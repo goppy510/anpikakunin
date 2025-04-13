@@ -1,0 +1,74 @@
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.eventView {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+
+.dateTime {
+  font-weight: bold;
+}
+
+.author {
+  color: #666;
+}
+
+.map {
+  flex: 1;
+  min-height: 300px;
+}
+
+.information {
+  padding: 1rem;
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.comment {
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.intensitySection {
+  margin-top: 1rem;
+}
+
+.intensityGroup {
+  margin-bottom: 0.5rem;
+}
+
+.intensityLevel {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.intensityAreas {
+  line-height: 1.5;
+}

@@ -1,0 +1,114 @@
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.monitorContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.button {
+  padding: 0.5rem 1rem;
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.button:hover {
+  background-color: #e0e0e0;
+}
+
+.button.active {
+  background-color: #4caf50;
+  color: white;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.eventList {
+  width: 300px;
+  border-right: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.eventList h2 {
+  padding: 0.5rem 1rem;
+  margin: 0;
+  font-size: 1.2rem;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.eventItem {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.eventItem:hover {
+  background-color: #f9f9f9;
+}
+
+.eventItem.active {
+  background-color: #e6f7ff;
+  border-left: 3px solid #1890ff;
+}
+
+.eventTime {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.eventLocation {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.eventDetails {
+  font-size: 0.9rem;
+}
+
+.eventView {
+  flex: 1;
+  overflow: hidden;
+}

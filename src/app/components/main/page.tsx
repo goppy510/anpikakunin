@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { apiService } from "@/app/api/ApiService";
 import {
-  oauth2,
+  refreshTokenCheck,
   refreshTokenDelete,
   oAuth2ClassReInit,
 } from "@/app/api/Oauth2Service";
 import pack from "@/../package.json";
 import dynamic from "next/dynamic";
 
-const Monitor = dynamic(() => import("@/app/components/monitor/Monitor"), {
+const Monitor = dynamic(() => import("@/app/components/ui/monitor/Monitor"), {
   ssr: false,
 });
 
@@ -21,9 +21,8 @@ export default function MainPage() {
   const [status, setStatus] = useState<Status>("loading");
 
   useEffect(() => {
-    oauth2
-      .refreshTokenCheck()
-      .then((isValid) => (isValid ? contractCheck() : setInitMode(true)))
+    refreshTokenCheck()
+      .then((isValid: boolean) => (isValid ? contractCheck() : setInitMode(true)))
       .finally(() => setStatus(undefined));
   }, []);
 
@@ -41,7 +40,7 @@ export default function MainPage() {
       .contractList()
       .then((res) => {
         const hasEarthquake = res.items.some(
-          (r) => r.classification === "telegram.earthquake"
+          (r: any) => r.classification === "telegram.earthquake"
         );
         setStatus(hasEarthquake ? "ok" : "no-contract");
       })
@@ -98,7 +97,7 @@ export default function MainPage() {
 
         <div className="footer">
           <p>ETCM - v.{pack.version}</p>
-          <p>&copy; {pack.author}</p>
+          <p>&copy; {new Date().getFullYear()} DMDATA.JP</p>
           <p>by DMDATA.JP</p>
         </div>
       </div>
