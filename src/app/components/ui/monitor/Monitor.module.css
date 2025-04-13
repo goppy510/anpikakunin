@@ -7,51 +7,13 @@
   color: #666;
 }
 
-.monitorContainer {
+.monitor {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #ddd;
-}
-
-.controls {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-
-.status {
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.button {
-  padding: 0.5rem 1rem;
-  background-color: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.button:hover {
-  background-color: #e0e0e0;
-}
-
-.button.active {
-  background-color: #4caf50;
-  color: white;
-}
-
-.content {
+.earthquake {
   display: flex;
   flex: 1;
   overflow: hidden;
@@ -65,31 +27,37 @@
   overflow: hidden;
 }
 
-.eventList h2 {
+.eventHeader {
   padding: 0.5rem 1rem;
-  margin: 0;
-  font-size: 1.2rem;
   background-color: #f5f5f5;
   border-bottom: 1px solid #ddd;
 }
 
-.list {
-  flex: 1;
-  overflow-y: auto;
+.eventHeader h3 {
+  margin: 0;
+  font-size: 1.2rem;
 }
 
-.eventItem {
+.eventList ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.eventList li {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #eee;
   cursor: pointer;
 }
 
-.eventItem:hover {
+.eventList li:hover {
   background-color: #f9f9f9;
 }
 
-.eventItem.active {
-  background-color: #e6f7ff;
+.viewEvent {
+  background-color: #e6f7ff !important;
   border-left: 3px solid #1890ff;
 }
 
@@ -99,16 +67,100 @@
   margin-bottom: 0.25rem;
 }
 
-.eventLocation {
+.eventMaxint {
   font-weight: bold;
   margin-bottom: 0.25rem;
 }
 
-.eventDetails {
-  font-size: 0.9rem;
+.eventMaxint span {
+  color: #d32f2f;
 }
 
-.eventView {
+.eventRegion {
+  margin-bottom: 0.25rem;
+}
+
+.eventMagnitude {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.eventData {
   flex: 1;
   overflow: hidden;
+}
+
+.settings {
+  width: 200px;
+  padding: 1rem;
+  background-color: #f5f5f5;
+  border-left: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+}
+
+.websocket {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.websocketStatus {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.websocketStatus.open {
+  background-color: #4caf50;
+  color: white;
+}
+
+.websocketStatus.closed, .websocketStatus.error {
+  background-color: #f44336;
+  color: white;
+}
+
+.websocketStart, .websocketClose {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #1976d2;
+}
+
+.sound {
+  margin-bottom: 1rem;
+}
+
+.panes {
+  margin-bottom: 1rem;
+}
+
+.panel {
+  cursor: pointer;
+  padding: 0.5rem;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.panel:hover {
+  background-color: #d0d0d0;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.package {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: center;
+}
+
+.logoGithub {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  margin-right: 0.5rem;
 }
