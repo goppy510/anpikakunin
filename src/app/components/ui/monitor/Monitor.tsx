@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useWebSocketService } from "./use-websocket-service";
+import { useSoundControl } from "./use-sound-control";
+import { intColor } from "@/app/utils/int-color";
 import EventView from "./EarthQuake/Event/View";
 import styles from "./Monitor.module.css";
 
@@ -11,14 +13,14 @@ export default function Monitor() {
     viewEventId,
     selectEventObservable,
     toEvent,
+    openPanel,
     webSocketStart,
     webSocketClose,
     webSocketStatus,
     webSocketIsStartingOK,
-    soundPlay,
-    toggleSoundPlay
   } = useWebSocketService();
 
+  const { soundPlay, toggleSoundPlay, soundPlayEnabled } = useSoundControl();
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
@@ -38,57 +40,120 @@ export default function Monitor() {
   }
 
   return (
-    <div className={styles.monitorContainer}>
-      <div className={styles.header}>
-        <h1>地震情報</h1>
-        <div className={styles.controls}>
-          <div className={styles.status}>
-            WebSocket: {webSocketStatus || "未接続"}
-          </div>
-          <button 
-            className={styles.button}
-            onClick={webSocketIsStartingOK() ? webSocketStart : webSocketClose}
-          >
-            {webSocketIsStartingOK() ? "接続" : "切断"}
-          </button>
-          <button 
-            className={`${styles.button} ${soundPlay ? styles.active : ''}`}
-            onClick={toggleSoundPlay}
-          >
-            {soundPlay ? "サウンドON" : "サウンドOFF"}
-          </button>
-        </div>
-      </div>
-      
-      <div className={styles.content}>
+    <div className={styles.monitor}>
+      <div className={styles.earthquake}>
         <div className={styles.eventList}>
-          <h2>地震リスト</h2>
-          <div className={styles.list}>
-            {eventList().map(event => (
-              <div 
-                key={event.eventId}
-                className={`${styles.eventItem} ${viewEventId === event.eventId ? styles.active : ''}`}
-                onClick={() => toEvent(event.eventId)}
+          <div className={styles.eventHeader}>
+            <h3>地震情報履歴（100件）</h3>
+          </div>
+          <ul>
+            {eventList().map((row) => (
+              <li
+                key={row.eventId}
+                onClick={() => toEvent(row.eventId)}
+                className={`intensity-s${intColor(row.maxInt)} ${
+                  row.eventId === viewEventId ? styles.viewEvent : ""
+                }`}
               >
                 <div className={styles.eventTime}>
-                  {event.arrivalTime ? new Date(event.arrivalTime).toLocaleString('ja-JP') : '不明'}
+                  {new Date(row.originTime || row.arrivalTime).toLocaleString(
+                    "ja-JP",
+                    {
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }
+                  )}
                 </div>
-                <div className={styles.eventInfo}>
-                  <div className={styles.eventLocation}>
-                    {event.hypocenter?.name || '不明'}
-                  </div>
-                  <div className={styles.eventDetails}>
-                    {event.magnitude && `M${event.magnitude.value}`}
-                    {event.maxInt && ` 最大震度${event.maxInt}`}
-                  </div>
+                <div className={styles.eventMaxint}>
+                  最大震度 <span>{row.maxInt || "-"}</span>
                 </div>
-              </div>
+                <div className={styles.eventRegion}>
+                  <span>{row.hypocenter?.name || "震源不明"}</span>
+                  {(row.maxInt ||
+                    row.hypocenter?.depth?.condition !== "不明") && (
+                    <>
+                      <span>&nbsp;</span>
+                      {row.hypocenter?.depth?.condition ? (
+                        <span>{row.hypocenter.depth.condition}</span>
+                      ) : row.hypocenter?.depth?.value ? (
+                        <span>{row.hypocenter.depth.value}km</span>
+                      ) : (
+                        <span>不明</span>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className={styles.eventMagnitude}>
+                  {row.magnitude ? (
+                    (row.magnitude as any).condition ? (
+                      <span>{(row.magnitude as any).condition}</span>
+                    ) : (row.magnitude as any).value ? (
+                      <span>M {(row.magnitude as any).value}</span>
+                    ) : (
+                      <span>M不明</span>
+                    )
+                  ) : (
+                    <span>M不明</span>
+                  )}
+                </div>
+              </li>
             ))}
+          </ul>
+        </div>
+        <div className={styles.eventData}>
+          <EventView eventData$={selectEventObservable()} />
+        </div>
+      </div>
+
+      <div className={styles.settings}>
+        <div className={styles.websocket}>
+          <div>WebSocket:</div>
+          {webSocketIsStartingOK() && (
+            <div className={styles.websocketStart} onClick={webSocketStart}>
+              Open
+            </div>
+          )}
+          <div className={`${styles.websocketStatus} ${webSocketStatus}`}>
+            {webSocketStatus}
+          </div>
+          {webSocketStatus === "open" && (
+            <div className={styles.websocketClose} onClick={webSocketClose}>
+              to Close
+            </div>
+          )}
+        </div>
+        <div className={styles.sound}>
+          <label>
+            <span>音声通知:</span>
+            <input
+              type="checkbox"
+              checked={soundPlay}
+              onChange={toggleSoundPlay}
+            />
+          </label>
+        </div>
+        <div className={styles.panes}>
+          <div
+            onClick={() => openPanel("earthquake-history")}
+            className={styles.panel}
+          >
+            地震情報検索
           </div>
         </div>
-        
-        <div className={styles.eventView}>
-          <EventView eventData$={selectEventObservable()} />
+        <div className={styles.spacer}></div>
+        <div className={styles.package}>
+          <span>
+            <a href="https://github.com/pdmdss/app-etcm" target="_blank">
+              <img
+                src="/assets/github.png"
+                alt="github"
+                className={styles.logoGithub}
+              />
+            </a>
+          </span>
+          <span>{`DMDATA.JP / ETCM v1.0.0`}</span>
         </div>
       </div>
     </div>
