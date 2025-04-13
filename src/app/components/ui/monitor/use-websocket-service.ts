@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Subject } from "rxjs";
 import { EarthquakeData } from "./EarthQuake/EarthQuakeData.store";
 import { EarthquakeEvent } from "@/app/types/earthquake-event";
@@ -9,20 +9,52 @@ import { EarthquakeInformation } from "@dmdata/telegram-json-types";
 import { apiService } from "@/app/api/ApiService";
 import { Settings } from "@/app/lib/db/settings";
 
+type TelegramItem = {
+  id: string;
+  head: {
+    type: string;
+  };
+};
+
 export function useWebSocketService() {
   const [eventIdList, setEventIdList] = useState<string[]>([]);
   const [viewEventId, setViewEventId] = useState<string | undefined>(undefined);
   const [soundPlay, setSoundPlay] = useState(false);
   const [webSocketStatus, setWebSocketStatus] = useState<string | null>(null);
   
-  const eventSelectSubject = new Subject<{ data: EarthquakeInformation.Latest.Main; latestInformation: boolean }>();
+  const eventSelectSubject = useRef(new Subject<{ data: EarthquakeInformation.Latest.Main; latestInformation: boolean }>()).current;
+
+  const toEvent = useCallback((eventId: string) => {
+    if (viewEventId === eventId) return;
+    
+    setViewEventId(eventId);
+    
+    apiService.gdEarthquakeEvent(eventId)
+      .then(event => {
+        const telegram = event.event.telegrams.find((telegram: TelegramItem) => 
+          /^VXSE5[1-3]$/.test(telegram.head.type)
+        );
+        if (telegram) {
+          return apiService.telegramGet(telegram.id);
+        }
+        return null;
+      })
+      .then(data => {
+        if (data) {
+          eventSelectSubject.next({
+            data,
+            latestInformation: eventIdList.indexOf(eventId) === (eventIdList.length - 1)
+          });
+        }
+      });
+  }, [viewEventId, eventIdList, eventSelectSubject]);
 
   useEffect(() => {
     apiService.gdEarthquakeList({ limit: 100 })
       .then(response => {
         const events = response.items.reverse();
         const ids = events.map((item: any) => {
-          EarthquakeData.set(item);
+          EarthquakeData.set(item as unknown as EarthquakeEvent);
           return item.eventId;
         });
         setEventIdList(ids);
@@ -50,11 +82,11 @@ export function useWebSocketService() {
       };
       
       if (earthquake?.hypocenter) {
-        eventData.hypocenter = earthquake.hypocenter as any;
+        eventData.hypocenter = earthquake.hypocenter as unknown as EarthquakeEvent['hypocenter'];
       }
       
       if (earthquake?.magnitude) {
-        eventData.magnitude = earthquake.magnitude as any;
+        eventData.magnitude = earthquake.magnitude as unknown as EarthquakeEvent['magnitude'];
       }
       
       EarthquakeData.set(eventData as EarthquakeEvent);
@@ -87,29 +119,7 @@ export function useWebSocketService() {
     return () => {
       clearInterval(checkStatus);
     };
-  }, []);
-
-  const toEvent = useCallback((eventId: string) => {
-    if (viewEventId === eventId) return;
-    
-    setViewEventId(eventId);
-    
-    apiService.gdEarthquakeEvent(eventId)
-      .then(event => {
-        const telegram = event.event.telegrams.find((telegram: any) => /^VXSE5[1-3]$/.test(telegram.head.type));
-        if (telegram) {
-          return apiService.telegramGet(telegram.id);
-        }
-      })
-      .then(data => {
-        if (data) {
-          eventSelectSubject.next({
-            data,
-            latestInformation: eventIdList.indexOf(eventId) === (eventIdList.length - 1)
-          });
-        }
-      });
-  }, [viewEventId, eventIdList]);
+  }, [toEvent, soundPlay, eventSelectSubject]);
 
   const toggleSoundPlay = useCallback(() => {
     const newValue = !soundPlay;
@@ -142,7 +152,7 @@ export function useWebSocketService() {
 
   const selectEventObservable = useCallback(() => {
     return eventSelectSubject.asObservable();
-  }, []);
+  }, [eventSelectSubject]);
 
   return {
     eventList,
