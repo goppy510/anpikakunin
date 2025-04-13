@@ -41,15 +41,23 @@ export function useWebSocketService() {
       if (soundPlay) {
       }
 
-      EarthquakeData.set({
+      const eventData: Partial<EarthquakeEvent> = {
         eventId: data.eventId || '',
         arrivalTime: earthquake?.arrivalTime ?? data.targetDateTime,
         originTime: earthquake?.originTime,
-        hypocenter: earthquake?.hypocenter as any,
-        magnitude: earthquake?.magnitude as any,
         maxInt: 'intensity' in data.body ? data.body.intensity?.maxInt : undefined,
         maxLgInt: undefined
-      } as any);
+      };
+      
+      if (earthquake?.hypocenter) {
+        eventData.hypocenter = earthquake.hypocenter as any;
+      }
+      
+      if (earthquake?.magnitude) {
+        eventData.magnitude = earthquake.magnitude as any;
+      }
+      
+      EarthquakeData.set(eventData as EarthquakeEvent);
 
       setEventIdList(prevIds => {
         const newIds = [...prevIds];
