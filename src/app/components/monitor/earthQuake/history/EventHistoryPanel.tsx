@@ -1,68 +1,66 @@
+// src/app/components/monitor/event-history/EventHistoryPanel.tsx
 "use client";
 
 import { useState } from "react";
-import { apiService } from "@/app/api/ApiService";
 import { EarthquakeData } from "@/app/components/monitor/earthQuake/store";
-import { APITypes } from "@dmdata/api-types";
+import { apiService } from "@/app/api"; // ← 共有インスタンス
+import type { APITypes } from "@dmdata/api-types";
+import {
+  buildDatetimeRange,
+  formatJPDateTime,
+  IntensityLevels,
+} from "../hooks/event-history.service";
 
-export default function EventHistoryPanel({
-  onClose,
-}: {
-  onClose: (eventId?: string) => void;
-}) {
+/* ---------- 型ガード ---------- */
+type GdListOk = APITypes.GDEarthquakeList.ResponseOk;
+function isGdListOk(res: unknown): res is GdListOk {
+  return typeof res === "object" && res !== null && "items" in res;
+}
+
+type Props = { onClose: (eventId?: string) => void };
+
+export default function EventHistoryPanel({ onClose }: Props) {
   const [historyStatus, setHistoryStatus] = useState<"loading" | "ok" | null>(
     null
   );
-  const [historyItems, setHistoryItems] = useState<
-    APITypes.GDEarthquakeList.ResponseOk["items"]
-  >([]);
+  const [historyItems, setHistoryItems] = useState<GdListOk["items"]>([]);
   const [searchValues, setSearchValues] = useState({
     start_date: "",
     end_date: "",
     max_int: "",
   });
 
-  const setSearch = (
-    key: "start_date" | "end_date" | "max_int",
-    value: string
-  ) => {
+  const setSearch = (key: keyof typeof searchValues, value: string) =>
     setSearchValues((prev) => ({ ...prev, [key]: value }));
-  };
 
-  const dateFormat = (val: string, isEnd: boolean) => {
-    const date = new Date(val);
-    if (isEnd) date.setDate(date.getDate() + 1);
-    return `${date.getFullYear()}-${(date.getMonth() + 1)
-      .toString()
-      .padStart(2, "0")}-${date
-      .getDate()
-      .toString()
-      .padStart(2, "0")}T00:00:00`;
-  };
-
-  const search = () => {
+  /* ---------- 検索 ---------- */
+  const search = async () => {
     const { start_date, end_date, max_int } = searchValues;
-    const datetime =
-      start_date || end_date
-        ? `${start_date ? dateFormat(start_date, false) : ""}~${
-            end_date ? dateFormat(end_date, true) : ""
-          }`
-        : undefined;
+    const datetime = buildDatetimeRange(start_date, end_date);
 
     setHistoryStatus("loading");
-    apiService
-      .gdEarthquakeList({
+    try {
+      const res = await apiService.gdEarthquakeList({
         ...(datetime ? { datetime } : {}),
         ...(max_int ? { maxInt: max_int } : {}),
         limit: 100,
-      })
-      .then((res) => {
+      });
+
+      if (isGdListOk(res)) {
         setHistoryItems(res.items);
         setHistoryStatus("ok");
-      })
-      .catch(() => setHistoryStatus(null));
+      } else {
+        // APIError の場合
+        console.error(res);
+        setHistoryStatus(null);
+      }
+    } catch (e) {
+      console.error(e);
+      setHistoryStatus(null);
+    }
   };
 
+  /* ---------- イベント選択 ---------- */
   const toSelectEvent = (eventId: string) => {
     const event = historyItems.find((i) => i.eventId === eventId);
     if (!event) return;
@@ -70,51 +68,52 @@ export default function EventHistoryPanel({
     onClose(eventId);
   };
 
+  /* ---------- render ---------- */
   return (
     <div className="panel">
+      {/* --- header --- */}
       <div className="header">
         <h3>地震情報履歴検索</h3>
-        <div className="header-span"></div>
-        <div onClick={() => onClose()} className="panel-close">
-          <span className="material-icons">close</span>
-        </div>
+        <div className="header-span" />
+        <button onClick={() => onClose()} className="panel-close">
+          ×
+        </button>
       </div>
 
+      {/* --- search form --- */}
       <div className="search">
         <div className="search-input">
           <input
             type="date"
-            onInput={(e) =>
-              setSearch("start_date", (e.target as HTMLInputElement).value)
-            }
+            onInput={(e) => setSearch("start_date", e.currentTarget.value)}
           />
           <span> ~ </span>
           <input
             type="date"
-            onInput={(e) =>
-              setSearch("end_date", (e.target as HTMLInputElement).value)
-            }
+            onInput={(e) => setSearch("end_date", e.currentTarget.value)}
           />
         </div>
+
         <div className="search-input">
           <select
-            onInput={(e) =>
-              setSearch("max_int", (e.target as HTMLSelectElement).value)
-            }
+            defaultValue=""
+            onInput={(e) => setSearch("max_int", e.currentTarget.value)}
           >
             <option value="">-</option>
-            {[1, 2, 3, 4, "5-", "5+", "6-", "6+", "7"].map((level) => (
-              <option key={level} value={level}>
-                震度{level}以上
+            {IntensityLevels.map((lvl) => (
+              <option key={lvl} value={lvl}>
+                震度{lvl}以上
               </option>
             ))}
           </select>
         </div>
+
         <div className="search-input">
-          <input type="button" value="検索" onClick={search} />
+          <button onClick={search}>検索</button>
         </div>
       </div>
 
+      {/* --- result list --- */}
       <div className="history">
         {historyStatus === "ok" && (
           <table>
@@ -123,45 +122,31 @@ export default function EventHistoryPanel({
                 <tr
                   key={row.eventId}
                   onClick={() => toSelectEvent(row.eventId)}
+                  className={`intensity-s${row.maxInt ?? ""}`}
                 >
                   <td>
-                    {row.originTime
-                      ? formatDate(row.originTime)
-                      : formatDate(row.arrivalTime)}
-                    頃{row.originTime ? "発生" : "検知"}
+                    {formatJPDateTime(row.originTime ?? row.arrivalTime)}頃
+                    {row.originTime ? "発生" : "検知"}
                   </td>
                   <td>{row.hypocenter?.name || "-"}</td>
                   <td>
-                    {row.hypocenter?.depth?.condition ||
+                    {row.hypocenter?.depth?.condition ??
                       (row.hypocenter?.depth?.value
                         ? `${row.hypocenter.depth.value}km`
                         : "-")}
                   </td>
                   <td>
-                    {row.magnitude?.condition ||
+                    {row.magnitude?.condition ??
                       (row.magnitude ? `M${row.magnitude}` : "-")}
                   </td>
-                  <td
-                    className={`max-intensity intensity-s${row.maxInt ?? ""}`}
-                  >
-                    {row.maxInt ?? "-"}
-                  </td>
+                  <td>{row.maxInt ?? "-"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {historyStatus === "loading" && <p>Loading...</p>}
       </div>
     </div>
   );
-}
-
-function formatDate(str: string) {
-  const date = new Date(str);
-  return `${date.getFullYear()}年${(date.getMonth() + 1)
-    .toString()
-    .padStart(2, "0")}月${date.getDate().toString().padStart(2, "0")}日${date
-    .getHours()
-    .toString()
-    .padStart(2, "0")}時${date.getMinutes().toString().padStart(2, "0")}分`;
 }

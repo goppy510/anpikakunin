@@ -1,21 +1,32 @@
-import { dbPromise } from "@/app/lib/db/indexed-db";
-import { AppSettings } from "@/app/lib/db/setting";
+// src/app/lib/db/settings.ts
+import { getDb } from "@/app/lib/db/indexed-db";
+import type { AppSettings } from "@/app/lib/db/setting"; // スキーマ型
 
 export class Settings {
-  static get<K extends Extract<keyof T, string>, T = AppSettings>(key: K) {
-    return dbPromise.then(
-      (db) => db.get("settings", key) as Promise<T[K] | undefined>
-    );
+  /* ---------- 取得 ---------- */
+  static async get<K extends keyof AppSettings>(
+    key: K
+  ): Promise<AppSettings[K] | undefined> {
+    const db = await getDb();
+    return db
+      ? ((await db.get("settings", key as string)) as
+          | AppSettings[K]
+          | undefined)
+      : undefined;
   }
 
-  static async set<K extends Extract<keyof T, string>, T = AppSettings>(
+  /* ---------- 保存 ---------- */
+  static async set<K extends keyof AppSettings>(
     key: K,
-    value: T[K]
-  ) {
-    return (await dbPromise).put("settings", value, key);
+    value: AppSettings[K]
+  ): Promise<void> {
+    const db = await getDb();
+    if (db) await db.put("settings", value, key as string);
   }
 
-  static async delete(key: keyof AppSettings) {
-    return (await dbPromise).delete("settings", key);
+  /* ---------- 削除 ---------- */
+  static async delete(key: keyof AppSettings): Promise<void> {
+    const db = await getDb();
+    if (db) await db.delete("settings", key as string);
   }
 }

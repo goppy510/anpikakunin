@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { LatLngTuple } from "leaflet";
-import { apiService } from "@/app/api/ApiService";
+import { apiService } from "@/app/api/index";
 
 export function useStation() {
   const [stations, setStations] = useState<Map<string, LatLngTuple>>(new Map());
   const [areas, setAreas] = useState<Map<string, LatLngTuple>>(new Map());
 
   useEffect(() => {
-    apiService.parameterEarthquakeStation().then((res) => {
+    apiService.parameterEarthquakeStation().then((res: any) => {
       const map = new Map<string, LatLngTuple>();
       res.items.forEach(
         (r: {

@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiService } from "@/app/api/ApiService";
-import {
-  oauth2,
-  refreshTokenDelete,
-  oAuth2ClassReInit,
-} from "@/app/api/Oauth2Service";
-import pack from "@/../package.json";
 import dynamic from "next/dynamic";
+import { ApiService } from "@/app/api/ApiService";
+import { Oauth2Service } from "@/app/api/Oauth2Service";
+import pack from "@/../package.json";
 
 const Monitor = dynamic(() => import("@/app/components/monitor/Monitor"), {
   ssr: false,
 });
+
+const oauth2 = new Oauth2Service();
+const apiService = new ApiService();
 
 type Status = "ok" | "loading" | "no-contract" | "no-auth" | undefined;
 
@@ -20,90 +19,133 @@ export default function MainPage() {
   const [initMode, setInitMode] = useState(false);
   const [status, setStatus] = useState<Status>("loading");
 
+  /* ---------------- boot ---------------- */
   useEffect(() => {
-    oauth2
-      .refreshTokenCheck()
-      .then((isValid) => (isValid ? contractCheck() : setInitMode(true)))
-      .finally(() => setStatus(undefined));
+    (async () => {
+      try {
+        const isValid = await oauth2.refreshTokenCheck();
+        if (isValid) await contractCheck();
+        else setInitMode(true);
+      } catch (e) {
+        console.error(e);
+        setStatus("no-auth");
+      } finally {
+        setStatus(undefined);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ---------------- handlers ---------------- */
   const init = async () => {
     setInitMode(false);
     setStatus("loading");
-    await refreshTokenDelete();
-    await oAuth2ClassReInit();
-    contractCheck();
+    try {
+      await oauth2.refreshTokenDelete();
+      await oauth2.oAuth2ClassReInit();
+      await contractCheck();
+    } catch (e) {
+      console.error(e);
+      setStatus("no-auth");
+    }
   };
 
-  const contractCheck = () => {
+  const contractCheck = async () => {
     setInitMode(false);
-    apiService
-      .contractList()
-      .then((res) => {
+    try {
+      const res = await apiService.contractList();
+      if ("items" in res && Array.isArray(res.items)) {
         const hasEarthquake = res.items.some(
           (r) => r.classification === "telegram.earthquake"
         );
         setStatus(hasEarthquake ? "ok" : "no-contract");
-      })
-      .catch((err) => {
+      } else {
+        console.error("Unexpected response format:", res);
         setStatus("no-auth");
-        console.error(err);
-      });
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus("no-auth");
+    }
   };
 
+  /* ---------------- view ---------------- */
   if (initMode || status !== "ok") {
     return (
-      <div className="full-window">
-        <div className="content">
+      <div className="relative flex h-screen w-screen items-center justify-center bg-[#677a98]">
+        {/* central message */}
+        <div className="text-center text-white">
+          {/* status mode ------------------------------------ */}
           {!initMode && (
-            <div className="status-message">
+            <div className="text-[20px]">
               {status === "no-contract" && (
                 <p>現在、地震津波関連の契約がないため情報が表示できません。</p>
               )}
+
               {status === "no-auth" && (
                 <>
                   <p>
                     認可情報が取り消されました。アプリケーション再連携を行ってください。
                   </p>
-                  <div className="init" onClick={init}>
+                  <button
+                    onClick={init}
+                    className="mx-auto mt-2 rounded-md border border-[#063e7c] bg-[#1c528d] px-4 py-2"
+                  >
                     アプリケーション再連携
-                  </div>
+                  </button>
                 </>
               )}
+
               {status === "loading" && <p>Now loading...</p>}
+
               {!["no-contract", "no-auth", "loading"].includes(
                 status ?? ""
               ) && <p>Now process...</p>}
             </div>
           )}
+
+          {/* init view ------------------------------------ */}
           {initMode && (
-            <div className="init-view">
-              <h1>地震情報ビューア</h1>
+            <div className="space-y-3">
+              <h1 className="text-2xl font-bold">地震情報ビューア</h1>
               <p>これは、地震情報をリアルタイムに更新する情報パネルです。</p>
               <p>
-                <a href="https://dmdata.jp">dmdata.jp</a>
+                <a
+                  href="https://dmdata.jp"
+                  className="underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  dmdata.jp
+                </a>
                 の「地震・津波関連」を契約している方のみ使用できます。
               </p>
-              <p>WebSocketまたはPuLLリクエストを行い情報を取得しています。</p>
-              <br />
+              <p>
+                WebSocket または PuLL リクエストを行い情報を取得しています。
+              </p>
               <p>
                 このアプリケーションを使用するには、以下のアプリケーション連携をしてください。
               </p>
-              <div className="init" onClick={init}>
+
+              <button
+                onClick={init}
+                className="mx-auto rounded-md border border-[#063e7c] bg-[#1c528d] px-4 py-2"
+              >
                 アプリケーション連携
-              </div>
+              </button>
             </div>
           )}
         </div>
 
-        <div className="footer">
+        {/* footer ------------------------------------------ */}
+        <footer className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center text-sm text-white">
           <p>ETCM - v.{pack.version}</p>
-          <p>&copy; {pack.author}</p>
           <p>by DMDATA.JP</p>
-        </div>
+        </footer>
       </div>
     );
   }
 
+  /* 通常モニタ画面 */
   return <Monitor />;
 }
