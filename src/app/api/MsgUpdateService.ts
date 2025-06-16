@@ -1,100 +1,343 @@
 import { ungzip } from "pako";
-import { EarthquakeInformation } from "@dmdata/telegram-json-types";
-import { APITypes } from "@dmdata/api-types";
+// Removed RxJS imports
+
+import type { EarthquakeInformation } from "@dmdata/telegram-json-types";
+import type { APITypes } from "@dmdata/api-types";
 import { WebSocketService } from "@dmdata/sdk-js";
-import { apiService } from "@/app/api/ApiService";
+import type { ApiService } from "@/app/api/ApiService"; // Use 'import type'
 
-class MsgUpdateService {
-  private telegramTypes = ["VXSE51", "VXSE52", "VXSE53", "VXSE61"];
-  private nextPoolingToken?: string;
-  private webSocketSubject?: WebSocketService;
-  private webSocketStatus: null | "connecting" | "open" | "closed" | "error" =
-    null;
-  private telegramListeners: ((
-    data: EarthquakeInformation.Latest.Main
-  ) => void)[] = [];
-
-  getWebSocketStatus(): typeof this.webSocketStatus {
-    return this.webSocketStatus;
-  }
-
-  onNewTelegram(callback: (data: EarthquakeInformation.Latest.Main) => void) {
-    this.telegramListeners.push(callback);
-    if (this.telegramListeners.length === 1) {
-      this.startPolling();
-    }
-  }
-
-  webSocketStart() {
-    this.createWebSocketStream()?.then((ws) => {
-      if (!ws) return;
-      ws.on("data", (item: APITypes.WebSocketV2.Event.Data) => {
-        if (
-          this.telegramTypes.includes(item.head.type) &&
-          item.format === "json" &&
-          item.encoding === "base64"
-        ) {
-          const data = unzip(item.body) as EarthquakeInformation.Latest.Main;
-          this.telegramListeners.forEach((cb) => cb(data));
-        }
-      });
-    });
-  }
-
-  webSocketClose() {
-    if (this.webSocketStatus === "open") {
-      this.webSocketSubject?.close();
-    }
-  }
-
-  private startPolling() {
-    const poll = async () => {
-      if (this.webSocketStatus === "open") return;
-      try {
-        const res = await apiService.telegramList({
-          cursorToken: this.nextPoolingToken,
-          formatMode: "json",
-          type: "VXSE",
-        });
-        this.nextPoolingToken = res.nextPooling;
-
-        for (const item of res.items) {
-          if (!this.telegramTypes.includes(item.head.type)) continue;
-          const data = await apiService.telegramGet(item.id);
-          if (typeof data === "object" && !(data instanceof Document)) {
-            this.telegramListeners.forEach((cb) =>
-              cb(data as EarthquakeInformation.Latest.Main)
-            );
-          }
-        }
-      } catch (err) {
-        console.error("Polling error:", err);
-      } finally {
-        setTimeout(poll, 2000);
-      }
-    };
-    poll();
-  }
-
-  private async createWebSocketStream(): Promise<WebSocketService | undefined> {
-    if (this.webSocketSubject?.readyState === WebSocketService.OPEN) return;
-
-    this.webSocketStatus = "connecting";
-    const ws = await apiService.socketStart(
-      ["telegram.earthquake"],
-      "ETCM",
-      "json"
-    );
-    this.webSocketSubject = ws;
-    ws.on("start", () => (this.webSocketStatus = "open"));
-    return ws;
-  }
-}
-
-function unzip(data: string) {
+// Helper function remains the same
+function unzip(data: string): EarthquakeInformation.Latest.Main {
   const buffer = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
   const decompressed = ungzip(buffer); // Uint8Array
   return JSON.parse(new TextDecoder().decode(decompressed));
 }
 
-export const msgUpdateService = new MsgUpdateService();
+export class MsgUpdateService {
+  private readonly telegramTypes = ["VXSE51", "VXSE52", "VXSE53", "VXSE61"];
+  private nextPoolingToken?: string;
+  private webSocketSubject?: WebSocketService;
+  private webSocketStatus: null | "connecting" | "open" | "closed" | "error" =
+    null;
+
+  // Callback and distinctness tracking
+  private onNewTelegramCallback?: (
+    data: EarthquakeInformation.Latest.Main
+  ) => void;
+  private processedTelegramIds = new Set<string>();
+
+  // Polling state
+  private isPollingActive: boolean = false;
+  private pollingTimeoutId?: ReturnType<typeof setTimeout>;
+  private isInitialPollComplete: boolean = false; // To handle RxJS skip(1) intent
+
+  constructor(private api: ApiService) {}
+
+  /**
+   * Gets the current status of the WebSocket connection.
+   */
+  getWebSocketStatus(): typeof this.webSocketStatus {
+    return this.webSocketStatus;
+  }
+
+  /**
+   * Registers a callback function to receive new, distinct telegram data.
+   * Initiates the process of fetching data (polling and/or WebSocket).
+   * @param callback The function to call with new telegram data.
+   */
+  public newTelegrams(
+    callback: (data: EarthquakeInformation.Latest.Main) => void
+  ): void {
+    console.log("Setting up new telegram subscription.");
+    this.onNewTelegramCallback = callback;
+
+    // Reset state for a new subscription
+    this.processedTelegramIds.clear();
+    this.nextPoolingToken = undefined;
+    this.isInitialPollComplete = false;
+
+    // Stop any existing activities before starting new ones
+    this.webSocketClose(); // Close existing WebSocket if any
+    this.stopPollingLoop(); // Stop existing polling if any
+
+    // Start polling (it will stop automatically if WebSocket connects)
+    this.startPollingLoop();
+
+    // Optionally, attempt WebSocket connection immediately as well
+    // this.connectWebSocket(); // Uncomment if you want WS to try connecting right away
+  }
+
+  /**
+   * Initiates a WebSocket connection attempt.
+   */
+  public webSocketStart(): void {
+    console.log("WebSocket start requested.");
+    this.connectWebSocket();
+  }
+
+  /**
+   * Closes the WebSocket connection if it's open.
+   */
+  public webSocketClose(): void {
+    if (
+      this.webSocketStatus === "open" ||
+      this.webSocketStatus === "connecting"
+    ) {
+      if (this.webSocketSubject) {
+        console.log("Closing WebSocket connection.");
+        this.webSocketSubject.close();
+        // State will be updated by the 'close' event handler in connectWebSocket
+        this.webSocketSubject = undefined; // Clear reference
+      }
+    }
+    // Explicitly set status if closing manually before connection established
+    if (this.webSocketStatus === "connecting") {
+      this.webSocketStatus = "closed";
+    }
+  }
+
+  // --- Internal Methods ---
+
+  /**
+   * Handles incoming raw data from the WebSocket connection.
+   */
+  private handleWebSocketData(data: APITypes.WebSocketV2.Event.Data): void {
+    try {
+      if (
+        this.telegramTypes.includes(data.head.type) &&
+        data.format === "json" &&
+        data.encoding === "base64" &&
+        data.body // Ensure body is not empty
+      ) {
+        const processedData = unzip(data.body);
+
+        // Check distinctness before invoking callback
+        if (!this.processedTelegramIds.has(processedData._originalId)) {
+          this.processedTelegramIds.add(processedData._originalId);
+          // Safely invoke the callback if it exists
+          this.onNewTelegramCallback?.(processedData);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to process WebSocket data:", error, data);
+    }
+  }
+
+  /**
+   * Establishes and manages the WebSocket connection and its event listeners.
+   */
+  private async connectWebSocket(): Promise<void> {
+    // Prevent multiple concurrent connection attempts or connecting when already open
+    if (
+      this.webSocketStatus === "connecting" ||
+      this.webSocketStatus === "open"
+    ) {
+      console.log(
+        `WebSocket connection attempt skipped, status: ${this.webSocketStatus}`
+      );
+      return;
+    }
+
+    console.log("Attempting to connect WebSocket...");
+    this.webSocketStatus = "connecting";
+
+    try {
+      // Assuming api.socketStart returns Promise<WebSocketService> when returnMode is default/websocket
+      const response = await this.api.socketStart(
+        ["telegram.earthquake"],
+        "ETCM",
+        "json"
+      );
+
+      // Ensure the response is a WebSocketService instance
+      if (response instanceof WebSocketService) {
+        // Check if status changed while awaiting (e.g., manual close)
+        if (this.webSocketStatus !== "connecting") {
+          console.log(
+            "WebSocket connection aborted before listeners attached."
+          );
+          response.close(); // Ensure the obtained socket is closed
+          return;
+        }
+
+        this.webSocketSubject = response;
+      } else {
+        console.error(
+          "Failed to establish WebSocket connection: Invalid response type."
+        );
+        this.webSocketStatus = "error";
+        return;
+      }
+      console.log("WebSocket connection established, attaching listeners.");
+
+      this.webSocketSubject.on("start", () => {
+        console.log("WebSocket connection open.");
+        if (this.webSocketStatus !== "closed") {
+          // Avoid status update if closed manually right before 'start'
+          this.webSocketStatus = "open";
+          this.stopPollingLoop(); // Stop polling now that WebSocket is active
+        }
+      });
+
+      this.webSocketSubject?.on("data", (data) => {
+        this.handleWebSocketData(data);
+      });
+
+      this.webSocketSubject?.on("close", (event) => {
+        // Check if this close was initiated manually or unexpectedly
+        if (this.webSocketStatus !== "closed") {
+          // Avoid double logging if closed manually
+          console.log(
+            `WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}`
+          );
+          this.webSocketStatus = "closed";
+          this.webSocketSubject = undefined; // Clear reference
+          // Restart polling only if the service hasn't been stopped externally
+          if (this.onNewTelegramCallback) {
+            this.startPollingLoop();
+          }
+        }
+      });
+
+      this.webSocketSubject?.on("error", (error) => {
+        console.error("WebSocket error:", error);
+        if (this.webSocketStatus !== "closed") {
+          // Avoid status update if closed manually right before 'error'
+          this.webSocketStatus = "error";
+          this.webSocketSubject?.close(); // Attempt to close on error
+          this.webSocketSubject = undefined;
+          // Restart polling only if the service hasn't been stopped externally
+          if (this.onNewTelegramCallback) {
+            this.startPollingLoop();
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Failed to start WebSocket connection:", error);
+      // Ensure status reflects failure if we were trying to connect
+      if (this.webSocketStatus === "connecting") {
+        this.webSocketStatus = "error"; // Or 'closed' depending on desired state
+      }
+      // Restart polling if connection failed and a subscription exists
+      if (this.onNewTelegramCallback) {
+        this.startPollingLoop();
+      }
+    }
+  }
+
+  /**
+   * Starts the polling loop if it's not already active and WebSocket is not open.
+   */
+  private startPollingLoop(): void {
+    // Prevent multiple loops or starting if WebSocket is active
+    if (this.isPollingActive || this.webSocketStatus === "open") {
+      // console.log("Start polling loop skipped."); // Too noisy?
+      return;
+    }
+
+    console.log("Starting polling loop...");
+    this.isPollingActive = true;
+    // Reset initial poll flag - crucial if loop restarts after WS close
+    this.isInitialPollComplete = false;
+    clearTimeout(this.pollingTimeoutId); // Clear any residual timer
+
+    // Define the asynchronous loop function
+    const loop = async () => {
+      // Primary exit conditions for the loop continuation
+      if (!this.isPollingActive || this.webSocketStatus === "open") {
+        console.log("Polling loop stopping.");
+        this.isPollingActive = false; // Ensure flag is set correctly
+        return;
+      }
+
+      try {
+        // Perform one polling cycle
+        const listResponse = await this.api.telegramList({
+          cursorToken: this.nextPoolingToken,
+          formatMode: "json",
+          type: "VXSE", // Filtering by broad type; specific types checked later
+        });
+
+        // Always update the token for the *next* iteration
+        this.nextPoolingToken = listResponse.nextPooling;
+        const currentItems = listResponse.items;
+
+        if (!this.isInitialPollComplete) {
+          // Just completed the first poll, obtained the token.
+          this.isInitialPollComplete = true;
+          console.log(
+            `Initial poll complete. Next token: ${
+              this.nextPoolingToken ? "obtained" : "not available"
+            }. Processing items from next poll.`
+          );
+        } else if (currentItems && currentItems.length > 0) {
+          // This is a subsequent poll, process the items found.
+          console.log(`Polling found ${currentItems.length} items.`);
+          for (const item of currentItems) {
+            if (this.telegramTypes.includes(item.head.type)) {
+              // Check distinctness *before* fetching details (optimization)
+              if (!this.processedTelegramIds.has(item._originalId)) {
+                try {
+                  const detail = await this.api.telegramGet(item.id);
+                  // Check type and ensure it's the expected object structure
+                  if (
+                    typeof detail === "object" &&
+                    !(detail instanceof Document) &&
+                    detail !== null &&
+                    "_originalId" in detail
+                  ) {
+                    const processedData =
+                      detail as EarthquakeInformation.Latest.Main;
+                    // Final distinctness check before callback
+                    if (
+                      !this.processedTelegramIds.has(processedData._originalId)
+                    ) {
+                      this.processedTelegramIds.add(processedData._originalId);
+                      this.onNewTelegramCallback?.(processedData);
+                    }
+                  } else {
+                    console.warn(
+                      `Received unexpected data type or structure for telegram ID ${item.id}:`,
+                      typeof detail
+                    );
+                  }
+                } catch (getErr) {
+                  console.error(
+                    `Failed to get telegram detail for ID ${item.id}:`,
+                    getErr
+                  );
+                  // Decide if you want to retry or just skip this item
+                }
+              } else {
+                // console.log(`Skipping already processed ID (from polling): ${item._originalId}`); // Can be noisy
+              }
+            }
+          }
+        }
+      } catch (listError) {
+        console.error("Polling telegramList API call failed:", listError);
+        // Optional: Add delay/backoff logic here if needed
+      }
+
+      // Schedule the next iteration only if the loop should continue
+      if (this.isPollingActive && this.webSocketStatus !== "open") {
+        this.pollingTimeoutId = setTimeout(loop, 2000); // Schedule next run
+      } else {
+        this.isPollingActive = false; // Ensure flag is reset if loop terminates
+      }
+    };
+
+    // Initiate the first iteration of the loop
+    loop();
+  }
+
+  /**
+   * Stops the polling loop and clears the timeout.
+   */
+  private stopPollingLoop(): void {
+    if (!this.isPollingActive) return;
+    console.log("Stopping polling loop...");
+    this.isPollingActive = false;
+    clearTimeout(this.pollingTimeoutId);
+  }
+}

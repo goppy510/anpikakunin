@@ -38,12 +38,17 @@ export default function MainPage() {
 
   /* ---------------- handlers ---------------- */
   const init = async () => {
+    // ❶ 状態をリセット
     setInitMode(false);
     setStatus("loading");
+
     try {
+      // ❷ RefreshToken を削除
       await oauth2.refreshTokenDelete();
-      await oauth2.oAuth2ClassReInit();
-      await contractCheck();
+
+      // ❸ 認可 URL を作成してリダイレクト
+      const authUrl = oauth2.buildAuthorizationUrl(); // ← 下で実装
+      window.location.href = authUrl; // ブラウザ遷移
     } catch (e) {
       console.error(e);
       setStatus("no-auth");
@@ -140,7 +145,7 @@ export default function MainPage() {
         {/* footer ------------------------------------------ */}
         <footer className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center text-sm text-white">
           <p>ETCM - v.{pack.version}</p>
-          <p>by DMDATA.JP</p>
+          <p>安否確認</p>
         </footer>
       </div>
     );
