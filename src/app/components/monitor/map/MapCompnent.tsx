@@ -1,14 +1,28 @@
 "use client";
 
-import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  GeoJSON,
+  CircleMarker,
+  Popup,
+} from "react-leaflet";
 import { useEffect, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import styles from "./map.module.scss";
 import type { FeatureCollection } from "geojson";
 
+interface EarthquakeStation {
+  name: string;
+  code: string;
+  lat: string;
+  lon: string;
+}
+
 export default function MapComponent() {
   const [prefectureData, setPrefectureData] =
     useState<FeatureCollection | null>(null);
+  const [stationData, setStationData] = useState<EarthquakeStation[]>([]);
 
   // 日本の境界（北海道を含むように調整）
   const japanBounds: [[number, number], [number, number]] = [
@@ -26,6 +40,12 @@ export default function MapComponent() {
       .catch((error) =>
         console.error("Failed to load prefecture data:", error)
       );
+
+    // 地震観測点データを取得
+    fetch("/assets/earthquake/stations.json")
+      .then((response) => response.json())
+      .then((data) => setStationData(data))
+      .catch((error) => console.error("Failed to load station data:", error));
   }, []);
 
   return (
@@ -58,6 +78,36 @@ export default function MapComponent() {
             }}
           />
         )}
+
+        {/* 地震観測点マーカー */}
+        {stationData.map((station) => {
+          const lat = parseFloat(station.lat);
+          const lng = parseFloat(station.lon);
+
+          if (isNaN(lat) || isNaN(lng)) return null;
+
+          return (
+            <CircleMarker
+              key={station.code}
+              center={[lat, lng]}
+              radius={2}
+              fillColor="#0d33ff"
+              weight={0}
+              opacity={0.8}
+              fillOpacity={0.8}
+            >
+              <Popup>
+                <div>
+                  <strong>{station.name}</strong>
+                  <br />
+                  コード: {station.code}
+                  <br />
+                  座標: {lat.toFixed(4)}, {lng.toFixed(4)}
+                </div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
     </div>
   );
