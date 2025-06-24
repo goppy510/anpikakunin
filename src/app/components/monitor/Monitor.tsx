@@ -168,7 +168,12 @@ export default function Monitor() {
 
         {/* ---- event-data/map ---- */}
         <main className="flex-1 bg-gray-50">
-          <MapComponent />
+          <MapComponent 
+            onEarthquakeUpdate={(newEvent) => {
+              console.log('New earthquake event:', newEvent);
+              setEvents(prevEvents => [newEvent, ...prevEvents.slice(0, 9)]); // 最新10件まで保持
+            }}
+          />
         </main>
       </div>
     </div>
