@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { oauth2 } from "@/app/api/Oauth2Service";
 
 export default function OauthPage() {
   const [status, setStatus] = useState<string>("Processing...");
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
@@ -24,19 +26,23 @@ export default function OauthPage() {
           return;
         }
 
-        // TODO: Exchange code for tokens using your OAuth2Service
-        setStatus("OAuth callback received successfully!");
-        console.log("Authorization code:", code);
-        console.log("State:", state);
+        setStatus("Exchanging code for tokens...");
+        await oauth2().exchangeCodeForToken(code, state);
+        
+        setStatus("Authentication successful! Redirecting...");
+        
+        setTimeout(() => {
+          router.push("/");
+        }, 2000);
         
       } catch (error) {
         console.error("OAuth callback error:", error);
-        setStatus("Failed to process OAuth callback");
+        setStatus(`Failed to process OAuth callback: ${error}`);
       }
     };
 
     handleOAuthCallback();
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   return (
     <div>

@@ -1,7 +1,7 @@
 import { DMDATA } from "@dmdata/sdk-js";
 // Removed RxJS imports
 import { APITypes, Components } from "@dmdata/api-types";
-import { Oauth2Service } from "@/app/api/Oauth2Service"; // Assuming path is correct
+import { oauth2 } from "@/app/api/Oauth2Service";
 
 // --- IMPORTANT ASSUMPTION ---
 // This code assumes Oauth2Service has been updated or provides alternative methods
@@ -28,12 +28,42 @@ export class ApiService {
 
   constructor() {
     this.client.setAuthorizationContext({
-      // Assumes Oauth2Service.getAuthorization() returns Promise<string>
-      getAuthorization: () => Oauth2Service.getAuthorization(), // Directly return the Promise
-
-      // Assumes Oauth2Service.getDPoPProofJWTAsync() returns Promise<string>
-      getDPoPProofJWT: (method: string, uri: string, nonce?: string | null) =>
-        Oauth2Service.getDPoPProofJWTAsync(method, uri, nonce), // Directly return the Promise
+      getAuthorization: async () => {
+        try {
+          const service = oauth2();
+          await service.ensureInitialized();
+          const auth = await service.oauth2Instance?.getAuthorization();
+          console.log("Authorization token:", auth ? "***TOKEN***" : "null");
+          return auth || "";
+        } catch (error) {
+          console.error("Error getting authorization:", error);
+          return "";
+        }
+      },
+      getDPoPProofJWT: async (method: string, uri: string, nonce?: string | null) => {
+        try {
+          const service = oauth2();
+          await service.ensureInitialized();
+          const oauth2Instance = service.oauth2Instance;
+          
+          if (!oauth2Instance) {
+            console.log("DPoP JWT: No OAuth2 instance");
+            return "";
+          }
+          
+          if (typeof (oauth2Instance as any).getDPoPProofJWT !== 'function') {
+            console.log("DPoP JWT: getDPoPProofJWT method not available, available methods:", Object.getOwnPropertyNames(oauth2Instance));
+            return "";
+          }
+          
+          const jwt = await (oauth2Instance as any).getDPoPProofJWT(method, uri, nonce);
+          console.log("DPoP JWT:", jwt ? "***JWT***" : "null");
+          return jwt || "";
+        } catch (error) {
+          console.error("Error getting DPoP JWT:", error);
+          return "";
+        }
+      },
     });
   }
 

@@ -7,59 +7,27 @@ const groups = new Map<string, L.LayerGroup>();
 export function initMap() {
   if (map) return;
 
+  // 本家の設定に合わせる
   map = L.map("map", {
-    center: [35, 135],
-    zoom: 5,
-    maxZoom: 9,
-    minZoom: 2,
-    renderer: L.canvas(),
-    zoomControl: false,
+    center: [35, 135], // 本家と同じ中心点
+    zoom: 5, // 本家と同じズーム
+    maxZoom: 9, // 本家と同じ最大ズーム
+    minZoom: 2, // 本家と同じ最小ズーム
+    renderer: L.canvas(), // 本家と同じレンダラー
   });
 
   for (const group of groups.values()) {
     group.addTo(map);
   }
 
-  const gridPref = L.vectorGrid.protobuf(
-    "https://soshi1822.jp/map/tile/prefectures/{z}/{x}/{y}.pbf",
-    {
-      maxNativeZoom: 12,
-      minNativeZoom: 2,
-      rendererFactory: L.canvas.tile,
-      vectorTileLayerStyles: {
-        prefectures: {
-          weight: 2,
-          fill: true,
-          fillOpacity: 1,
-          fillColor: "#eaeaea",
-          color: "#696969",
-        },
-      },
-    }
-  );
+  // 本家のベクタータイルを使用（CORS問題が解決されるまで一時的にOSMを使用）
+  const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  });
 
-  const gridWorld = L.vectorGrid.protobuf(
-    "https://soshi1822.jp/map/tile/world/{z}/{x}/{y}.pbf",
-    {
-      zIndex: 4,
-      maxNativeZoom: 10,
-      minNativeZoom: 2,
-      rendererFactory: L.canvas.tile,
-      vectorTileLayerStyles: {
-        world: {
-          weight: 2,
-          color: "#696969",
-          fillColor: "#ece8e8",
-          fillOpacity: 1,
-          fill: true,
-          bubblingMouseEvents: false,
-        },
-      },
-    }
-  );
+  map.addLayer(tileLayer);
 
-  map.addLayer(gridPref);
-  map.addLayer(gridWorld);
+  console.log("Map initialized");
 }
 
 export function destroyMap() {

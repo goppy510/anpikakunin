@@ -1,8 +1,16 @@
 /* src/app/components/monitor/Monitor.tsx */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+console.log("Monitor component loaded");
 import cn from "classnames";
+import { ApiService } from "@/app/api/ApiService";
+
+const MapComponent = dynamic(() => import("./map/MapCompnent"), {
+  ssr: false,
+});
 
 type EventItem = {
   eventId: string;
@@ -152,9 +160,8 @@ export default function Monitor() {
         </aside>
 
         {/* ---- event-data/map ---- */}
-        <main className="flex-1 bg-gray-50 flex items-center justify-center">
-          {/* ここに Map や EventView を配置 */}
-          <p className="text-gray-400">Map / EventView Area</p>
+        <main className="flex-1 bg-gray-50">
+          <MapComponent />
         </main>
       </div>
     </div>

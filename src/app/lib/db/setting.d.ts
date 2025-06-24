@@ -4,4 +4,6 @@ export type AppSettings = {
   oauthRefreshToken: string;
   soundPlayAutoActivation: boolean;
   oauthDPoPKeypair: Keypair;
+  oauthCodeVerifier: string;
+  oauthState: string;
 };
