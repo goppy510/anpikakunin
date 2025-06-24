@@ -10,13 +10,19 @@ import { ApiService } from "@/app/api/ApiService";
 
 const MapComponent = dynamic(() => import("./map/MapCompnent"), {
   ssr: false,
-  loading: () => <div style={{ 
-    height: '100%', 
-    display: 'flex', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    color: 'white'
-  }}>地図を読み込み中...</div>
+  loading: () => (
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "white",
+      }}
+    >
+      地図を読み込み中...
+    </div>
+  ),
 });
 
 type EventItem = {
@@ -50,6 +56,53 @@ export default function Monitor() {
   const [soundPlay, setSoundPlay] = useState(false);
   const [events, setEvents] = useState<EventItem[]>(dummyEvents);
   const [viewEventId, setViewEventId] = useState<string | null>(null);
+
+  // 震度に応じた色を取得する関数（マップと同じ色スキーム）
+  const getIntensityColor = (intensity: string): string => {
+    const normalizedIntensity = parseFloat(intensity) || 0;
+
+    if (intensity === "5弱" || intensity === "5-") return "#ffff00";
+    if (intensity === "5強" || intensity === "5+") return "#ffcc00";
+    if (intensity === "6弱" || intensity === "6-") return "#ff9900";
+    if (intensity === "6強" || intensity === "6+") return "#ff6600";
+
+    if (normalizedIntensity === 0) return "#0066ff";
+    if (normalizedIntensity === 1) return "#0080ff";
+    if (normalizedIntensity === 2) return "#00ccff";
+    if (normalizedIntensity === 3) return "#00ff99";
+    if (normalizedIntensity === 4) return "#66ff33";
+    if (normalizedIntensity === 5) return "#ffff00";
+    if (normalizedIntensity === 6) return "#ff9900";
+    if (normalizedIntensity >= 7) return "#ff0000";
+    return "#0066ff";
+  };
+
+  // 黄色系の色で黒文字が必要かどうかを判定
+  const needsDarkText = (intensity: string): boolean => {
+    const color = getIntensityColor(intensity);
+    // 黄色系の色（明るい色）は黒文字を使用
+    return color === "#ffff00" || color === "#ffcc00" || color === "#66ff33";
+  };
+
+  // 震度に応じた左ボーダーのTailwindクラスを取得
+  const getIntensityBorderClass = (intensity: string): string => {
+    const normalizedIntensity = parseFloat(intensity) || 0;
+
+    if (intensity === "5弱" || intensity === "5-") return "border-l-yellow-400";
+    if (intensity === "5強" || intensity === "5+") return "border-l-yellow-500";
+    if (intensity === "6弱" || intensity === "6-") return "border-l-orange-500";
+    if (intensity === "6強" || intensity === "6+") return "border-l-orange-600";
+
+    if (normalizedIntensity === 0) return "border-l-blue-500";
+    if (normalizedIntensity === 1) return "border-l-blue-400";
+    if (normalizedIntensity === 2) return "border-l-cyan-400";
+    if (normalizedIntensity === 3) return "border-l-green-400";
+    if (normalizedIntensity === 4) return "border-l-lime-400";
+    if (normalizedIntensity === 5) return "border-l-yellow-400";
+    if (normalizedIntensity === 6) return "border-l-orange-500";
+    if (normalizedIntensity >= 7) return "border-l-red-500";
+    return "border-l-gray-500";
+  };
 
   /* ---------- UIハンドラ例 ---------- */
   const openWs = () => setStatus("connecting");
@@ -132,46 +185,112 @@ export default function Monitor() {
       {/* main -------------------------------------------------------- */}
       <div className="z-[5] flex flex-1 max-h-full overflow-hidden">
         {/* ---- event list ---- */}
-        <aside className="flex flex-col w-[260px] max-w-[260px]">
-          <header className="py-1.5 bg-[#bcd4ee] text-center">
-            <h3 className="text-base">地震情報履歴（{events.length}件）</h3>
+        <aside className="flex flex-col w-[380px] max-w-[380px]">
+          <header className="py-1 bg-red-600 text-center border-b-2 border-red-700">
+            <h3 className="text-xs font-bold text-white tracking-wide leading-tight">
+              地震情報 [{events.length}]
+            </h3>
           </header>
 
-          <ul className="flex-1 overflow-y-scroll m-0 p-0">
-            {events.map((ev) => (
-              <li
-                key={ev.eventId}
-                className={cn(
-                  "p-1.5 list-none border-b border-gray-200 cursor-pointer animate-[flash_0.65s_ease-in-out_7_alternate] opacity-100",
-                  `intensity-s${ev.maxInt ?? ""}`,
-                  viewEventId === ev.eventId && "relative view-event"
-                )}
-                onClick={() => setViewEventId(ev.eventId)}
-              >
-                {/* 時刻 */}
-                <p className="text-lg">
-                  {formatJPDateTime(ev.originTime ?? ev.arrivalTime)}
-                </p>
-                {/* 最大震度 */}
-                <p className="text-base px-2 text-right">
-                  最大震度 <span className="text-xl">{ev.maxInt ?? "-"}</span>
-                </p>
-                {/* 震源＋深さ */}
-                <p className="px-2 text-right">
-                  {ev.hypocenter?.name ?? "震源不明"}&nbsp;
-                  {renderDepth(ev.hypocenter?.depth)}
-                </p>
-              </li>
-            ))}
+          <ul className="flex-1 overflow-y-scroll m-0 p-2 bg-black">
+            {events.map((ev, index) => {
+              const isLatest = index === 0;
+              return (
+                <li
+                  key={ev.eventId}
+                  className={cn(
+                    "relative list-none cursor-pointer border-l-4 hover:bg-gray-700 transition-colors duration-100 rounded-r-lg",
+                    viewEventId === ev.eventId && "bg-gray-600",
+                    getIntensityBorderClass(ev.maxInt ?? "0"),
+                    isLatest
+                      ? "bg-gradient-to-r from-gray-700 to-gray-800 border-2 border-yellow-400 shadow-lg mb-3"
+                      : "bg-gray-800 mb-2"
+                  )}
+                  onClick={() => setViewEventId(ev.eventId)}
+                >
+                  <div
+                    className={cn(
+                      "flex items-center gap-5",
+                      isLatest ? "h-24 p-3" : "h-20 p-2.5"
+                    )}
+                  >
+                    {/* 震度表示 - 大型サイズ */}
+                    <div
+                      className="flex items-center justify-center font-black leading-none border-2 shrink-0 shadow-lg"
+                      style={{
+                        width: isLatest ? "70px" : "60px",
+                        height: isLatest ? "70px" : "60px",
+                        backgroundColor: getIntensityColor(ev.maxInt ?? "0"),
+                        borderColor: "rgba(0,0,0,0.4)",
+                        color: needsDarkText(ev.maxInt ?? "0")
+                          ? "#000000"
+                          : "#ffffff",
+                        fontSize: isLatest ? "2.5rem" : "2.25rem",
+                        whiteSpace: "nowrap",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      {ev.maxInt ?? "-"}
+                    </div>
+
+                    {/* 地震情報エリア */}
+                    <div className="flex-1 min-w-0">
+                      {/* 震源地 */}
+                      <div
+                        className={cn(
+                          "text-white font-bold leading-relaxed mb-2",
+                          isLatest ? "text-2xl" : "text-xl"
+                        )}
+                      >
+                        <span className="truncate block">
+                          {ev.hypocenter?.name ?? "震源不明"}
+                        </span>
+                      </div>
+
+                      {/* 時刻 */}
+                      <div
+                        className={cn(
+                          "text-gray-300 leading-relaxed font-medium",
+                          isLatest ? "text-lg" : "text-base"
+                        )}
+                      >
+                        {formatJPDateTime(ev.originTime ?? ev.arrivalTime)}
+                      </div>
+                    </div>
+
+                    {/* 右側: マグニチュードと深さ */}
+                    <div className="flex flex-col items-end justify-center text-right shrink-0">
+                      <div
+                        className={cn(
+                          "text-yellow-300 leading-relaxed font-black mb-2",
+                          isLatest ? "text-3xl" : "text-2xl"
+                        )}
+                      >
+                        M{ev.magnitude?.value ?? "-"}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-gray-200 leading-relaxed font-bold",
+                          isLatest ? "text-lg" : "text-base"
+                        )}
+                      >
+                        深さ{renderDepth(ev.hypocenter?.depth)}
+                      </div>
+                    </div>
+
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </aside>
 
         {/* ---- event-data/map ---- */}
         <main className="flex-1 bg-gray-50">
-          <MapComponent 
+          <MapComponent
             onEarthquakeUpdate={(newEvent) => {
-              console.log('New earthquake event:', newEvent);
-              setEvents(prevEvents => [newEvent, ...prevEvents.slice(0, 9)]); // 最新10件まで保持
+              console.log("New earthquake event:", newEvent);
+              setEvents((prevEvents) => [newEvent, ...prevEvents.slice(0, 9)]); // 最新10件まで保持
             }}
           />
         </main>
