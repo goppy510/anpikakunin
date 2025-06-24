@@ -50,6 +50,33 @@ export default function MapComponent({
   const [forceRender, setForceRender] = useState(0);
   const [markersVisible, setMarkersVisible] = useState(true);
   const [animatingEarthquake, setAnimatingEarthquake] = useState(false);
+  const [intensityThreshold, setIntensityThreshold] = useState<number>(3); // 震度3以上を表示
+
+  // 震度を数値に変換するヘルパー関数
+  const getIntensityValue = (intensity: number | string): number => {
+    if (typeof intensity === 'string') {
+      if (intensity === '5弱' || intensity === '5-') return 5.0;
+      if (intensity === '5強' || intensity === '5+') return 5.5;
+      if (intensity === '6弱' || intensity === '6-') return 6.0;
+      if (intensity === '6強' || intensity === '6+') return 6.5;
+      return parseFloat(intensity) || 0;
+    }
+    return intensity;
+  };
+
+  // 震度フィルタリング関数
+  const shouldShowIntensity = (intensity: number | string): boolean => {
+    return getIntensityValue(intensity) >= intensityThreshold;
+  };
+
+  // 数値震度を表示用文字列に変換する関数
+  const formatIntensityForDisplay = (intensity: number): string => {
+    if (intensity === 5.0) return "5弱";
+    if (intensity === 5.5) return "5強";
+    if (intensity === 6.0) return "6弱";
+    if (intensity === 6.5) return "6強";
+    return intensity.toString();
+  };
 
   // カスタムマーカー管理コンポーネント
   const CustomMarkers = () => {
@@ -111,8 +138,8 @@ export default function MapComponent({
         // 地震データを取得
         const earthquakeInfo = earthquakeData.get(station.code);
 
-        // 地震データがある場合のみマーカーを作成
-        if (earthquakeInfo) {
+        // 地震データがあり、かつ震度フィルタをパスする場合のみマーカーを作成
+        if (earthquakeInfo && shouldShowIntensity(earthquakeInfo.intensity)) {
           // 震度0-7のグラデーション色スキーム（青→赤）
           const getMarkerColor = (intensity: number | string) => {
             // 数値または文字列での震度を正規化
@@ -176,7 +203,7 @@ export default function MapComponent({
           map.removeLayer(marker);
         });
       };
-    }, [map, stationData, earthquakeData, markersVisible, forceRender]);
+    }, [map, stationData, earthquakeData, markersVisible, forceRender, intensityThreshold]);
 
     return null;
   };
@@ -365,12 +392,12 @@ export default function MapComponent({
     // 親コンポーネントに地震イベントを通知
     if (onEarthquakeUpdate) {
       const maxIntensity = Math.max(
-        ...Array.from(newTestData.values()).map((d) => d.intensity)
+        ...Array.from(newTestData.values()).map((d) => getIntensityValue(d.intensity))
       );
       onEarthquakeUpdate({
         eventId: `manual-test-${Date.now()}`,
         arrivalTime: new Date().toISOString(),
-        maxInt: maxIntensity.toString(),
+        maxInt: formatIntensityForDisplay(maxIntensity),
         magnitude: { value: 4.5 },
         hypocenter: { name: "手動テスト震源" },
       });
@@ -599,12 +626,12 @@ export default function MapComponent({
                 // 親コンポーネントに地震イベントを通知
                 if (onEarthquakeUpdate) {
                   const maxIntensity = Math.max(
-                    ...Array.from(newTestData.values()).map((d) => d.intensity)
+                    ...Array.from(newTestData.values()).map((d) => getIntensityValue(d.intensity))
                   );
                   onEarthquakeUpdate({
                     eventId: `test-${Date.now()}`,
                     arrivalTime: new Date().toISOString(),
-                    maxInt: maxIntensity.toString(),
+                    maxInt: formatIntensityForDisplay(maxIntensity),
                     magnitude: { value: 4.5 },
                     hypocenter: { name: "テスト震源" },
                   });
@@ -648,13 +675,19 @@ export default function MapComponent({
                     obs.areas.forEach((area: any) => {
                       if (area.stations) {
                         area.stations.forEach((station: any) => {
-                          console.log("Adding station data:", station);
-                          newEarthquakeData.set(station.code, {
-                            code: station.code,
-                            intensity: station.intensity || obs.maxInt || 0,
-                            arrivalTime:
-                              body.eventTime || new Date().toISOString(),
-                          });
+                          const stationIntensity = station.intensity || obs.maxInt || 0;
+                          // 震度フィルタリングを適用
+                          if (shouldShowIntensity(stationIntensity)) {
+                            console.log("Adding station data:", station);
+                            newEarthquakeData.set(station.code, {
+                              code: station.code,
+                              intensity: stationIntensity,
+                              arrivalTime:
+                                body.eventTime || new Date().toISOString(),
+                            });
+                          } else {
+                            console.log(`Station ${station.code} filtered out (intensity: ${stationIntensity})`);
+                          }
                         });
                       }
                     });
@@ -663,6 +696,20 @@ export default function MapComponent({
 
                 setEarthquakeData(newEarthquakeData);
                 console.log("Updated earthquake data:", newEarthquakeData);
+                
+                // 親コンポーネントに地震イベントを通知
+                if (onEarthquakeUpdate && newEarthquakeData.size > 0) {
+                  const maxIntensity = Math.max(
+                    ...Array.from(newEarthquakeData.values()).map((d) => getIntensityValue(d.intensity))
+                  );
+                  onEarthquakeUpdate({
+                    eventId: `realtime-${Date.now()}`,
+                    arrivalTime: body.eventTime || new Date().toISOString(),
+                    maxInt: formatIntensityForDisplay(maxIntensity),
+                    magnitude: body.earthquake?.magnitude || { value: undefined },
+                    hypocenter: body.earthquake?.hypocenter || { name: "不明" },
+                  });
+                }
               }
 
               // パターン2: 直接震度データがある場合
@@ -830,6 +877,32 @@ export default function MapComponent({
           </span>
           <br />
           地震データ: {earthquakeData.size}件
+          <br />
+          震度フィルタ: 
+          <select
+            value={intensityThreshold}
+            onChange={(e) => setIntensityThreshold(Number(e.target.value))}
+            style={{
+              marginLeft: "5px",
+              padding: "1px 3px",
+              fontSize: "11px",
+              background: "#333",
+              color: "white",
+              border: "1px solid #555",
+              borderRadius: "3px",
+            }}
+          >
+            <option value={0}>震度0以上</option>
+            <option value={1}>震度1以上</option>
+            <option value={2}>震度2以上</option>
+            <option value={3}>震度3以上</option>
+            <option value={4}>震度4以上</option>
+            <option value={5}>震度5弱以上</option>
+            <option value={5.5}>震度5強以上</option>
+            <option value={6}>震度6弱以上</option>
+            <option value={6.5}>震度6強以上</option>
+            <option value={7}>震度7のみ</option>
+          </select>
           <br />
           <button
             onClick={addTestEarthquakeData}
