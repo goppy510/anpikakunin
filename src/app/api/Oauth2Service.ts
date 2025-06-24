@@ -1,91 +1,282 @@
+// src/app/api/Oauth2Service.ts
+"use client";
+
 import { OAuth2Code } from "@dmdata/oauth2-client";
 import { Settings } from "@/app/lib/db/settings";
-import { environment } from "@/environments/environment";
+import { env } from "@/app/lib/env";
 
-let oauth2: OAuth2Code | undefined;
-let refreshToken: string | undefined;
+const CLIENT_ID = "CId.LgawSy4V1SNsimqooHFBiVNvLjdZtS1K5dJL6wyX5gfE";
+const REDIRECT_URI = env.NEXT_PUBLIC_OAUTH_REDIRECT_URI;
+const SCOPES = [
+  "contract.list",
+  "parameter.earthquake",
+  "socket.start",
+  "telegram.list",
+  "telegram.data",
+  "telegram.get.earthquake",
+  "gd.earthquake",
+] as const;
 
-export async function refreshTokenDelete() {
-  await Settings.delete("oauthRefreshToken");
-  refreshToken = undefined;
-}
+export class Oauth2Service {
+  private oauth2: OAuth2Code | null = null;
+  private initPromise: Promise<void> | null = null;
+  private codeVerifier: string | null = null;
+  private codeChallenge: string | null = null;
+  private state: string | null = null;
 
-export async function getRefreshToken(): Promise<string | undefined> {
-  return refreshToken;
-}
-
-export async function oAuth2ClassReInit() {
-  await initOauth2();
-}
-
-export async function getAuthorization(): Promise<string> {
-  if (!oauth2) {
-    await waitForInit();
+  constructor() {
+    this.initPromise = this.init();
   }
-  return oauth2!.getAuthorization();
-}
 
-export async function getDPoPProofJWT(
-  method: string,
-  uri: string,
-  nonce?: string | null
-): Promise<string | null> {
-  if (!oauth2) {
-    await waitForInit();
+  async ensureInitialized(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
   }
-  return oauth2!.getDPoPProofJWT(method, uri, nonce);
-}
 
-export async function refreshTokenCheck(): Promise<boolean> {
-  return !!(await Settings.get("oauthRefreshToken"));
-}
-
-export async function initOauth2() {
-  const storedRefreshToken = await Settings.get("oauthRefreshToken");
-  const oauthDPoPKeypair = (await Settings.get("oauthDPoPKeypair")) ?? "ES384";
-
-  oauth2 = new OAuth2Code({
-    endpoint: {
-      authorization: "https://manager.dmdata.jp/account/oauth2/v1/auth",
-      token: "https://manager.dmdata.jp/account/oauth2/v1/token",
-      introspect: "https://manager.dmdata.jp/account/oauth2/v1/introspect",
-    },
-    client: {
-      id: "CId.LgawSy4V1SNsimqooHFBiVNvLjdZtS1K5dJL6wyX5gfE",
-      scopes: [
-        "contract.list",
-        "parameter.earthquake",
-        "parameter.tsunami",
-        "socket.start",
-        "telegram.list",
-        "telegram.data",
-        "telegram.get.earthquake",
-        "telegram.get.volcano",
-        "telegeram.get.weather",
-        "gd.earthquake",
-      ],
-      redirectUri: environment.OAUTH_REDIRECT_URI,
-    },
-    pkce: true,
-    refreshToken: storedRefreshToken,
-    dpop: oauthDPoPKeypair,
-  });
-
-  refreshToken = storedRefreshToken;
-
-  oauth2
-    .on("refresh_token", (token) => {
-      refreshToken = token;
-      Settings.set("oauthRefreshToken", token);
-    })
-    .on("dpop_keypair", (keypair) => Settings.set("oauthDPoPKeypair", keypair));
-}
-
-async function waitForInit() {
-  let retries = 50;
-  while (!oauth2 && retries > 0) {
-    await new Promise((res) => setTimeout(res, 100));
-    retries--;
+  get oauth2Instance(): OAuth2Code | null {
+    return this.oauth2;
   }
-  if (!oauth2) throw new Error("OAuth2 not initialized");
+
+  async refreshTokenCheck(): Promise<boolean> {
+    try {
+      await this.ensureInitialized();
+      
+      // Check if we have a refresh token in storage
+      const storedRefreshToken = await Settings.get("oauthRefreshToken");
+      
+      if (!storedRefreshToken) return false;
+      
+      // Actually test if the OAuth2 instance can get authorization
+      if (this.oauth2) {
+        try {
+          const auth = await this.oauth2.getAuthorization();
+          console.log("refreshTokenCheck: Authorization test successful");
+          return !!auth;
+        } catch (error) {
+          console.log("refreshTokenCheck: Authorization test failed, returning false");
+          // If DPoP error or other auth failure, token is invalid
+          return false;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Refresh token check failed:", error);
+      return false;
+    }
+  }
+
+  async debugTokenStatus(): Promise<void> {
+    const storedRefreshToken = await Settings.get("oauthRefreshToken");
+    console.log("=== OAuth Debug ===");
+    console.log("Stored refresh token:", storedRefreshToken ? "EXISTS" : "NULL");
+    console.log("OAuth2 instance:", this.oauth2 ? "EXISTS" : "NULL");
+    if (this.oauth2) {
+      try {
+        const auth = await this.oauth2.getAuthorization();
+        console.log("getAuthorization result:", auth ? "EXISTS" : "NULL");
+      } catch (error) {
+        console.log("getAuthorization error:", error);
+      }
+    }
+    console.log("==================");
+  }
+
+  async refreshTokenDelete(): Promise<void> {
+    await this.ensureInitialized();
+    try {
+      if (this.oauth2) {
+        await this.oauth2.revoke();
+      }
+      await Settings.delete("oauthRefreshToken");
+      await Settings.delete("oauthDPoPKeypair");
+      await Settings.delete("oauthCodeVerifier");
+      await Settings.delete("oauthState");
+      
+      // Reset the OAuth2 instance to start fresh
+      this.oauth2 = null;
+      this.codeVerifier = null;
+      this.codeChallenge = null;
+      this.state = null;
+      this.initPromise = null;
+      
+      console.log("All OAuth data cleared");
+    } catch (error) {
+      console.error("Failed to delete refresh token:", error);
+      throw error;
+    }
+  }
+
+  async exchangeCodeForToken(code: string, state: string): Promise<void> {
+    // Retrieve stored code verifier and state
+    const [storedCodeVerifier, storedState] = await Promise.all([
+      Settings.get("oauthCodeVerifier"),
+      Settings.get("oauthState")
+    ]);
+    
+    console.log("Exchange - code verifier found:", !!storedCodeVerifier);
+    console.log("Exchange - state found:", !!storedState);
+    console.log("Exchange - state match:", storedState === state);
+    
+    if (!storedCodeVerifier) throw new Error("Code verifier not found");
+    if (!storedState || storedState !== state) throw new Error("State mismatch");
+
+    // Manual token exchange to avoid DPoP issues
+    const requestBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      code: code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: storedCodeVerifier,
+    });
+    
+    console.log("Token request params:", {
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      code: code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: storedCodeVerifier ? "***EXISTS***" : "NULL",
+    });
+    
+    const tokenResponse = await fetch('https://manager.dmdata.jp/account/oauth2/v1/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: requestBody,
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error("Token exchange failed:", tokenResponse.status, errorText);
+      throw new Error(`Token exchange failed: ${tokenResponse.status} ${errorText}`);
+    }
+
+    const tokens = await tokenResponse.json();
+    console.log("Token response:", tokens);
+    
+    if (tokens.refresh_token) {
+      console.log("Storing refresh token");
+      await Settings.set("oauthRefreshToken", tokens.refresh_token);
+      
+      // Clear old OAuth2 instance and reinitialize with new token
+      this.oauth2 = null;
+      await this.init();
+      console.log("OAuth2 reinitialized with new refresh token");
+    } else {
+      console.error("No refresh_token in response");
+    }
+    
+    // Clean up stored values
+    await Settings.delete("oauthCodeVerifier");
+    await Settings.delete("oauthState");
+  }
+
+  private generateCodeVerifier(): string {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode.apply(null, Array.from(array)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  private generateState(): string {
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode.apply(null, Array.from(array)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  private async generateCodeChallenge(verifier: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(digest))))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  async buildAuthorizationUrl(): Promise<string> {
+    await this.ensureInitialized();
+    if (!this.oauth2) {
+      // Reinitialize if cleared
+      await this.init();
+    }
+    if (!this.oauth2) throw new Error("OAuth2 not initialized");
+
+    // Always use manual implementation to ensure state is included
+    // Generate PKCE manually if not available
+    if (!this.codeChallenge) {
+      this.codeVerifier = this.generateCodeVerifier();
+      this.codeChallenge = await this.generateCodeChallenge(this.codeVerifier);
+      
+      // Store code verifier and state for later use
+      await Settings.set("oauthCodeVerifier", this.codeVerifier);
+      console.log("Auth URL - code verifier stored");
+    }
+
+    // Generate state if not available
+    if (!this.state) {
+      this.state = this.generateState();
+      await Settings.set("oauthState", this.state);
+      console.log("Auth URL - state stored");
+    }
+    
+    const qp = new URLSearchParams({
+      response_type: "code",
+      client_id: CLIENT_ID,
+      scope: SCOPES.join(" "),
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: "S256",
+      code_challenge: this.codeChallenge,
+      state: this.state,
+    });
+
+    return `https://manager.dmdata.jp/account/oauth2/v1/auth?${qp.toString()}`;
+  }
+
+  private async init() {
+    const [refreshToken, dpopKeypair] = await Promise.all([
+      Settings.get("oauthRefreshToken"),
+      Settings.get("oauthDPoPKeypair"),
+    ]);
+
+    console.log("Init - refresh token exists:", !!refreshToken);
+    console.log("Init - dpop keypair exists:", !!dpopKeypair);
+
+    this.oauth2 = new OAuth2Code({
+      endpoint: {
+        authorization: "https://manager.dmdata.jp/account/oauth2/v1/auth",
+        token: "https://manager.dmdata.jp/account/oauth2/v1/token",
+        introspect: "https://manager.dmdata.jp/account/oauth2/v1/introspect",
+      },
+      client: {
+        id: CLIENT_ID,
+        scopes: [...SCOPES],
+        redirectUri: REDIRECT_URI,
+      },
+      pkce: true,
+      refreshToken: refreshToken || undefined,
+      dpop: dpopKeypair || undefined,
+    });
+
+    this.oauth2
+      .on("refresh_token", (t) => Settings.set("oauthRefreshToken", t))
+      .on("dpop_keypair", (k) => Settings.set("oauthDPoPKeypair", k));
+
+    console.log("OAuth2 instance initialized");
+  }
 }
+
+let _instance: Oauth2Service | null = null;
+export const oauth2 = () => {
+  if (typeof window === 'undefined') {
+    throw new Error('OAuth2Service can only be used on the client side');
+  }
+  return (_instance ??= new Oauth2Service());
+};

@@ -1,141 +1,178 @@
+/* src/app/components/monitor/Monitor.tsx */
 "use client";
 
-import { useWebSocketService } from "@/app/components/ui/monitor/use-websocket-service";
-import { useSoundControl } from "@/app/components/ui/monitor/use-sound-control";
-import { EarthquakeData } from "@/app/components/ui/monitor/EarthQuake/EarthQuakeData.store";
-import type { EarthquakeEvent } from "@/app/types/earthquake-event";
-import { intColor } from "@/app/utils/int-color";
-import EventView from "@/app/components/ui/monitor/EarthQuake/Event/View";
-import styles from "./monitor.module.scss";
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+console.log("Monitor component loaded");
+import cn from "classnames";
+import { ApiService } from "@/app/api/ApiService";
+import { EventItem } from "./types/EventItem";
+import { LatestEventCard } from "./ui/LatestEventCard";
+import { RegularEventCard } from "./ui/RegularEventCard";
+
+const MapComponent = dynamic(() => import("./map/MapCompnent"), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "white",
+      }}
+    >
+      地図を読み込み中...
+    </div>
+  ),
+});
+
+
+const dummyEvents: EventItem[] = [
+  {
+    eventId: "20250428120000",
+    arrivalTime: "2025-04-28T12:00:00+09:00",
+    originTime: "2025-04-28T11:58:10+09:00",
+    maxInt: "4",
+    magnitude: { value: 5.8 },
+    hypocenter: { name: "茨城県沖", depth: { value: 50 } },
+  },
+  // …モックデータ続く
+];
 
 export default function Monitor() {
-  const {
-    eventList,
-    viewEventId,
-    selectEventObservable,
-    toEvent,
-    openPanel,
-    webSocketStart,
-    webSocketClose,
-    webSocketStatus,
-    webSocketIsStartingOK,
-  } = useWebSocketService();
+  const [status, setStatus] = useState<
+    "open" | "connecting" | "closed" | "error"
+  >("closed");
+  const [soundPlay, setSoundPlay] = useState(false);
+  const [events, setEvents] = useState<EventItem[]>(dummyEvents);
+  const [viewEventId, setViewEventId] = useState<string | null>(null);
 
-  const { soundPlay, toggleSoundPlay, soundPlayEnabled } = useSoundControl();
+
+  /* ---------- UIハンドラ例 ---------- */
+  const openWs = () => setStatus("connecting");
+  const closeWs = () => setStatus("closed");
+  const toggleSound = (v: boolean) => setSoundPlay(v);
 
   return (
-    <div className={styles.monitor}>
-      <div className={styles.earthquake}>
-        <div className={styles.eventList}>
-          <div className={styles.eventHeader}>
-            <h3>地震情報履歴（100件）</h3>
-          </div>
-          <ul>
-            {eventList().map((row) => (
-              <li
-                key={row.eventId}
-                onClick={() => toEvent(row.eventId)}
-                className={`intensity-s${intColor(row.maxInt)} ${
-                  row.eventId === viewEventId ? styles.viewEvent : ""
-                }`}
-              >
-                <div className={styles.eventTime}>
-                  {new Date(row.originTime || row.arrivalTime).toLocaleString(
-                    "ja-JP",
-                    {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }
-                  )}
-                </div>
-                <div className={styles.eventMaxint}>
-                  最大震度 <span>{row.maxInt || "-"}</span>
-                </div>
-                <div className={styles.eventRegion}>
-                  <span>{row.hypocenter?.name || "震源不明"}</span>
-                  {(row.maxInt ||
-                    row.hypocenter?.depth?.condition !== "不明") && (
-                    <>
-                      <span>&nbsp;</span>
-                      {row.hypocenter?.depth?.condition ? (
-                        <span>{row.hypocenter.depth.condition}</span>
-                      ) : row.hypocenter?.depth?.value ? (
-                        <span>{row.hypocenter.depth.value}km</span>
-                      ) : (
-                        <span>不明</span>
-                      )}
-                    </>
-                  )}
-                </div>
-                <div className={styles.eventMagnitude}>
-                  {row.magnitude?.condition ? (
-                    <span>{row.magnitude.condition}</span>
-                  ) : row.magnitude?.value ? (
-                    <span>M {row.magnitude.value}</span>
-                  ) : (
-                    <span>M不明</span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+    <div className="flex flex-col flex-wrap w-screen h-screen max-h-screen">
+      {/* settings bar ------------------------------------------------ */}
+      <div className="flex text-white text-sm leading-[30px] min-h-[30px] bg-[#677a98]">
+        {/* WebSocket 操作 */}
+        <div className="flex mx-1.5">
+          {status !== "open" && (
+            <button
+              className="mx-0.5 px-0.5 border border-[#063e7c] rounded bg-[#1c528d]"
+              onClick={openWs}
+            >
+              Open
+            </button>
+          )}
+          {status === "open" && (
+            <button
+              className="mx-0.5 px-0.5 border border-[#063e7c] rounded bg-[#1c528d]"
+              onClick={closeWs}
+            >
+              to&nbsp;Close
+            </button>
+          )}
+          <span
+            className={cn(
+              "mx-0.5 px-0.5 rounded text-black",
+              {
+                open: "border border-green-400 bg-green-200",
+                connecting: "border border-yellow-400 bg-yellow-200",
+                error: "border border-red-700 bg-red-600 text-white",
+                closed: "border border-gray-400 bg-gray-300",
+              }[status]
+            )}
+          >
+            {status}
+          </span>
         </div>
-        <div className={styles.eventData}>
-          <EventView eventData$={selectEventObservable()} />
+
+        {/* sound */}
+        <label className="mx-1.5">
+          <span>音声通知:</span>
+          <input
+            type="checkbox"
+            checked={soundPlay}
+            onChange={(e) => toggleSound(e.target.checked)}
+            className="mx-0.5 align-middle"
+          />
+        </label>
+
+        {/* パネル呼び出し例 */}
+        <div className="flex mx-1.5">
+          <button
+            className="mx-0.5 px-0.5 border border-[#063e7c] rounded bg-[#1c528d]"
+            onClick={() => console.log("地震情報検索を開く")}
+          >
+            地震情報検索
+          </button>
+        </div>
+
+        <div className="flex-grow" />
+
+        {/* package 情報 */}
+        <div className="text-xs mx-1.5 flex items-center gap-1">
+          <a href="https://github.com/pdmdss/app-etcm" target="_blank">
+            <img
+              src="/assets/github.png"
+              alt="github"
+              className="h-6 p-0.5 rounded bg-white"
+            />
+          </a>
+          <span>pdmdss / app-etcm v0.0.0</span>
         </div>
       </div>
 
-      <div className={styles.settings}>
-        <div className={styles.websocket}>
-          <div>WebSocket:</div>
-          {webSocketIsStartingOK() && (
-            <div className={styles.websocketStart} onClick={webSocketStart}>
-              Open
-            </div>
-          )}
-          <div className={`${styles.websocketStatus} ${webSocketStatus()}`}>
-            {webSocketStatus()}
-          </div>
-          {webSocketStatus() === "open" && (
-            <div className={styles.websocketClose} onClick={webSocketClose}>
-              to Close
-            </div>
-          )}
-        </div>
-        <div className={styles.sound}>
-          <label>
-            <span>音声通知:</span>
-            <input
-              type="checkbox"
-              checked={soundPlay}
-              onChange={toggleSoundPlay}
-            />
-          </label>
-        </div>
-        <div className={styles.panes}>
-          <div
-            onClick={() => openPanel("earthquake-history")}
-            className={styles.panel}
-          >
-            地震情報検索
-          </div>
-        </div>
-        <div className={styles.spacer}></div>
-        <div className={styles.package}>
-          <span>
-            <a href="https://github.com/pdmdss/app-etcm" target="_blank">
-              <img
-                src="/assets/github.png"
-                alt="github"
-                className={styles.logoGithub}
-              />
-            </a>
-          </span>
-          <span>{`pdmdss / app-etcm v1.0.0`}</span>
-        </div>
+      {/* main -------------------------------------------------------- */}
+      <div className="z-[5] flex flex-1 max-h-full overflow-hidden">
+        {/* ---- event list ---- */}
+        <aside className="flex flex-col w-[380px] max-w-[380px]">
+          <header className="py-1 bg-red-600 text-center border-b-2 border-red-700">
+            <h3 className="text-xs font-bold text-white tracking-wide leading-tight">
+              地震情報 [{events.length}]
+            </h3>
+          </header>
+
+          <ul className="flex-1 overflow-y-scroll m-0 p-2 bg-black">
+            {events.map((ev, index) => {
+              const isLatest = index === 0;
+              const isSelected = viewEventId === ev.eventId;
+              
+              return isLatest ? (
+                <LatestEventCard
+                  key={ev.eventId}
+                  event={ev}
+                  isSelected={isSelected}
+                  onClick={() => setViewEventId(ev.eventId)}
+                />
+              ) : (
+                <RegularEventCard
+                  key={ev.eventId}
+                  event={ev}
+                  isSelected={isSelected}
+                  onClick={() => setViewEventId(ev.eventId)}
+                />
+              );
+            })}
+          </ul>
+        </aside>
+
+        {/* ---- event-data/map ---- */}
+        <main className="flex-1 bg-gray-50">
+          <MapComponent
+            onEarthquakeUpdate={(newEvent) => {
+              console.log("New earthquake event:", newEvent);
+              setEvents((prevEvents) => [newEvent, ...prevEvents.slice(0, 9)]); // 最新10件まで保持
+            }}
+          />
+        </main>
       </div>
     </div>
   );
 }
+
