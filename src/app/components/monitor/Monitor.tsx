@@ -10,6 +10,13 @@ import { ApiService } from "@/app/api/ApiService";
 
 const MapComponent = dynamic(() => import("./map/MapCompnent"), {
   ssr: false,
+  loading: () => <div style={{ 
+    height: '100%', 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    color: 'white'
+  }}>地図を読み込み中...</div>
 });
 
 type EventItem = {

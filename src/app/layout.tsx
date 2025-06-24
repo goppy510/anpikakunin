@@ -12,7 +12,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head></head>
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning={true}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
         </ThemeProvider>
