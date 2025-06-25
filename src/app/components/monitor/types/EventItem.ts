@@ -10,4 +10,7 @@ export type EventItem = {
     name?: string;
     depth?: { value?: number; condition?: string };
   };
+  isTest?: boolean;
+  isConfirmed?: boolean; // 最終確定フラグ
+  currentMaxInt?: string; // 現在の最大震度（地図用）
 };
