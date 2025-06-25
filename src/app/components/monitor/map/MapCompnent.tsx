@@ -28,6 +28,8 @@ interface EarthquakeData {
   arrivalTime: string;
 }
 
+import { EventItem } from "../types/EventItem";
+
 interface MapComponentProps {
   onEarthquakeUpdate?: (event: {
     eventId: string;
@@ -36,10 +38,18 @@ interface MapComponentProps {
     magnitude?: { value?: number };
     hypocenter?: { name?: string };
   }) => void;
+  runSimulation?: boolean;
+  onSimulationComplete?: () => void;
+  testMode?: boolean;
+  earthquakeEvents?: EventItem[]; // 地図表示用のイベントデータ
 }
 
 export default function MapComponent({
   onEarthquakeUpdate,
+  runSimulation = false,
+  onSimulationComplete,
+  testMode = false,
+  earthquakeEvents = [],
 }: MapComponentProps = {}) {
   const [prefectureData, setPrefectureData] =
     useState<FeatureCollection | null>(null);
@@ -429,386 +439,143 @@ export default function MapComponent({
   }, []);
 
   // WebSocket接続でリアルタイムデータを取得
+  // 注意: WebSocketManagerで接続管理しているため、MapComponentでの独自接続は無効化
   useEffect(() => {
-    // クライアントサイドでのみ実行
     if (!isClient) return;
-
-    let ws: WebSocket | null = null;
-
-    const connectWebSocket = async () => {
-      setWsStatus("connecting");
-      try {
-        // OAuth2認証を確認
-        await oauth2Service.ensureInitialized();
-
-        const isAuthenticated = await oauth2Service.refreshTokenCheck();
-        if (!isAuthenticated) {
-          console.log("No authentication available for WebSocket");
-          setWsStatus("error");
-          return;
-        }
-
-        // OAuth2インスタンスからアクセストークンを取得
-        const oauth2Instance = oauth2Service.oauth2Instance;
-        if (!oauth2Instance) {
-          console.log("OAuth2 instance not available");
-          setWsStatus("error");
-          return;
-        }
-
-        // WebSocketチケットを取得（クライアントサイドで直接）
-        console.log("Getting WebSocket ticket directly from client...");
-        let ticket: string;
-        try {
-          // OAuth2インスタンスからアクセストークンを取得
-          let accessToken: string;
-          try {
-            // @dmdata/oauth2-clientの正しいメソッドを使用
-            const authorization = await oauth2Instance.getAuthorization();
-            accessToken = authorization.replace("Bearer ", "");
-            console.log("Access token obtained:", !!accessToken);
-          } catch (tokenError) {
-            console.error("Failed to get access token:", tokenError);
-            throw new Error("Failed to get access token");
-          }
-
-          // 複数のエンドポイントを試す
-          const possibleEndpoints = [
-            "https://api.dmdata.jp/v2/socket",
-            "https://api.dmdata.jp/v2/socket/start",
-            "https://api.dmdata.jp/v2/websocket",
-            "https://api.dmdata.jp/v2/websocket/start",
-          ];
-
-          const requestBody = {
-            classifications: ["telegram.earthquake"],
-            appName: "anpikakunin-app",
-            formatMode: "json",
-          };
-
-          let ticketResponse: Response | null = null;
-          let successfulUrl = "";
-
-          for (const apiUrl of possibleEndpoints) {
-            console.log("Trying endpoint:", apiUrl);
-
-            try {
-              const response = await fetch(apiUrl, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestBody),
-              });
-
-              console.log("Response status for", apiUrl, ":", response.status);
-
-              if (response.ok) {
-                ticketResponse = response;
-                successfulUrl = apiUrl;
-                break;
-              } else if (response.status === 409) {
-                // 409エラー（最大接続数）の場合は一時的にスキップ
-                const errorText = await response.text();
-                console.log(
-                  "Connection limit reached for",
-                  apiUrl,
-                  ":",
-                  errorText
-                );
-                console.log("Waiting 2 seconds before trying next endpoint...");
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                continue;
-              } else if (response.status !== 404) {
-                // 404以外のエラーは記録して続ける
-                const errorText = await response.text();
-                console.log("Non-404 error for", apiUrl, ":", errorText);
-                ticketResponse = response;
-                successfulUrl = apiUrl;
-                break;
-              }
-            } catch (fetchError) {
-              console.log("Fetch error for", apiUrl, ":", fetchError);
-            }
-          }
-
-          if (!ticketResponse) {
-            throw new Error("All DMDATA API endpoints failed");
-          }
-
-          console.log("Using endpoint:", successfulUrl);
-
-          if (!ticketResponse.ok) {
-            // Responseがすでに読まれている可能性があるのでチェック
-            let errorText = "Unknown error";
-            try {
-              if (!ticketResponse.bodyUsed) {
-                errorText = await ticketResponse.text();
-              } else {
-                errorText = `HTTP ${ticketResponse.status} ${ticketResponse.statusText}`;
-              }
-            } catch (readError) {
-              console.error("Failed to read error response:", readError);
-              errorText = `HTTP ${ticketResponse.status} ${ticketResponse.statusText}`;
-            }
-
-            console.error(
-              "DMDATA API error:",
-              ticketResponse.status,
-              errorText
-            );
-            throw new Error(
-              `DMDATA API error: ${ticketResponse.status} ${errorText}`
-            );
-          }
-
-          const ticketData = await ticketResponse.json();
-          console.log("WebSocket ticket response:", ticketData);
-
-          if (!ticketData.ticket) {
-            throw new Error("No ticket received from API");
-          }
-
-          ticket = ticketData.ticket;
-          console.log("WebSocket ticket obtained successfully");
-        } catch (error) {
-          console.error("Failed to get WebSocket ticket:", error);
-          setWsStatus("error");
-          return;
-        }
-
-        // DMDATA WebSocketエンドポイント（チケット付き）
-        const wsUrl = `wss://ws.api.dmdata.jp/v2/websocket?ticket=${ticket}`;
-        console.log("Connecting to WebSocket with ticket...");
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = () => {
-          console.log(
-            "WebSocket connected successfully with ticket authentication"
-          );
-          setWsStatus("open");
-
-          // チケット認証で接続済みのため、追加の認証メッセージは不要
-          console.log("WebSocket is ready to receive earthquake data");
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-
-            // すべてのメッセージタイプをログ出力
-            if (data.type === "ping") {
-              return;
-            }
-
-            if (data.type === "start") {
-              // 動作確認用のテストデータを追加（5秒後）
-              setTimeout(() => {
-                // サンプル観測点にテストデータを追加
-                const sampleStations = ["0110100", "0121700", "0122400"]; // 札幌、江別、千歳
-                const newTestData = new Map<string, EarthquakeData>();
-
-                sampleStations.forEach((stationCode, index) => {
-                  const testData = {
-                    code: stationCode,
-                    intensity: 3 + index, // 震度3、4、5
-                    arrivalTime: new Date().toISOString(),
-                  };
-                  newTestData.set(stationCode, testData);
-                });
-
-                setEarthquakeData(newTestData);
-
-                // マーカーを一度非表示にしてから再表示
-                setForceRender((prev) => prev + 1);
-
-                // 親コンポーネントに地震イベントを通知
-                if (onEarthquakeUpdate) {
-                  const maxIntensity = Math.max(
-                    ...Array.from(newTestData.values()).map((d) => getIntensityValue(d.intensity))
-                  );
-                  onEarthquakeUpdate({
-                    eventId: `test-${Date.now()}`,
-                    arrivalTime: new Date().toISOString(),
-                    maxInt: formatIntensityForDisplay(maxIntensity),
-                    magnitude: { value: 4.5 },
-                    hypocenter: { name: "テスト震源" },
-                  });
-                }
-              }, 5000);
-
-              return;
-            }
-
-            if (data.type === "error") {
-              console.error("WebSocket error message:", data);
-              return;
-            }
-
-            // DMDATAのWebSocketメッセージ形式に対応
-            if (data.type === "data") {
-              console.log("Data message received!");
-              console.log("Data content:", data);
-
-              // 様々なデータ形式を確認
-              const body = data.body || data;
-
-              console.log("Processing body:", body);
-
-              // 地震情報の処理 - 様々なパスを試す
-              let foundEarthquakeData = false;
-
-              // パターン1: body.earthquake.intensityがある場合
-              if (
-                body.earthquake &&
-                body.earthquake.intensity &&
-                body.earthquake.intensity.observation
-              ) {
-                console.log("Found earthquake intensity data (pattern 1)");
-                foundEarthquakeData = true;
-                const newEarthquakeData = new Map(earthquakeData);
-
-                body.earthquake.intensity.observation.forEach((obs: any) => {
-                  console.log("Processing observation:", obs);
-                  if (obs.areas) {
-                    obs.areas.forEach((area: any) => {
-                      if (area.stations) {
-                        area.stations.forEach((station: any) => {
-                          const stationIntensity = station.intensity || obs.maxInt || 0;
-                          // 震度フィルタリングを適用
-                          if (shouldShowIntensity(stationIntensity)) {
-                            console.log("Adding station data:", station);
-                            newEarthquakeData.set(station.code, {
-                              code: station.code,
-                              intensity: stationIntensity,
-                              arrivalTime:
-                                body.eventTime || new Date().toISOString(),
-                            });
-                          } else {
-                            console.log(`Station ${station.code} filtered out (intensity: ${stationIntensity})`);
-                          }
-                        });
-                      }
-                    });
-                  }
-                });
-
-                setEarthquakeData(newEarthquakeData);
-                console.log("Updated earthquake data:", newEarthquakeData);
-                
-                // 親コンポーネントに地震イベントを通知
-                if (onEarthquakeUpdate && newEarthquakeData.size > 0) {
-                  const maxIntensity = Math.max(
-                    ...Array.from(newEarthquakeData.values()).map((d) => getIntensityValue(d.intensity))
-                  );
-                  onEarthquakeUpdate({
-                    eventId: `realtime-${Date.now()}`,
-                    arrivalTime: body.eventTime || new Date().toISOString(),
-                    maxInt: formatIntensityForDisplay(maxIntensity),
-                    magnitude: body.earthquake?.magnitude || { value: undefined },
-                    hypocenter: body.earthquake?.hypocenter || { name: "不明" },
-                  });
-                }
-              }
-
-              // パターン2: 直接震度データがある場合
-              if (!foundEarthquakeData && (body.intensity || body.stations)) {
-                console.log("Found earthquake intensity data (pattern 2)");
-                foundEarthquakeData = true;
-                // 単純な震度データの処理を追加
-              }
-
-              if (!foundEarthquakeData) {
-                console.log(
-                  "No earthquake intensity data found in this message"
-                );
-                console.log("Available properties:", Object.keys(body));
-              }
-            }
-
-            // その他のメッセージタイプ
-            if (
-              data.type !== "ping" &&
-              data.type !== "start" &&
-              data.type !== "error" &&
-              data.type !== "data"
-            ) {
-              console.log("Unknown message type:", data.type);
-              console.log("Full unknown message:", data);
-            }
-          } catch (error) {
-            console.error("Failed to parse WebSocket message:", error);
-          }
-        };
-
-        ws.onerror = (error) => {
-          console.error("WebSocket error occurred:");
-          console.error("Error details:", error);
-          console.error("WebSocket readyState:", ws?.readyState);
-          console.error("WebSocket URL:", ws?.url);
-          setWsStatus("error");
-        };
-
-        ws.onclose = (event) => {
-          console.log("WebSocket disconnected");
-          console.log("Close code:", event.code);
-          console.log("Close reason:", event.reason);
-          console.log("Was clean close:", event.wasClean);
-
-          // 一般的なWebSocketクローズコードの意味
-          const closeCodeMeanings: Record<number, string> = {
-            1000: "Normal closure",
-            1001: "Going away",
-            1002: "Protocol error",
-            1003: "Unsupported data type",
-            1006: "Abnormal closure",
-            1007: "Invalid data",
-            1008: "Policy violation",
-            1009: "Message too large",
-            1011: "Server error",
-            1012: "Service restart",
-            1013: "Try again later",
-            1014: "Bad gateway",
-            1015: "TLS handshake failure",
-          };
-
-          console.log(
-            "Close meaning:",
-            closeCodeMeanings[event.code] || "Unknown"
-          );
-          setWsStatus("closed");
-
-          // 409エラー（接続制限）の場合は長めの待機時間
-          // その他のエラーは短い待機時間で再接続
-          if (
-            event.code !== 1008 &&
-            event.code !== 1007 &&
-            event.code !== 1002
-          ) {
-            const waitTime = event.code === 1005 ? 10000 : 5000; // 1005は10秒待機
-            console.log(
-              `Scheduling reconnection in ${waitTime / 1000} seconds...`
-            );
-            setTimeout(connectWebSocket, waitTime);
-          } else {
-            console.log("Not reconnecting due to authentication/policy error");
-          }
-        };
-      } catch (error) {
-        console.error("Failed to create WebSocket:", error);
-        setWsStatus("error");
-      }
-    };
-
-    connectWebSocket();
+    
+    console.log("MapComponent: WebSocket connection disabled (managed by WebSocketManager)");
+    
+    // WebSocket接続はWebSocketManagerで管理されているため、
+    // MapComponentでは状態のみ設定
+    setWsStatus("open");
+    console.log("MapComponent ready for real earthquake data from WebSocketManager");
 
     return () => {
-      if (ws) {
-        ws.close();
-      }
+      // クリーンアップ（WebSocketManagerで管理されているため何もしない）
     };
+
+    // 以下の元のWebSocket接続コードを無効化
+    /*
+    let ws: WebSocket | null = null;
+
+    */
   }, [isClient]);
+
+  // WebSocketから受信したイベントデータを地図用のデータに変換
+  useEffect(() => {
+    if (!earthquakeEvents || earthquakeEvents.length === 0) return;
+    
+    console.log("Map: Updating with earthquake events:", earthquakeEvents.map(e => ({
+      eventId: e.eventId,
+      maxInt: e.maxInt,
+      currentMaxInt: e.currentMaxInt,
+      isConfirmed: e.isConfirmed,
+      hypocenter: e.hypocenter?.name
+    })));
+    
+    // currentMaxIntを使って地図データを更新
+    const newEarthquakeData = new Map<string, EarthquakeData>();
+    
+    earthquakeEvents.forEach(event => {
+      console.log(`Map: Processing event ${event.eventId}: currentMaxInt=${event.currentMaxInt}, maxInt=${event.maxInt}, isConfirmed=${event.isConfirmed}`);
+      
+      if (event.currentMaxInt && event.currentMaxInt !== "-") {
+        // ここでは仮想的な観測点データを作成（実際のAPIからのデータでは観測点コードが含まれる）
+        const intensity = parseFloat(event.currentMaxInt) || 0;
+        console.log(`Map: Using intensity ${intensity} for event ${event.eventId}`);
+        if (intensity > 0) {
+          // イベントの震源地に応じた観測点コードを選択
+          let testStationCodes: string[];
+          if (event.isTest || event.hypocenter?.name?.includes("千葉") || event.hypocenter?.name?.includes("東方沖")) {
+            // テストイベントまたは千葉県東方沖 → 茨城県の観測点（地理的に近い）
+            console.log(`Map: Using Chiba/Ibaraki stations for event ${event.eventId} (isTest: ${event.isTest}, hypocenter: ${event.hypocenter?.name})`);
+            testStationCodes = ["0820100", "0820101", "0820121"];
+          } else if (event.hypocenter?.name?.includes("北海道") || event.hypocenter?.name?.includes("石狩")) {
+            // 北海道の観測点コード
+            console.log(`Map: Using Hokkaido stations for event ${event.eventId}`);
+            testStationCodes = ["0110100", "0121700", "0122400"];
+          } else {
+            // デフォルト（茨城県沖など）
+            console.log(`Map: Using default Ibaraki stations for event ${event.eventId}`);
+            testStationCodes = ["0820100", "0820101", "0820121"];
+          }
+          testStationCodes.forEach((stationCode, index) => {
+            const stationIntensity = Math.max(0, intensity - index);
+            console.log(`Map: Setting station ${stationCode} intensity to ${stationIntensity}`);
+            newEarthquakeData.set(stationCode, {
+              code: stationCode,
+              intensity: stationIntensity, // 距離に応じて震度を減衰
+              arrivalTime: event.arrivalTime,
+            });
+          });
+        }
+      }
+    });
+    
+    if (newEarthquakeData.size > 0) {
+      console.log(`Map: Updating earthquake data with ${newEarthquakeData.size} stations:`, Array.from(newEarthquakeData.entries()));
+      setEarthquakeData(newEarthquakeData);
+      setForceRender((prev) => prev + 1);
+    } else {
+      console.log("Map: No earthquake data to update");
+    }
+  }, [earthquakeEvents]);
+
+  // 千葉県東方沖の地震波伝播アニメーション
+  const addChibaEarthquakeData = () => {
+    if (animatingEarthquake) return;
+
+    // 震源地を設定（千葉県東方沖）
+    const epicenterLat = 35.7;
+    const epicenterLon = 140.8;
+
+    // 茨城県の観測点（震源からの距離順に配置）
+    const sampleStations = [
+      { code: "0820100", intensity: 4 }, // 茨城県（震源に近い）
+      { code: "0820101", intensity: 3 }, // 茨城県
+      { code: "0820121", intensity: 2 }, // 茨城県（震源から遠い）
+    ];
+    
+    const newTestData = new Map<string, EarthquakeData>();
+
+    sampleStations.forEach(({code, intensity}) => {
+      const testData = {
+        code: code,
+        intensity: intensity,
+        arrivalTime: new Date().toISOString(),
+      };
+      newTestData.set(code, testData);
+    });
+
+    // まず空のデータを設定してマーカーをリセット
+    setEarthquakeData(new Map());
+    setForceRender((prev) => prev + 1);
+
+    // 少し待ってからアニメーション開始
+    setTimeout(() => {
+      animateEarthquakeWave(epicenterLat, epicenterLon, newTestData);
+    }, 1000); // 1秒後にアニメーション開始
+  };
+
+  // 外部からのシミュレーション実行
+  useEffect(() => {
+    if (runSimulation && !animatingEarthquake) {
+      // 現在のイベントに基づいてアニメーションを選択
+      const currentEvents = earthquakeEvents || [];
+      const hasChiba = currentEvents.some(event => 
+        event.hypocenter?.name?.includes("千葉") || 
+        event.hypocenter?.name?.includes("東方沖")
+      );
+      
+      if (hasChiba) {
+        addChibaEarthquakeData();
+      } else {
+        addTestEarthquakeData(); // デフォルトは北海道
+      }
+      
+      onSimulationComplete?.();
+    }
+  }, [runSimulation, earthquakeEvents]);
 
   return (
     <div className={styles.map}>
@@ -903,23 +670,27 @@ export default function MapComponent({
             <option value={6.5}>震度6強以上</option>
             <option value={7}>震度7のみ</option>
           </select>
-          <br />
-          <button
-            onClick={addTestEarthquakeData}
-            disabled={animatingEarthquake}
-            style={{
-              marginTop: "5px",
-              padding: "2px 8px",
-              fontSize: "11px",
-              background: animatingEarthquake ? "#666" : "#4f46e5",
-              color: "white",
-              border: "none",
-              borderRadius: "3px",
-              cursor: animatingEarthquake ? "not-allowed" : "pointer",
-            }}
-          >
-            {animatingEarthquake ? "アニメーション中..." : "北海道テストデータ"}
-          </button>
+          {testMode && (
+            <>
+              <br />
+              <button
+                onClick={addTestEarthquakeData}
+                disabled={animatingEarthquake}
+                style={{
+                  marginTop: "5px",
+                  padding: "2px 8px",
+                  fontSize: "11px",
+                  background: animatingEarthquake ? "#666" : "#4f46e5",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "3px",
+                  cursor: animatingEarthquake ? "not-allowed" : "pointer",
+                }}
+              >
+                {animatingEarthquake ? "アニメーション中..." : "北海道テストデータ"}
+              </button>
+            </>
+          )}
         </div>
       )}
       
