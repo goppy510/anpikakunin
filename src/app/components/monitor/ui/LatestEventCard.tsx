@@ -38,12 +38,22 @@ export function LatestEventCard({ event, isSelected, onClick }: LatestEventCardP
           {event.maxInt ?? "-"}
         </div>
 
+
         {/* 地震情報エリア */}
         <div className="flex-1 min-w-0">
           {/* 震源地 */}
           <div className="text-white font-bold leading-relaxed mb-2 text-2xl">
             <span className="truncate block">
-              {event.hypocenter?.name ?? "震源不明"}
+              {!event.isConfirmed ? (
+                <span className="text-orange-300">確認中</span>
+              ) : (
+                event.hypocenter?.name ?? "震源不明"
+              )}
+              {event.isTest && (
+                <span className="ml-2 text-sm font-medium text-yellow-300 bg-yellow-900 px-2 py-0.5 rounded">
+                  TEST
+                </span>
+              )}
             </span>
           </div>
 
