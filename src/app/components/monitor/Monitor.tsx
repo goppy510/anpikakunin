@@ -13,6 +13,9 @@ import { LatestEventCard } from "./ui/LatestEventCard";
 import { RegularEventCard } from "./ui/RegularEventCard";
 import { runProgressiveSimulation } from "./utils/progressiveSimulationService";
 import { WebSocketManager } from "./utils/websocketProcessor";
+import { EventDatabase } from "./utils/eventDatabase";
+import { CurrentTime } from "./components/CurrentTime";
+import { IntensityScale } from "./components/IntensityScale";
 
 const MapComponent = dynamic(() => import("./map/MapCompnent"), {
   ssr: false,
@@ -58,6 +61,31 @@ export default function Monitor() {
   const [authStatus, setAuthStatus] = useState<"checking" | "authenticated" | "not_authenticated">("checking");
   const [notificationThreshold, setNotificationThreshold] = useState(1); // デフォルト震度1
   const wsManagerRef = useRef<WebSocketManager | null>(null);
+  const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
+  const [serverTime, setServerTime] = useState<string>("");
+
+  // データベースからイベントを読み込み
+  useEffect(() => {
+    const loadEventsFromDB = async () => {
+      try {
+        console.log("IndexedDBから地震イベントを読み込み中...");
+        const storedEvents = await EventDatabase.getLatestEvents(50);
+        
+        if (storedEvents.length > 0) {
+          setEvents(storedEvents);
+          console.log(`IndexedDBから ${storedEvents.length}件 の地震イベントを復元しました`);
+        } else {
+          console.log("IndexedDBに保存された地震イベントはありません");
+        }
+      } catch (error) {
+        console.error("IndexedDBからのイベント読み込みに失敗:", error);
+      } finally {
+        setIsLoadingFromDB(false);
+      }
+    };
+
+    loadEventsFromDB();
+  }, []);
 
   // 認証状態確認
   useEffect(() => {
@@ -121,10 +149,12 @@ export default function Monitor() {
         // 既存のイベントを更新するか新規追加
         setEvents(prevEvents => {
           const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
+          let updatedEvents: EventItem[];
+          
           if (existingIndex >= 0) {
             // 既存イベントを更新
             const existingEvent = prevEvents[existingIndex];
-            const updatedEvents = [...prevEvents];
+            updatedEvents = [...prevEvents];
             
             // 既存イベントが確定済みの場合は震度を更新しない
             if (existingEvent.isConfirmed) {
@@ -144,7 +174,6 @@ export default function Monitor() {
                 originTime: event.originTime || existingEvent.originTime
               };
             }
-            return updatedEvents;
           } else {
             // 新規イベントを追加（確認中状態で）
             const newEvent = {
@@ -153,8 +182,18 @@ export default function Monitor() {
               currentMaxInt: event.maxInt,
               maxInt: "-" // 震度はハイフン表示
             };
-            return [newEvent, ...prevEvents.slice(0, 9)];
+            updatedEvents = [newEvent, ...prevEvents.slice(0, 9)];
           }
+          
+          // IndexedDBに保存（非同期で実行）
+          const eventToSave = updatedEvents.find(e => e.eventId === event.eventId);
+          if (eventToSave) {
+            EventDatabase.saveEvent(eventToSave).catch(error => {
+              console.error("IndexedDBへの保存に失敗:", error);
+            });
+          }
+          
+          return updatedEvents;
         });
       };
 
@@ -162,8 +201,12 @@ export default function Monitor() {
         setStatus(newStatus);
       };
 
+      const handleTimeUpdate = (newServerTime: string) => {
+        setServerTime(newServerTime);
+      };
+
       // WebSocketマネージャーを初期化
-      wsManagerRef.current = new WebSocketManager(handleNewEvent, handleStatusChange);
+      wsManagerRef.current = new WebSocketManager(handleNewEvent, handleStatusChange, handleTimeUpdate);
       
       // 自動接続開始
       wsManagerRef.current.connect();
@@ -263,17 +306,50 @@ export default function Monitor() {
       console.error("Manual cleanup failed:", error);
     }
   };
+
+  const cleanupDatabase = async () => {
+    if (confirm("データベースの古いイベントを削除しますか？（最新100件のみ残します）")) {
+      try {
+        await EventDatabase.cleanupOldEvents(100);
+        const stats = await EventDatabase.getStats();
+        alert(`クリーンアップ完了\n保存イベント数: ${stats.totalEvents}件`);
+      } catch (error) {
+        console.error("Database cleanup failed:", error);
+        alert("データベースのクリーンアップに失敗しました");
+      }
+    }
+  };
+
+  const clearDatabase = async () => {
+    if (confirm("すべての地震イベントデータを削除しますか？\nこの操作は取り消せません。")) {
+      try {
+        await EventDatabase.clearAll();
+        setEvents([]);
+        alert("すべての地震イベントデータを削除しました");
+      } catch (error) {
+        console.error("Database clear failed:", error);
+        alert("データベースのクリアに失敗しました");
+      }
+    }
+  };
   
   // イベント確定処理
   const confirmEvent = (eventId: string) => {
     setEvents(prevEvents => {
       return prevEvents.map(event => {
         if (event.eventId === eventId && !event.isConfirmed) {
-          return {
+          const confirmedEvent = {
             ...event,
             isConfirmed: true,
             maxInt: event.currentMaxInt || event.maxInt // 現在の震度を確定
           };
+          
+          // IndexedDBに保存
+          EventDatabase.saveEvent(confirmedEvent).catch(error => {
+            console.error("確定イベントのIndexedDB保存に失敗:", error);
+          });
+          
+          return confirmedEvent;
         }
         return event;
       });
@@ -527,6 +603,23 @@ export default function Monitor() {
           )}
         </div>
 
+        {/* データベース管理 */}
+        <div className="flex items-center mx-3">
+          <span className="text-xs mr-2">DB:</span>
+          <button
+            className="mx-1 px-2 py-1 border border-blue-500 rounded bg-blue-900 hover:bg-blue-800 text-blue-300 transition-colors text-xs"
+            onClick={cleanupDatabase}
+          >
+            古いデータ削除
+          </button>
+          <button
+            className="mx-1 px-2 py-1 border border-red-500 rounded bg-red-900 hover:bg-red-800 text-red-300 transition-colors text-xs"
+            onClick={clearDatabase}
+          >
+            全削除
+          </button>
+        </div>
+
         <div className="flex-grow" />
 
         {/* package 情報 */}
@@ -548,7 +641,7 @@ export default function Monitor() {
         <aside className="flex flex-col w-[380px] max-w-[380px]">
           <header className="py-1 bg-red-600 text-center border-b-2 border-red-700">
             <h3 className="text-xs font-bold text-white tracking-wide leading-tight">
-              地震情報 [{events.length}]
+              地震情報 [{events.length}] {isLoadingFromDB && <span className="text-yellow-300">(読み込み中...)</span>}
             </h3>
           </header>
 
@@ -604,6 +697,8 @@ export default function Monitor() {
             onSimulationComplete={() => setRunMapSimulation(false)}
             testMode={testMode}
             earthquakeEvents={events} // 地図用に現在のイベントを渡す
+            connectionStatus={status}
+            serverTime={serverTime}
           />
         </main>
       </div>

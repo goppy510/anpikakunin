@@ -14,6 +14,8 @@ import "leaflet/dist/leaflet.css";
 import styles from "./map.module.scss";
 import type { FeatureCollection } from "geojson";
 import { Oauth2Service } from "@/app/api/Oauth2Service";
+import { CurrentTime } from "../components/CurrentTime";
+import { IntensityScale } from "../components/IntensityScale";
 
 interface EarthquakeStation {
   name: string;
@@ -42,6 +44,8 @@ interface MapComponentProps {
   onSimulationComplete?: () => void;
   testMode?: boolean;
   earthquakeEvents?: EventItem[]; // 地図表示用のイベントデータ
+  connectionStatus?: "open" | "connecting" | "closed" | "error";
+  serverTime?: string;
 }
 
 export default function MapComponent({
@@ -50,6 +54,8 @@ export default function MapComponent({
   onSimulationComplete,
   testMode = false,
   earthquakeEvents = [],
+  connectionStatus = "closed",
+  serverTime = "",
 }: MapComponentProps = {}) {
   const [prefectureData, setPrefectureData] =
     useState<FeatureCollection | null>(null);
@@ -612,8 +618,8 @@ export default function MapComponent({
         {markersVisible && <CustomMarkers />}
       </MapContainer>
 
-      {/* WebSocketステータス表示（クライアントサイドのみ） */}
-      {isClient && (
+      {/* WebSocketステータス表示（テストモード時のみ） */}
+      {isClient && testMode && (
         <div
           style={{
             position: "absolute",
@@ -670,79 +676,49 @@ export default function MapComponent({
             <option value={6.5}>震度6強以上</option>
             <option value={7}>震度7のみ</option>
           </select>
-          {testMode && (
-            <>
-              <br />
-              <button
-                onClick={addTestEarthquakeData}
-                disabled={animatingEarthquake}
-                style={{
-                  marginTop: "5px",
-                  padding: "2px 8px",
-                  fontSize: "11px",
-                  background: animatingEarthquake ? "#666" : "#4f46e5",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "3px",
-                  cursor: animatingEarthquake ? "not-allowed" : "pointer",
-                }}
-              >
-                {animatingEarthquake ? "アニメーション中..." : "北海道テストデータ"}
-              </button>
-            </>
-          )}
+          <br />
+          <button
+            onClick={addTestEarthquakeData}
+            disabled={animatingEarthquake}
+            style={{
+              marginTop: "5px",
+              padding: "2px 8px",
+              fontSize: "11px",
+              background: animatingEarthquake ? "#666" : "#4f46e5",
+              color: "white",
+              border: "none",
+              borderRadius: "3px",
+              cursor: animatingEarthquake ? "not-allowed" : "pointer",
+            }}
+          >
+            {animatingEarthquake ? "アニメーション中..." : "北海道テストデータ"}
+          </button>
         </div>
       )}
       
       {/* 震度スケール凡例 */}
+      <IntensityScale />
+      
+      {/* 現在時刻表示（震度スケールの隣） */}
       {isClient && (
         <div
           style={{
             position: "absolute",
             bottom: "20px",
-            right: "10px",
+            right: "140px", // 震度スケールの左隣
             background: "rgba(0,0,0,0.8)",
             color: "white",
             padding: "10px",
             borderRadius: "5px",
             fontSize: "11px",
             zIndex: 1000,
-            minWidth: "120px"
+            minWidth: "140px"
           }}
         >
-          <div style={{ fontWeight: "bold", marginBottom: "5px", textAlign: "center" }}>震度スケール</div>
-          {[
-            { intensity: 7, color: "#ff0000", label: "震度7" },
-            { intensity: 6.5, color: "#ff6600", label: "震度6強" },
-            { intensity: 6, color: "#ff9900", label: "震度6弱" },
-            { intensity: 5.5, color: "#ffcc00", label: "震度5強" },
-            { intensity: 5, color: "#ffff00", label: "震度5弱" },
-            { intensity: 4, color: "#66ff33", label: "震度4" },
-            { intensity: 3, color: "#00ff99", label: "震度3" },
-            { intensity: 2, color: "#00ccff", label: "震度2" },
-            { intensity: 1, color: "#0080ff", label: "震度1" },
-            { intensity: 0, color: "#0066ff", label: "震度0" },
-          ].map(({ intensity, color, label }) => (
-            <div
-              key={intensity}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "2px",
-              }}
-            >
-              <div
-                style={{
-                  width: "12px",
-                  height: "12px",
-                  backgroundColor: color,
-                  borderRadius: "50%",
-                  marginRight: "8px",
-                }}
-              />
-              <span>{label}</span>
-            </div>
-          ))}
+          <CurrentTime 
+            connectionStatus={connectionStatus}
+            serverTime={serverTime}
+          />
         </div>
       )}
     </div>

@@ -275,16 +275,19 @@ export class WebSocketManager {
   private ws: WebSocket | null = null;
   private onMessage: ((event: EventItem) => void) | null = null;
   private onStatusChange: ((status: "open" | "connecting" | "closed" | "error") => void) | null = null;
+  private onTimeUpdate: ((serverTime: string) => void) | null = null;
   private apiService: ApiService;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private shouldReconnect = true;
   
   constructor(
     onMessage: (event: EventItem) => void,
-    onStatusChange: (status: "open" | "connecting" | "closed" | "error") => void
+    onStatusChange: (status: "open" | "connecting" | "closed" | "error") => void,
+    onTimeUpdate?: (serverTime: string) => void
   ) {
     this.onMessage = onMessage;
     this.onStatusChange = onStatusChange;
+    this.onTimeUpdate = onTimeUpdate || null;
     this.apiService = new ApiService();
   }
   
@@ -359,6 +362,9 @@ export class WebSocketManager {
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage;
+          
+          // サーバー時刻を抽出してコールバック実行
+          this.extractAndUpdateServerTime(message);
           
           // エラーメッセージで close=true の場合、接続を閉じる
           if (message.type === 'error' && message.close) {
@@ -547,6 +553,37 @@ export class WebSocketManager {
     } catch (error) {
       console.error("Error processing EEW data:", error);
       return null;
+    }
+  }
+
+  // WebSocketメッセージからサーバー時刻を抽出
+  private extractAndUpdateServerTime(message: WebSocketMessage): void {
+    try {
+      let serverTime: string | null = null;
+
+      // 優先順位でサーバー時刻を抽出
+      if (message.head?.time) {
+        serverTime = message.head.time;
+      } else if (message.xmlReport?.head?.time) {
+        serverTime = message.xmlReport.head.time;
+      } else if (message.passing && message.passing.length > 0) {
+        // 通過時刻から最新のタイムスタンプを取得
+        const latestPassing = message.passing.sort((a, b) => 
+          new Date(b.time).getTime() - new Date(a.time).getTime()
+        )[0];
+        serverTime = latestPassing.time;
+      }
+
+      // 有効な時刻の場合、コールバックを実行
+      if (serverTime && this.onTimeUpdate) {
+        const parsedTime = new Date(serverTime);
+        if (!isNaN(parsedTime.getTime())) {
+          this.onTimeUpdate(serverTime);
+        }
+      }
+    } catch (error) {
+      // 時刻抽出エラーは静かに処理（メイン機能に影響させない）
+      console.debug("Server time extraction failed:", error);
     }
   }
 }
