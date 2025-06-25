@@ -22,6 +22,7 @@ type GDEarthquakeEventData = APITypes.GDEarthquakeEvent.Response;
 type ParameterEarthquakeStationData =
   APITypes.ParameterEarthquakeStation.Response; // Using actual type example
 type SocketStartResponse = APITypes.SocketStart.Response; // Using actual type example
+type SocketListResponse = APITypes.SocketList.Response;
 
 export class ApiService {
   private client = new DMDATA();
@@ -42,6 +43,11 @@ export class ApiService {
       },
       getDPoPProofJWT: async (method: string, uri: string, nonce?: string | null) => {
         try {
+          console.log("=== DPoP JWT Request ===");
+          console.log("Method:", method);
+          console.log("URI:", uri);
+          console.log("Nonce:", nonce);
+          
           const service = oauth2();
           await service.ensureInitialized();
           const oauth2Instance = service.oauth2Instance;
@@ -51,16 +57,45 @@ export class ApiService {
             return "";
           }
           
+          // DPoP: 現在無効化中 - 常に空文字を返す
+          console.log("DPoP JWT: Disabled (returning empty)");
+          return "";
+          
+          console.log("OAuth2 instance exists, checking methods...");
+          console.log("Available methods:", Object.getOwnPropertyNames(oauth2Instance));
+          console.log("Available prototype methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(oauth2Instance)));
+          
           if (typeof (oauth2Instance as any).getDPoPProofJWT !== 'function') {
-            console.log("DPoP JWT: getDPoPProofJWT method not available, available methods:", Object.getOwnPropertyNames(oauth2Instance));
+            console.log("DPoP JWT: getDPoPProofJWT method not available");
+            
+            // Alternative method names to try
+            const alternativeNames = ['generateDPoPProof', 'createDPoPProof', 'dpop'];
+            for (const altName of alternativeNames) {
+              if (typeof (oauth2Instance as any)[altName] === 'function') {
+                console.log(`Found alternative method: ${altName}`);
+                try {
+                  const jwt = await (oauth2Instance as any)[altName](method, uri, nonce);
+                  console.log("Alternative DPoP JWT:", jwt ? "***JWT***" : "null");
+                  return jwt || "";
+                } catch (altError) {
+                  console.error(`Error with alternative method ${altName}:`, altError);
+                }
+              }
+            }
+            
             return "";
           }
           
           const jwt = await (oauth2Instance as any).getDPoPProofJWT(method, uri, nonce);
-          console.log("DPoP JWT:", jwt ? "***JWT***" : "null");
+          console.log("DPoP JWT result:", jwt ? "***JWT***" : "null");
           return jwt || "";
         } catch (error) {
           console.error("Error getting DPoP JWT:", error);
+          console.error("Error details:", {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          });
           return "";
         }
       },
@@ -184,5 +219,14 @@ export class ApiService {
     // Already uses async/await, no change needed
     const res = await this.client.parameter.earthquake();
     return res.data;
+  }
+
+  async socketList(params?: APITypes.SocketList.QueryParams): Promise<SocketListResponse> {
+    const res = await this.client.socket.list(params);
+    return res.data;
+  }
+
+  async socketClose(id: number): Promise<void> {
+    await this.client.socket.close(id);
   }
 }

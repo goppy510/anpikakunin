@@ -68,14 +68,29 @@ export class Oauth2Service {
   }
 
   async debugTokenStatus(): Promise<void> {
-    const storedRefreshToken = await Settings.get("oauthRefreshToken");
+    const [storedRefreshToken, storedDPoPKeypair] = await Promise.all([
+      Settings.get("oauthRefreshToken"),
+      Settings.get("oauthDPoPKeypair")
+    ]);
+    
     console.log("=== OAuth Debug ===");
     console.log("Stored refresh token:", storedRefreshToken ? "EXISTS" : "NULL");
+    console.log("Stored DPoP keypair:", storedDPoPKeypair ? "EXISTS" : "NULL");
     console.log("OAuth2 instance:", this.oauth2 ? "EXISTS" : "NULL");
+    
     if (this.oauth2) {
       try {
         const auth = await this.oauth2.getAuthorization();
         console.log("getAuthorization result:", auth ? "EXISTS" : "NULL");
+        
+        // DPoP JWT生成テスト
+        try {
+          const dpopJWT = await (this.oauth2 as any).getDPoPProofJWT("POST", "https://api.dmdata.jp/v2/socket");
+          console.log("DPoP JWT test:", dpopJWT ? "SUCCESS" : "FAILED");
+        } catch (dpopError) {
+          console.log("DPoP JWT test error:", dpopError);
+        }
+        
       } catch (error) {
         console.log("getAuthorization error:", error);
       }
@@ -248,6 +263,7 @@ export class Oauth2Service {
 
     console.log("Init - refresh token exists:", !!refreshToken);
     console.log("Init - dpop keypair exists:", !!dpopKeypair);
+    console.log("Init - dpop keypair content:", dpopKeypair ? "***KEYPAIR***" : "null");
 
     this.oauth2 = new OAuth2Code({
       endpoint: {
@@ -262,14 +278,24 @@ export class Oauth2Service {
       },
       pkce: true,
       refreshToken: refreshToken || undefined,
-      dpop: dpopKeypair || undefined,
+      // DPoP: Web Crypto APIエラーを回避するため無効化
+      // dpop: dpopKeypair || true,
     });
 
     this.oauth2
-      .on("refresh_token", (t) => Settings.set("oauthRefreshToken", t))
-      .on("dpop_keypair", (k) => Settings.set("oauthDPoPKeypair", k));
+      .on("refresh_token", (t) => {
+        console.log("Saving new refresh token");
+        Settings.set("oauthRefreshToken", t);
+      })
+      .on("dpop_keypair", (k) => {
+        console.log("Saving new DPoP keypair");
+        Settings.set("oauthDPoPKeypair", k);
+      });
 
     console.log("OAuth2 instance initialized");
+    
+    // DPoP: 現在無効化中（Web Crypto APIエラーのため）
+    console.log("DPoP is disabled to avoid Web Crypto API errors");
   }
 }
 
