@@ -494,22 +494,8 @@ export default function Monitor() {
           </button>
         </div>
 
-        {/* WebSocket 操作 */}
+        {/* WebSocket ステータス */}
         <div className="flex items-center mx-3">
-          <button
-            className="mx-1 px-3 py-1 border border-gray-600 rounded bg-gray-700 hover:bg-gray-600 transition-colors text-xs"
-            onClick={reconnectWs}
-            disabled={status === "connecting" || authStatus !== "authenticated"}
-          >
-            {status === "connecting" ? "接続中..." : "再接続"}
-          </button>
-          <button
-            className="mx-1 px-2 py-1 border border-orange-500 rounded bg-orange-900 hover:bg-orange-800 text-orange-300 transition-colors text-xs"
-            onClick={cleanupConnections}
-            disabled={authStatus !== "authenticated"}
-          >
-            接続クリア
-          </button>
           <span
             className={cn(
               "mx-1 px-2 py-1 rounded text-xs font-medium",
@@ -557,6 +543,8 @@ export default function Monitor() {
           </select>
         </div>
 
+        <div className="flex-grow" />
+
         {/* テストモード */}
         <div className="flex items-center mx-3">
           <button
@@ -580,20 +568,6 @@ export default function Monitor() {
           )}
         </div>
 
-
-        <div className="flex-grow" />
-
-        {/* package 情報 */}
-        <div className="flex items-center mx-3 text-xs text-gray-400">
-          <a href="https://github.com/pdmdss/app-etcm" target="_blank" className="flex items-center hover:text-gray-300">
-            <img
-              src="/assets/github.png"
-              alt="github"
-              className="h-5 w-5 mr-2 rounded bg-white p-0.5"
-            />
-            <span>anpikakunin v0.1.0</span>
-          </a>
-        </div>
       </div>
 
       {/* main -------------------------------------------------------- */}

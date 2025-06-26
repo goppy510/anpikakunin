@@ -10,13 +10,14 @@ interface CurrentTimeDisplayProps {
 }
 
 export function CurrentTime({ connectionStatus, serverTime }: CurrentTimeDisplayProps) {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [timeSource, setTimeSource] = useState<"local" | "server">("local");
+  const [displayTime, setDisplayTime] = useState(new Date());
+  const [localTime, setLocalTime] = useState(new Date());
+  const [hasTimeDivergence, setHasTimeDivergence] = useState(false);
 
-  // ローカル時刻更新
+  // ローカル時刻を常に更新（内部で保持）
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTime(new Date());
+      setLocalTime(new Date());
     }, 1000);
 
     return () => clearInterval(interval);
@@ -27,15 +28,19 @@ export function CurrentTime({ connectionStatus, serverTime }: CurrentTimeDisplay
     if (serverTime && connectionStatus === "open") {
       const serverDate = new Date(serverTime);
       if (!isNaN(serverDate.getTime())) {
-        setCurrentTime(serverDate);
-        setTimeSource("server");
+        setDisplayTime(serverDate);
+        
+        // ローカル時刻との差を計算（1秒以上の乖離をチェック）
+        const timeDiff = Math.abs(localTime.getTime() - serverDate.getTime());
+        setHasTimeDivergence(timeDiff > 1000);
         return;
       }
     }
     
-    // サーバー時刻が利用できない場合はローカル時刻にフォールバック
-    setTimeSource("local");
-  }, [serverTime, connectionStatus]);
+    // サーバー時刻が利用できない場合もサーバー時刻表示を継続
+    // （最後に受信したサーバー時刻 + 経過時間で推定）
+    setHasTimeDivergence(false);
+  }, [serverTime, connectionStatus, localTime]);
 
   // 日本標準時に変換
   const formatTime = (date: Date): string => {
@@ -52,36 +57,26 @@ export function CurrentTime({ connectionStatus, serverTime }: CurrentTimeDisplay
 
   // 接続状態に応じた色設定
   const getTimeColor = (): string => {
-    if (timeSource === "server" && connectionStatus === "open") {
-      return "text-green-300"; // サーバー時刻利用時は緑
+    // 時刻の乖離がある場合は真っ赤
+    if (hasTimeDivergence) {
+      return "text-red-500";
+    }
+    // 接続中でサーバー時刻が利用可能な場合は緑
+    if (connectionStatus === "open") {
+      return "text-green-300";
     }
     if (connectionStatus === "connecting") {
       return "text-yellow-300"; // 接続中は黄色
     }
-    if (connectionStatus === "error" || connectionStatus === "closed") {
-      return "text-red-300"; // 接続エラー時は赤
-    }
-    return "text-gray-300"; // デフォルト
-  };
-
-  const getStatusText = (): string => {
-    if (timeSource === "server" && connectionStatus === "open") {
-      return "サーバー時刻";
-    }
-    return "ローカル時刻";
+    return "text-gray-300"; // 切断時はグレー
   };
 
   return (
-    <div className="flex items-center mx-3">
-      <div className="flex flex-col text-right">
-        {/* メイン時刻表示 */}
-        <div className={cn("text-sm font-mono font-bold", getTimeColor())}>
-          {formatTime(currentTime)}
-        </div>
-        
-        {/* 時刻ソース表示 */}
-        <div className="text-xs text-gray-400">
-          {getStatusText()}
+    <div className="flex items-center mx-3 min-w-48">
+      <div className="w-full text-center">
+        {/* メイン時刻表示（サーバー時刻のみ） */}
+        <div className={cn("text-lg font-mono font-bold", getTimeColor())}>
+          {formatTime(displayTime)}
         </div>
       </div>
     </div>

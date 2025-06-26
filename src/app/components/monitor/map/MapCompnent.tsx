@@ -94,6 +94,54 @@ export default function MapComponent({
     return intensity.toString();
   };
 
+  // 震源地に応じた座標を取得する関数
+  const getEpicenterCoordinates = (hypocentername: string): [number, number] | null => {
+    const hypocenter = hypocentername?.toLowerCase() || '';
+    
+    // 主要な震源地の座標定義
+    if (hypocenter.includes('トカラ列島') || hypocenter.includes('tokara')) {
+      return [29.3, 129.4]; // トカラ列島近海
+    }
+    if (hypocenter.includes('長野') || hypocenter.includes('nagano')) {
+      return [36.2, 138.2]; // 長野県中部
+    }
+    if (hypocenter.includes('千葉') || hypocenter.includes('東方沖')) {
+      return [35.7, 140.8]; // 千葉県東方沖
+    }
+    if (hypocenter.includes('北海道') || hypocenter.includes('石狩')) {
+      return [43.2, 141.0]; // 北海道石狩湾
+    }
+    if (hypocenter.includes('茨城') || hypocenter.includes('ibaraki')) {
+      return [36.3, 140.5]; // 茨城県沖
+    }
+    if (hypocenter.includes('福島') || hypocenter.includes('fukushima')) {
+      return [37.4, 140.9]; // 福島県沖
+    }
+    if (hypocenter.includes('宮城') || hypocenter.includes('miyagi')) {
+      return [38.4, 141.5]; // 宮城県沖
+    }
+    if (hypocenter.includes('岩手') || hypocenter.includes('iwate')) {
+      return [39.7, 141.8]; // 岩手県沖
+    }
+    if (hypocenter.includes('青森') || hypocenter.includes('aomori')) {
+      return [40.8, 141.0]; // 青森県東方沖
+    }
+    if (hypocenter.includes('熊本') || hypocenter.includes('kumamoto')) {
+      return [32.8, 130.7]; // 熊本県
+    }
+    if (hypocenter.includes('大分') || hypocenter.includes('oita')) {
+      return [33.2, 131.6]; // 大分県
+    }
+    if (hypocenter.includes('鹿児島') || hypocenter.includes('kagoshima')) {
+      return [31.6, 130.6]; // 鹿児島県
+    }
+    if (hypocenter.includes('沖縄') || hypocenter.includes('okinawa')) {
+      return [26.2, 127.7]; // 沖縄県
+    }
+    
+    return null; // 座標が分からない場合
+  };
+
   // カスタムマーカー管理コンポーネント
   const CustomMarkers = () => {
     const map = useMap();
@@ -484,6 +532,73 @@ export default function MapComponent({
     */
   }, [isClient]);
 
+  // 震源地拡大管理コンポーネント
+  const EpicenterZoom = ({ events }: { events: any[] }) => {
+    const map = useMap();
+    const [lastEventTime, setLastEventTime] = useState<number | null>(null);
+
+    useEffect(() => {
+      if (!events || events.length === 0) {
+        // 初期表示時は全国地図
+        map.setView([38, 120], 6);
+        return;
+      }
+
+      // 最新のイベントの時刻を取得
+      const latestEvent = events[0];
+      if (!latestEvent) return;
+
+      const eventTime = new Date(latestEvent.arrivalTime).getTime();
+      const currentTime = Date.now();
+      const timeDiff = currentTime - eventTime;
+
+      // 最後のイベントから30秒以上経過していたら全国地図
+      if (timeDiff > 30000) {
+        map.setView([38, 120], 6);
+        setLastEventTime(eventTime);
+        return;
+      }
+
+      // 新しいイベントの場合のみ震源地に拡大
+      if (lastEventTime === null || eventTime > lastEventTime) {
+        if (latestEvent.hypocenter?.name && latestEvent.currentMaxInt && latestEvent.currentMaxInt !== "-") {
+          const coordinates = getEpicenterCoordinates(latestEvent.hypocenter.name);
+          if (!coordinates) return;
+
+          setLastEventTime(eventTime);
+
+          // 震度に応じたズームレベル設定
+          const intensityValue = getIntensityValue(latestEvent.currentMaxInt);
+          let zoomLevel = 7; // デフォルト
+          
+          if (intensityValue >= 5) {
+            zoomLevel = 9; // 震度5以上は詳細表示
+          } else if (intensityValue >= 3) {
+            zoomLevel = 8; // 震度3-4は中程度表示
+          } else {
+            zoomLevel = 7; // 震度1-2は広域表示
+          }
+
+          // スムーズに震源地に移動
+          map.setView(coordinates, zoomLevel, {
+            animate: true,
+            duration: 1.5
+          });
+
+          // 30秒後に全国地図に戻る
+          setTimeout(() => {
+            map.setView([38, 120], 6, {
+              animate: true,
+              duration: 2.0
+            });
+          }, 30000); // 30秒後
+        }
+      }
+    }, [map, events, lastEventTime]);
+
+    return null;
+  };
+
   // WebSocketから受信したイベントデータを地図用のデータに変換
   useEffect(() => {
     if (!earthquakeEvents || earthquakeEvents.length === 0) return;
@@ -623,6 +738,9 @@ export default function MapComponent({
 
         {/* ネイティブLeafletマーカー */}
         {markersVisible && <CustomMarkers />}
+        
+        {/* 震源地自動拡大 */}
+        <EpicenterZoom events={earthquakeEvents || []} />
       </MapContainer>
 
       {/* WebSocketステータス表示（テストモード時のみ） */}
