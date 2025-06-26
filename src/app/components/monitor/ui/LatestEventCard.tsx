@@ -10,10 +10,12 @@ interface LatestEventCardProps {
 }
 
 export function LatestEventCard({ event, isSelected, onClick }: LatestEventCardProps) {
+  const yahooUrl = `https://typhoon.yahoo.co.jp/weather/jp/earthquake/${event.eventId}.html`;
+
   return (
     <li
       className={cn(
-        "relative list-none cursor-pointer border-l-4 hover:bg-gray-700 transition-colors duration-100 rounded-r-lg",
+        "relative list-none cursor-pointer border-l-4 hover:bg-gray-700 transition-colors duration-100 rounded-r-lg group",
         isSelected && "bg-gray-600",
         getIntensityBorderClass(event.maxInt ?? "0"),
         "bg-gradient-to-r from-gray-700 to-gray-800 border-2 border-yellow-400 shadow-lg mb-3"
@@ -72,6 +74,20 @@ export function LatestEventCard({ event, isSelected, onClick }: LatestEventCardP
             深さ{renderDepth(event.hypocenter?.depth)}
           </div>
         </div>
+      </div>
+
+      {/* ホバー時のリンク表示 */}
+      <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <a
+          href={yahooUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded shadow-lg transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="mr-1">🔗</span>
+          Yahoo天気で詳細
+        </a>
       </div>
     </li>
   );

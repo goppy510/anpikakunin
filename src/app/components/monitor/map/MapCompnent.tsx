@@ -70,11 +70,11 @@ export default function MapComponent({
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: number | string): number => {
-    if (typeof intensity === 'string') {
-      if (intensity === '5弱' || intensity === '5-') return 5.0;
-      if (intensity === '5強' || intensity === '5+') return 5.5;
-      if (intensity === '6弱' || intensity === '6-') return 6.0;
-      if (intensity === '6強' || intensity === '6+') return 6.5;
+    if (typeof intensity === "string") {
+      if (intensity === "5弱" || intensity === "5-") return 5.0;
+      if (intensity === "5強" || intensity === "5+") return 5.5;
+      if (intensity === "6弱" || intensity === "6-") return 6.0;
+      if (intensity === "6強" || intensity === "6+") return 6.5;
       return parseFloat(intensity) || 0;
     }
     return intensity;
@@ -101,7 +101,7 @@ export default function MapComponent({
     useEffect(() => {
       // 新しいマーカーを作成
       const newMarkers: L.CircleMarker[] = [];
-      
+
       // 既存のマーカーをクリア（setLeafletMarkersは使わない）
       map.eachLayer((layer) => {
         if (layer instanceof L.CircleMarker) {
@@ -160,23 +160,30 @@ export default function MapComponent({
           const getMarkerColor = (intensity: number | string) => {
             // 数値または文字列での震度を正規化
             let normalizedIntensity: number;
-            
-            if (typeof intensity === 'string') {
+
+            if (typeof intensity === "string") {
               // 文字列の場合は震度表記を数値に変換
-              if (intensity === '5弱' || intensity === '5-') normalizedIntensity = 5.0;
-              else if (intensity === '5強' || intensity === '5+') normalizedIntensity = 5.5;
-              else if (intensity === '6弱' || intensity === '6-') normalizedIntensity = 6.0;
-              else if (intensity === '6強' || intensity === '6+') normalizedIntensity = 6.5;
+              if (intensity === "5弱" || intensity === "5-")
+                normalizedIntensity = 5.0;
+              else if (intensity === "5強" || intensity === "5+")
+                normalizedIntensity = 5.5;
+              else if (intensity === "6弱" || intensity === "6-")
+                normalizedIntensity = 6.0;
+              else if (intensity === "6強" || intensity === "6+")
+                normalizedIntensity = 6.5;
               else normalizedIntensity = parseFloat(intensity) || 0;
             } else {
               normalizedIntensity = intensity;
             }
-            
+
             // 震度を0-7の範囲にクランプ
-            const clampedIntensity = Math.max(0, Math.min(7, normalizedIntensity));
-            
-            if (clampedIntensity === 0) return "#0066ff"; // 震度0: 真っ青
-            if (clampedIntensity === 1) return "#0080ff"; // 震度1: 青
+            const clampedIntensity = Math.max(
+              0,
+              Math.min(7, normalizedIntensity)
+            );
+
+            if (clampedIntensity === 0) return "#666666"; // 震度0: グレー
+            if (clampedIntensity === 1) return "#888888"; // 震度1: 薄いグレー
             if (clampedIntensity === 2) return "#00ccff"; // 震度2: 水色
             if (clampedIntensity === 3) return "#00ff99"; // 震度3: 緑青
             if (clampedIntensity === 4) return "#66ff33"; // 震度4: 緑
@@ -219,7 +226,14 @@ export default function MapComponent({
           map.removeLayer(marker);
         });
       };
-    }, [map, stationData, earthquakeData, markersVisible, forceRender, intensityThreshold]);
+    }, [
+      map,
+      stationData,
+      earthquakeData,
+      markersVisible,
+      forceRender,
+      intensityThreshold,
+    ]);
 
     return null;
   };
@@ -255,26 +269,36 @@ export default function MapComponent({
   };
 
   // 段階的震度変化をシミュレートする関数
-  const simulateIntensityProgression = (stationCode: string, finalIntensity: number | string, distance: number, baseDelay: number) => {
+  const simulateIntensityProgression = (
+    stationCode: string,
+    finalIntensity: number | string,
+    distance: number,
+    baseDelay: number
+  ) => {
     // 距離に基づく遅延計算
-    const arrivalDelay = baseDelay + (distance * 100); // 距離1kmあたり100ms
-    
+    const arrivalDelay = baseDelay + distance * 100; // 距離1kmあたり100ms
+
     // 最終震度を数値に変換
     let finalIntensityNum: number;
-    if (typeof finalIntensity === 'string') {
-      if (finalIntensity === '5弱' || finalIntensity === '5-') finalIntensityNum = 5.0;
-      else if (finalIntensity === '5強' || finalIntensity === '5+') finalIntensityNum = 5.5;
-      else if (finalIntensity === '6弱' || finalIntensity === '6-') finalIntensityNum = 6.0;
-      else if (finalIntensity === '6強' || finalIntensity === '6+') finalIntensityNum = 6.5;
+    if (typeof finalIntensity === "string") {
+      if (finalIntensity === "5弱" || finalIntensity === "5-")
+        finalIntensityNum = 5.0;
+      else if (finalIntensity === "5強" || finalIntensity === "5+")
+        finalIntensityNum = 5.5;
+      else if (finalIntensity === "6弱" || finalIntensity === "6-")
+        finalIntensityNum = 6.0;
+      else if (finalIntensity === "6強" || finalIntensity === "6+")
+        finalIntensityNum = 6.5;
       else finalIntensityNum = parseFloat(finalIntensity) || 0;
     } else {
       finalIntensityNum = finalIntensity;
     }
-    
+
     // 震度の段階的変化を定義（0から最終震度まで）
     const progressionSteps = [];
-    const maxSteps = Math.floor(finalIntensityNum) + (finalIntensityNum % 1 > 0 ? 1 : 0);
-    
+    const maxSteps =
+      Math.floor(finalIntensityNum) + (finalIntensityNum % 1 > 0 ? 1 : 0);
+
     for (let step = 0; step <= maxSteps; step++) {
       let intensity: number | string;
       if (step < finalIntensityNum) {
@@ -282,10 +306,10 @@ export default function MapComponent({
       } else {
         intensity = finalIntensity; // 最終段階では元の震度表記を使用
       }
-      const stepDelay = arrivalDelay + (step * 400); // 震度1段階あたり400ms
+      const stepDelay = arrivalDelay + step * 400; // 震度1段階あたり400ms
       progressionSteps.push({ intensity, delay: stepDelay });
     }
-    
+
     // 段階的に震度を更新
     progressionSteps.forEach(({ intensity, delay }) => {
       setTimeout(() => {
@@ -294,7 +318,7 @@ export default function MapComponent({
           newData.set(stationCode, {
             code: stationCode,
             intensity: intensity,
-            arrivalTime: new Date().toISOString()
+            arrivalTime: new Date().toISOString(),
           });
           return newData;
         });
@@ -331,36 +355,30 @@ export default function MapComponent({
       })
       .sort((a, b) => a.distance - b.distance);
 
-    console.log('地震波伝播アニメーション開始（段階的震度変化）:');
-    console.log('総観測点数:', stationData.length);
-    console.log('マッチした観測点数:', stationsWithDistance.length);
-    
     if (stationsWithDistance.length === 0) {
-      console.log('観測点が見つかりません。利用可能な観測点コードを確認中...');
-      // 利用可能な観測点コードの最初の10個を表示
-      stationData.slice(0, 10).forEach(station => {
-        console.log(`利用可能: ${station.code} - ${station.name}`);
-      });
       setAnimatingEarthquake(false);
       return;
     }
-    
+
     // 各観測点で段階的震度変化をシミュレート
     stationsWithDistance.forEach((item) => {
-      console.log(`${item.station.name}: 距離${item.distance.toFixed(1)}km, 最終震度${item.earthquakeData.intensity}`);
       simulateIntensityProgression(
-        item.station.code, 
-        item.earthquakeData.intensity, 
-        item.distance, 
+        item.station.code,
+        item.earthquakeData.intensity,
+        item.distance,
         500 // 基本遅延500ms
       );
     });
-    
+
     // アニメーション終了タイマー（最も遠い観測点の完了を待つ）
-    const maxDistance = Math.max(...stationsWithDistance.map(item => item.distance));
-    const maxIntensity = Math.max(...stationsWithDistance.map(item => item.earthquakeData.intensity));
-    const totalDuration = 500 + (maxDistance * 100) + (maxIntensity * 400) + 1000;
-    
+    const maxDistance = Math.max(
+      ...stationsWithDistance.map((item) => item.distance)
+    );
+    const maxIntensity = Math.max(
+      ...stationsWithDistance.map((item) => item.earthquakeData.intensity)
+    );
+    const totalDuration = 500 + maxDistance * 100 + maxIntensity * 400 + 1000;
+
     setTimeout(() => {
       setAnimatingEarthquake(false);
     }, totalDuration);
@@ -384,10 +402,10 @@ export default function MapComponent({
       { code: "0130320", intensity: 3 }, // 当別町白樺
       { code: "0130431", intensity: 2 }, // 新篠津村第４７線（最も遠い）
     ];
-    
+
     const newTestData = new Map<string, EarthquakeData>();
 
-    sampleStations.forEach(({code, intensity}) => {
+    sampleStations.forEach(({ code, intensity }) => {
       const testData = {
         code: code,
         intensity: intensity,
@@ -408,7 +426,9 @@ export default function MapComponent({
     // 親コンポーネントに地震イベントを通知
     if (onEarthquakeUpdate) {
       const maxIntensity = Math.max(
-        ...Array.from(newTestData.values()).map((d) => getIntensityValue(d.intensity))
+        ...Array.from(newTestData.values()).map((d) =>
+          getIntensityValue(d.intensity)
+        )
       );
       onEarthquakeUpdate({
         eventId: `manual-test-${Date.now()}`,
@@ -448,13 +468,10 @@ export default function MapComponent({
   // 注意: WebSocketManagerで接続管理しているため、MapComponentでの独自接続は無効化
   useEffect(() => {
     if (!isClient) return;
-    
-    console.log("MapComponent: WebSocket connection disabled (managed by WebSocketManager)");
-    
+
     // WebSocket接続はWebSocketManagerで管理されているため、
     // MapComponentでは状態のみ設定
     setWsStatus("open");
-    console.log("MapComponent ready for real earthquake data from WebSocketManager");
 
     return () => {
       // クリーンアップ（WebSocketManagerで管理されているため何もしない）
@@ -470,44 +487,36 @@ export default function MapComponent({
   // WebSocketから受信したイベントデータを地図用のデータに変換
   useEffect(() => {
     if (!earthquakeEvents || earthquakeEvents.length === 0) return;
-    
-    console.log("Map: Updating with earthquake events:", earthquakeEvents.map(e => ({
-      eventId: e.eventId,
-      maxInt: e.maxInt,
-      currentMaxInt: e.currentMaxInt,
-      isConfirmed: e.isConfirmed,
-      hypocenter: e.hypocenter?.name
-    })));
-    
+
     // currentMaxIntを使って地図データを更新
     const newEarthquakeData = new Map<string, EarthquakeData>();
-    
-    earthquakeEvents.forEach(event => {
-      console.log(`Map: Processing event ${event.eventId}: currentMaxInt=${event.currentMaxInt}, maxInt=${event.maxInt}, isConfirmed=${event.isConfirmed}`);
-      
+
+    earthquakeEvents.forEach((event) => {
       if (event.currentMaxInt && event.currentMaxInt !== "-") {
         // ここでは仮想的な観測点データを作成（実際のAPIからのデータでは観測点コードが含まれる）
         const intensity = parseFloat(event.currentMaxInt) || 0;
-        console.log(`Map: Using intensity ${intensity} for event ${event.eventId}`);
         if (intensity > 0) {
           // イベントの震源地に応じた観測点コードを選択
           let testStationCodes: string[];
-          if (event.isTest || event.hypocenter?.name?.includes("千葉") || event.hypocenter?.name?.includes("東方沖")) {
+          if (
+            event.isTest ||
+            event.hypocenter?.name?.includes("千葉") ||
+            event.hypocenter?.name?.includes("東方沖")
+          ) {
             // テストイベントまたは千葉県東方沖 → 茨城県の観測点（地理的に近い）
-            console.log(`Map: Using Chiba/Ibaraki stations for event ${event.eventId} (isTest: ${event.isTest}, hypocenter: ${event.hypocenter?.name})`);
             testStationCodes = ["0820100", "0820101", "0820121"];
-          } else if (event.hypocenter?.name?.includes("北海道") || event.hypocenter?.name?.includes("石狩")) {
+          } else if (
+            event.hypocenter?.name?.includes("北海道") ||
+            event.hypocenter?.name?.includes("石狩")
+          ) {
             // 北海道の観測点コード
-            console.log(`Map: Using Hokkaido stations for event ${event.eventId}`);
             testStationCodes = ["0110100", "0121700", "0122400"];
           } else {
             // デフォルト（茨城県沖など）
-            console.log(`Map: Using default Ibaraki stations for event ${event.eventId}`);
             testStationCodes = ["0820100", "0820101", "0820121"];
           }
           testStationCodes.forEach((stationCode, index) => {
             const stationIntensity = Math.max(0, intensity - index);
-            console.log(`Map: Setting station ${stationCode} intensity to ${stationIntensity}`);
             newEarthquakeData.set(stationCode, {
               code: stationCode,
               intensity: stationIntensity, // 距離に応じて震度を減衰
@@ -517,13 +526,10 @@ export default function MapComponent({
         }
       }
     });
-    
+
     if (newEarthquakeData.size > 0) {
-      console.log(`Map: Updating earthquake data with ${newEarthquakeData.size} stations:`, Array.from(newEarthquakeData.entries()));
       setEarthquakeData(newEarthquakeData);
       setForceRender((prev) => prev + 1);
-    } else {
-      console.log("Map: No earthquake data to update");
     }
   }, [earthquakeEvents]);
 
@@ -541,10 +547,10 @@ export default function MapComponent({
       { code: "0820101", intensity: 3 }, // 茨城県
       { code: "0820121", intensity: 2 }, // 茨城県（震源から遠い）
     ];
-    
+
     const newTestData = new Map<string, EarthquakeData>();
 
-    sampleStations.forEach(({code, intensity}) => {
+    sampleStations.forEach(({ code, intensity }) => {
       const testData = {
         code: code,
         intensity: intensity,
@@ -568,17 +574,18 @@ export default function MapComponent({
     if (runSimulation && !animatingEarthquake) {
       // 現在のイベントに基づいてアニメーションを選択
       const currentEvents = earthquakeEvents || [];
-      const hasChiba = currentEvents.some(event => 
-        event.hypocenter?.name?.includes("千葉") || 
-        event.hypocenter?.name?.includes("東方沖")
+      const hasChiba = currentEvents.some(
+        (event) =>
+          event.hypocenter?.name?.includes("千葉") ||
+          event.hypocenter?.name?.includes("東方沖")
       );
-      
+
       if (hasChiba) {
         addChibaEarthquakeData();
       } else {
         addTestEarthquakeData(); // デフォルトは北海道
       }
-      
+
       onSimulationComplete?.();
     }
   }, [runSimulation, earthquakeEvents]);
@@ -607,8 +614,8 @@ export default function MapComponent({
             data={prefectureData}
             style={{
               color: "#ffffff",
-              weight: 1.5,
-              opacity: 0.9,
+              weight: 0.3,
+              opacity: 0.7,
               fillOpacity: 0,
             }}
           />
@@ -651,7 +658,7 @@ export default function MapComponent({
           <br />
           地震データ: {earthquakeData.size}件
           <br />
-          震度フィルタ: 
+          震度フィルタ:
           <select
             value={intensityThreshold}
             onChange={(e) => setIntensityThreshold(Number(e.target.value))}
@@ -695,10 +702,10 @@ export default function MapComponent({
           </button>
         </div>
       )}
-      
+
       {/* 震度スケール凡例 */}
       <IntensityScale />
-      
+
       {/* 現在時刻表示（震度スケールの隣） */}
       {isClient && (
         <div
@@ -712,10 +719,10 @@ export default function MapComponent({
             borderRadius: "5px",
             fontSize: "11px",
             zIndex: 1000,
-            minWidth: "140px"
+            minWidth: "140px",
           }}
         >
-          <CurrentTime 
+          <CurrentTime
             connectionStatus={connectionStatus}
             serverTime={serverTime}
           />

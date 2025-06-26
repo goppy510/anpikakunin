@@ -4,7 +4,6 @@
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 
-console.log("Monitor component loaded");
 import cn from "classnames";
 import { ApiService } from "@/app/api/ApiService";
 import { oauth2 } from "@/app/api/Oauth2Service";
@@ -58,7 +57,6 @@ export default function Monitor() {
   useEffect(() => {
     const loadEventsFromDB = async () => {
       try {
-        console.log("IndexedDBから地震イベントを読み込み中...");
         const storedEvents = await EventDatabase.getLatestEvents(50);
         
         if (storedEvents.length > 0) {
@@ -74,9 +72,7 @@ export default function Monitor() {
             };
           });
           setEvents(correctedEvents);
-          console.log(`IndexedDBから ${correctedEvents.length}件 の地震イベントを復元しました（確定状態を修正）`);
         } else {
-          console.log("IndexedDBに保存された地震イベントはありません");
         }
       } catch (error) {
         console.error("IndexedDBからのイベント読み込みに失敗:", error);
@@ -92,14 +88,9 @@ export default function Monitor() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log("=== Authentication Check ===");
         const oauth2Service = oauth2();
         
-        // 詳細な認証状態をデバッグ
-        await oauth2Service.debugTokenStatus();
-        
         const hasToken = await oauth2Service.refreshTokenCheck();
-        console.log("Authentication check result:", hasToken);
         
         setAuthStatus(hasToken ? "authenticated" : "not_authenticated");
         
@@ -108,16 +99,6 @@ export default function Monitor() {
           try {
             const apiService = new ApiService();
             const contracts = await apiService.contractList();
-            console.log("Contract verification successful:", contracts);
-            
-            // 契約詳細をログ出力
-            console.log("=== 契約詳細確認 ===");
-            contracts.items?.forEach(contract => {
-              console.log(`契約ID: ${contract.id}`);
-              console.log(`プラン: ${contract.planName}`);
-              console.log(`ステータス: ${contract.status}`);
-              console.log(`分類: ${JSON.stringify(contract.classification, null, 2)}`);
-            });
           } catch (apiError) {
             console.error("API access failed despite authentication:", apiError);
             setAuthStatus("not_authenticated");
@@ -283,12 +264,9 @@ export default function Monitor() {
     setAuthStatus("checking");
     const checkAuth = async () => {
       try {
-        console.log("=== Manual Authentication Refresh ===");
         const oauth2Service = oauth2();
         
-        await oauth2Service.debugTokenStatus();
         const hasToken = await oauth2Service.refreshTokenCheck();
-        console.log("Manual auth check result:", hasToken);
         
         setAuthStatus(hasToken ? "authenticated" : "not_authenticated");
         
@@ -296,7 +274,6 @@ export default function Monitor() {
           try {
             const apiService = new ApiService();
             const contracts = await apiService.contractList();
-            console.log("Manual contract verification successful:", contracts);
           } catch (apiError) {
             console.error("Manual API access failed despite authentication:", apiError);
             setAuthStatus("not_authenticated");
@@ -316,7 +293,6 @@ export default function Monitor() {
       const oauth2Service = oauth2();
       await oauth2Service.refreshTokenDelete();
       setAuthStatus("not_authenticated");
-      console.log("Authentication cleared");
     } catch (error) {
       console.error("Failed to clear auth:", error);
     }
@@ -325,20 +301,15 @@ export default function Monitor() {
   const cleanupConnections = async () => {
     try {
       const apiService = new ApiService();
-      console.log("Manual cleanup: Listing connections...");
       const socketList = await apiService.socketList();
-      console.log("Found connections:", socketList.items?.length || 0);
       
       if (socketList.items && socketList.items.length > 0) {
         for (const socket of socketList.items) {
           if (socket.status === 'open' || socket.status === 'waiting') {
-            console.log(`Manual cleanup: Closing socket ${socket.id}`);
             await apiService.socketClose(socket.id);
           }
         }
-        console.log("Manual cleanup complete");
       } else {
-        console.log("No connections to clean up");
       }
     } catch (error) {
       console.error("Manual cleanup failed:", error);
@@ -375,12 +346,10 @@ export default function Monitor() {
     const unconfirmedEvent = events.find(event => !event.isConfirmed);
     
     if (unconfirmedEvent) {
-      console.log("テストシミュレーション開始: 既存の確認中イベントを更新", unconfirmedEvent.eventId);
       const targetEventId = unconfirmedEvent.eventId;
       
       // ステップ1: 3秒後に震度を段階的に更新（確認中のまま）
       setTimeout(() => {
-        console.log("震度更新: → 3（確認中のまま）");
         setEvents(prevEvents => 
           prevEvents.map(event => 
             event.eventId === targetEventId 
@@ -392,7 +361,6 @@ export default function Monitor() {
       
       // ステップ2: 6秒後にさらに震度更新
       setTimeout(() => {
-        console.log("震度更新: 3 → 4（確認中のまま）");
         setEvents(prevEvents => 
           prevEvents.map(event => 
             event.eventId === targetEventId 
@@ -404,7 +372,6 @@ export default function Monitor() {
       
       // ステップ3: 9秒後に最終確定
       setTimeout(() => {
-        console.log("最終確定: 震度4、震源確定");
         setEvents(prevEvents => 
           prevEvents.map(event => 
             event.eventId === targetEventId 
@@ -435,14 +402,12 @@ export default function Monitor() {
         isTest: true
       };
       
-      console.log("テストシミュレーション開始: 新規確認中状態で地震イベントを追加");
       
       // 初期イベントを追加
       setEvents(prevEvents => [initialEvent, ...prevEvents.slice(0, 9)]);
       
       // 以下は上記と同じシミュレーション処理
       setTimeout(() => {
-        console.log("震度更新: 2 → 3（確認中のまま）");
         setEvents(prevEvents => 
           prevEvents.map(event => 
             event.eventId === testEventId 
@@ -453,7 +418,6 @@ export default function Monitor() {
       }, 3000);
       
       setTimeout(() => {
-        console.log("震度更新: 3 → 4（確認中のまま）");
         setEvents(prevEvents => 
           prevEvents.map(event => 
             event.eventId === testEventId 
@@ -464,7 +428,6 @@ export default function Monitor() {
       }, 6000);
       
       setTimeout(() => {
-        console.log("最終確定: 震度4、震源確定");
         setEvents(prevEvents => 
           prevEvents.map(event => 
             event.eventId === testEventId 
@@ -671,7 +634,6 @@ export default function Monitor() {
         <main className="flex-1 bg-gray-50">
           <MapComponent
             onEarthquakeUpdate={(newEvent) => {
-              console.log("New earthquake event:", newEvent);
               // MapComponentからのイベントは確定済みとして処理
               setEvents((prevEvents) => {
                 const existingIndex = prevEvents.findIndex(e => e.eventId === newEvent.eventId);

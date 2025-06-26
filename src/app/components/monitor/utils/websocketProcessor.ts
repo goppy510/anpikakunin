@@ -640,9 +640,7 @@ export class WebSocketManager {
             
             // 最大接続数エラーの場合、時間をおいて再接続
             if (message.error?.includes('maximum number of simultaneous connections')) {
-              console.log("Max connections reached, will retry in 30 seconds...");
-              setTimeout(() => {
-                console.log("Retrying connection after timeout...");
+                    setTimeout(() => {
                 this.connect();
               }, 30000); // 30秒後に再試行
             }
@@ -825,7 +823,6 @@ export class WebSocketManager {
         isTest: message.head.test || false
       };
 
-      console.log("Created EEW event:", event);
       return event;
 
     } catch (error) {
