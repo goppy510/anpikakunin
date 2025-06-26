@@ -53,6 +53,7 @@ export default function Monitor() {
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
   const [serverTime, setServerTime] = useState<string>("");
+  const [lastMessageType, setLastMessageType] = useState<string>("");
 
   // データベースからイベントを読み込み
   useEffect(() => {
@@ -221,8 +222,9 @@ export default function Monitor() {
         setStatus(newStatus);
       };
 
-      const handleTimeUpdate = (newServerTime: string) => {
+      const handleTimeUpdate = (newServerTime: string, messageType: string) => {
         setServerTime(newServerTime);
+        setLastMessageType(messageType);
       };
 
       // WebSocketマネージャーを初期化
@@ -531,6 +533,7 @@ export default function Monitor() {
             earthquakeEvents={events} // 地図用に現在のイベントを渡す
             connectionStatus={status}
             serverTime={serverTime}
+            lastMessageType={lastMessageType}
           />
         </main>
       </div>

@@ -7,40 +7,59 @@ import cn from "classnames";
 interface CurrentTimeDisplayProps {
   connectionStatus: "open" | "connecting" | "closed" | "error";
   serverTime?: string; // WebSocketから取得した時刻
+  lastMessageType?: string; // 最後に受信したメッセージの種類
 }
 
-export function CurrentTime({ connectionStatus, serverTime }: CurrentTimeDisplayProps) {
+export function CurrentTime({ connectionStatus, serverTime, lastMessageType }: CurrentTimeDisplayProps) {
   const [displayTime, setDisplayTime] = useState(new Date());
   const [localTime, setLocalTime] = useState(new Date());
-  const [hasTimeDivergence, setHasTimeDivergence] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
+  const [updateInterval, setUpdateInterval] = useState<number>(0);
 
-  // ローカル時刻を常に更新（内部で保持）
+  // ローカル時刻を常に更新（間隔チェック用）
   useEffect(() => {
     const interval = setInterval(() => {
-      setLocalTime(new Date());
+      const now = new Date();
+      setLocalTime(now);
+      
+      // 最後の更新からの経過時間を計算
+      if (lastUpdateTime) {
+        const elapsed = now.getTime() - lastUpdateTime;
+        setUpdateInterval(elapsed);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [lastUpdateTime]);
 
-  // サーバー時刻が利用可能な場合の処理
+  // サーバー時刻（ping/pong受信時刻）が利用可能な場合の処理
   useEffect(() => {
     if (serverTime && connectionStatus === "open") {
       const serverDate = new Date(serverTime);
       if (!isNaN(serverDate.getTime())) {
-        setDisplayTime(serverDate);
+        const now = Date.now();
         
-        // ローカル時刻との差を計算（1秒以上の乖離をチェック）
-        const timeDiff = Math.abs(localTime.getTime() - serverDate.getTime());
-        setHasTimeDivergence(timeDiff > 1000);
+        // 前回更新からの間隔を計算
+        if (lastUpdateTime) {
+          const interval = now - lastUpdateTime;
+          setUpdateInterval(interval);
+        }
+        
+        // ping/pong受信時刻をそのまま表示
+        setDisplayTime(serverDate);
+        setLastUpdateTime(now);
         return;
       }
     }
     
-    // サーバー時刻が利用できない場合もサーバー時刻表示を継続
-    // （最後に受信したサーバー時刻 + 経過時間で推定）
-    setHasTimeDivergence(false);
-  }, [serverTime, connectionStatus, localTime]);
+    // サーバー時刻が利用できない場合
+    if (connectionStatus !== "open") {
+      setUpdateInterval(0);
+      setLastUpdateTime(null);
+      // 接続がない場合はローカル時刻を表示
+      setDisplayTime(localTime);
+    }
+  }, [serverTime, connectionStatus]);
 
   // 日本標準時に変換
   const formatTime = (date: Date): string => {
@@ -55,28 +74,41 @@ export function CurrentTime({ connectionStatus, serverTime }: CurrentTimeDisplay
     });
   };
 
-  // 接続状態に応じた色設定
+  // 更新間隔に応じた色設定
   const getTimeColor = (): string => {
-    // 時刻の乖離がある場合は真っ赤
-    if (hasTimeDivergence) {
-      return "text-red-500";
+    if (connectionStatus !== "open") {
+      if (connectionStatus === "connecting") {
+        return "text-yellow-300"; // 接続中は黄色
+      }
+      return "text-gray-300"; // 切断時はグレー
     }
-    // 接続中でサーバー時刻が利用可能な場合は緑
-    if (connectionStatus === "open") {
-      return "text-green-300";
+
+    // ping/pong受信間隔に基づく色分け
+    if (updateInterval === 0) {
+      return "text-green-300"; // 初回受信時は緑
+    } else if (updateInterval < 20000) {
+      return "text-green-300"; // 20秒未満：緑色
+    } else if (updateInterval <= 40000) {
+      return "text-yellow-300"; // 20-40秒：黄色
+    } else {
+      return "text-red-500"; // 40秒超過：赤色
     }
-    if (connectionStatus === "connecting") {
-      return "text-yellow-300"; // 接続中は黄色
-    }
-    return "text-gray-300"; // 切断時はグレー
   };
 
   return (
     <div className="flex items-center mx-3 min-w-48">
       <div className="w-full text-center">
-        {/* メイン時刻表示（サーバー時刻のみ） */}
+        {/* メイン時刻表示 */}
         <div className={cn("text-lg font-mono font-bold", getTimeColor())}>
           {formatTime(displayTime)}
+        </div>
+        
+        {/* 時刻の種類を表示 */}
+        <div className="text-xs text-gray-400 mt-1">
+          {connectionStatus === "open" 
+            ? `最終受信時刻 (${lastMessageType || "不明"})`
+            : "ローカル時刻"
+          }
         </div>
       </div>
     </div>

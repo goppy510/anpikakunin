@@ -46,6 +46,7 @@ interface MapComponentProps {
   earthquakeEvents?: EventItem[]; // 地図表示用のイベントデータ
   connectionStatus?: "open" | "connecting" | "closed" | "error";
   serverTime?: string;
+  lastMessageType?: string;
 }
 
 export default function MapComponent({
@@ -56,6 +57,7 @@ export default function MapComponent({
   earthquakeEvents = [],
   connectionStatus = "closed",
   serverTime = "",
+  lastMessageType = "",
 }: MapComponentProps = {}) {
   const [prefectureData, setPrefectureData] =
     useState<FeatureCollection | null>(null);
@@ -843,6 +845,7 @@ export default function MapComponent({
           <CurrentTime
             connectionStatus={connectionStatus}
             serverTime={serverTime}
+            lastMessageType={lastMessageType}
           />
         </div>
       )}
