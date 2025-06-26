@@ -545,6 +545,11 @@ export default function Monitor() {
 
         <div className="flex-grow" />
 
+        {/* バージョン情報 */}
+        <div className="flex items-center mx-3 text-xs text-gray-400">
+          <span>anpikakunin v0.1.0</span>
+        </div>
+
         {/* テストモード */}
         <div className="flex items-center mx-3">
           <button
