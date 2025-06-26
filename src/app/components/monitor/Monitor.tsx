@@ -480,8 +480,8 @@ export default function Monitor() {
             </h3>
           </header>
 
-          <ul className="flex-1 overflow-y-scroll m-0 p-2 bg-black">
-            {events.map((ev, index) => {
+          <ul className="flex-1 overflow-y-auto m-0 p-2 bg-black max-h-full">
+            {events.slice(0, 20).map((ev, index) => {
               const isLatest = index === 0;
               const isSelected = viewEventId === ev.eventId;
               
