@@ -3,6 +3,7 @@
 import { EventItem } from "../types/EventItem";
 import { ApiService } from "@/app/api/ApiService";
 import { oauth2 } from "@/app/api/Oauth2Service";
+import * as pako from "pako";
 
 // DMDATA WebSocketメッセージの型定義
 interface WebSocketMessage {
@@ -133,14 +134,119 @@ const normalizeIntensity = (intensity: string): string => {
   return intensityMap[intensity] || intensity;
 };
 
+// WebSocketメッセージのbodyをデコードする関数
+const decodeMessageBody = (message: any): any => {
+  try {
+    console.log("=== Decoding Message Body ===");
+    console.log("Message encoding:", message.encoding);
+    console.log("Message compression:", message.compression);
+    console.log("Message format:", message.format);
+    console.log("Message body exists:", !!message.body);
+    console.log("Message body type:", typeof message.body);
+    
+    if (!message.body) {
+      console.log("No message body to decode");
+      return null;
+    }
+    
+    let decodedBody = message.body;
+    
+    // base64デコード
+    if (message.encoding === "base64") {
+      console.log("Decoding base64 data...");
+      const binaryString = atob(decodedBody);
+      const uint8Array = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        uint8Array[i] = binaryString.charCodeAt(i);
+      }
+      
+      // gzip展開
+      if (message.compression === "gzip") {
+        console.log("Decompressing gzip data...");
+        const decompressed = pako.inflate(uint8Array, { to: 'string' });
+        decodedBody = decompressed;
+        console.log("Gzip decompression successful, length:", decompressed.length);
+      } else {
+        decodedBody = new TextDecoder().decode(uint8Array);
+        console.log("Base64 decode successful, length:", decodedBody.length);
+      }
+    }
+    
+    // JSON解析
+    if (message.format === "json") {
+      console.log("Parsing JSON data...");
+      const parsed = JSON.parse(decodedBody);
+      console.log("JSON parsing successful");
+      return parsed;
+    }
+    
+    console.log("Returning raw decoded body");
+    return decodedBody;
+  } catch (error) {
+    console.error("Failed to decode message body:", error);
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
+    return null;
+  }
+};
+
 // 最大震度を取得する関数
 const getMaxIntensity = (message: WebSocketMessage): string => {
   try {
-    // 観測震度から最大震度を取得
+    console.log("=== getMaxIntensity: Starting ===");
+    
+    // まずデコードされたbodyから震度を取得を試行
+    const decodedBody = decodeMessageBody(message);
+    console.log("Decoded body for intensity extraction:", decodedBody);
+    
+    // 新しいDMDATAフォーマットの場合
+    if (decodedBody?.body?.intensity?.maxInt) {
+      const maxInt = decodedBody.body.intensity.maxInt;
+      console.log("Found maxInt in decoded body.body.intensity:", maxInt);
+      return normalizeIntensity(maxInt);
+    }
+    
+    // レガシーフォーマットの場合
+    if (decodedBody?.Body?.Intensity?.Observation) {
+      const observations = decodedBody.Body.Intensity.Observation;
+      console.log("Found observations in decoded body:", observations);
+      
+      if (Array.isArray(observations) && observations.length > 0) {
+        const maxInt = observations[0].MaxInt;
+        if (maxInt) {
+          console.log("Max intensity from decoded body:", maxInt);
+          return normalizeIntensity(maxInt);
+        }
+      }
+      
+      // 都道府県別の震度確認
+      if (Array.isArray(observations)) {
+        let maxIntensity = "0";
+        observations.forEach(obs => {
+          if (obs.Pref && Array.isArray(obs.Pref)) {
+            obs.Pref.forEach(pref => {
+              if (pref.MaxInt) {
+                const normalized = normalizeIntensity(pref.MaxInt);
+                if (compareIntensity(normalized, maxIntensity) > 0) {
+                  maxIntensity = normalized;
+                }
+              }
+            });
+          }
+        });
+        if (maxIntensity !== "0") {
+          console.log("Max intensity from prefecture data:", maxIntensity);
+          return maxIntensity;
+        }
+      }
+    }
+    
+    // フォールバック: xmlReportから取得
     const observations = message.xmlReport?.body?.intensity?.observation;
     if (observations && observations.length > 0) {
       const maxInt = observations[0].maxInt;
       if (maxInt) {
+        console.log("Max intensity from xmlReport:", maxInt);
         return normalizeIntensity(maxInt);
       }
     }
@@ -157,6 +263,10 @@ const getMaxIntensity = (message: WebSocketMessage): string => {
         }
       }
     });
+    
+    if (maxIntensity !== "0") {
+      console.log("Max intensity from xmlReport prefectures:", maxIntensity);
+    }
     
     return maxIntensity;
   } catch (error) {
@@ -186,7 +296,10 @@ const compareIntensity = (a: string, b: string): number => {
 // WebSocketメッセージを EventItem に変換する関数
 export const processWebSocketMessage = (message: WebSocketMessage): EventItem | null => {
   try {
-    console.log("Processing WebSocket message:", message);
+    console.log("=== Processing WebSocket Message ===");
+    console.log("Message type:", message.type);
+    console.log("Message classification:", message.classification);
+    console.log("Full message keys:", Object.keys(message));
     
     // エラーメッセージの場合
     if (message.type === 'error') {
@@ -216,52 +329,160 @@ export const processWebSocketMessage = (message: WebSocketMessage): EventItem | 
       return null;
     }
     
-    const xmlReport = message.xmlReport;
-    if (!xmlReport) {
-      console.log("No XML report in message, skipping");
+    console.log("=== Earthquake Message Detected ===");
+    console.log("Checking for xmlReport...");
+    
+    // 情報種別を確認
+    const infoKind = message.xmlReport?.head?.infoKind;
+    console.log("Info kind:", infoKind);
+    
+    // 情報種別による処理分岐
+    const isHypocenterInfo = infoKind === "震源速報";
+    const isIntensityInfo = infoKind === "震度速報" || infoKind?.includes("震度") || infoKind === "地震情報";
+    
+    // 確定状態の判定（複数の条件をチェック）
+    const infoType = message.xmlReport?.head?.infoType || decodedData?.infoType;
+    const serial = message.xmlReport?.head?.serial || decodedData?.serialNo;
+    const headline = message.xmlReport?.head?.headline || decodedData?.headline;
+    
+    console.log("Info kind:", infoKind);
+    console.log("Info type:", infoType);
+    console.log("Serial number:", serial);
+    console.log("Headline:", headline);
+    console.log("Is hypocenter info (震源速報):", isHypocenterInfo);
+    console.log("Is intensity info (震度速報/地震情報):", isIntensityInfo);
+    
+    // 確定状態の詳細判定
+    const isFinalReport = headline?.includes("最終") || headline?.includes("確定") || 
+                         infoType === "最終発表" || infoType === "確定";
+    const hasSerialNumber = serial && serial !== "1"; // 1より大きい連番は続報
+    
+    console.log("Is final report (headline/infoType):", isFinalReport);
+    console.log("Has serial number > 1:", hasSerialNumber);
+    
+    // まずはxmlReportをチェック
+    let xmlReport = message.xmlReport;
+    let decodedData = null;
+    
+    // 常にbodyをデコードしてみる（詳細な地震データが含まれている可能性）
+    console.log("Attempting to decode message body...");
+    decodedData = decodeMessageBody(message);
+    
+    if (decodedData) {
+      console.log("Decoded data structure:", Object.keys(decodedData));
+      
+      // デコードされたデータをxmlReportにマージまたは置換
+      if (decodedData.Body && decodedData.Head) {
+        console.log("Found complete earthquake data in decoded body");
+        xmlReport = {
+          head: xmlReport?.head || decodedData.Head,
+          body: decodedData.Body,
+          control: xmlReport?.control
+        };
+      } else if (decodedData.xmlReport) {
+        xmlReport = decodedData.xmlReport;
+        console.log("Found xmlReport in decoded data");
+      } else {
+        console.log("Decoded data contents:", JSON.stringify(decodedData, null, 2));
+      }
+    }
+    
+    if (!xmlReport && !decodedData) {
+      console.log("No XML report or decodable data in message, skipping");
       return null;
     }
     
-    const earthquake = xmlReport.body?.earthquake?.[0];
-    const head = xmlReport.head;
+    console.log("Using xmlReport structure:", xmlReport ? Object.keys(xmlReport) : 'null');
     
-    // イベントIDを取得 (優先順位: head.eventId > message.id)
-    const eventId = head?.eventId || message.id;
+    // デコードされたデータを優先的に使用
+    const earthquake = decodedData?.body?.earthquake || xmlReport?.body?.earthquake?.[0];
+    const head = xmlReport?.head;
     
-    // 震源情報を取得
+    console.log("Earthquake data source check:");
+    console.log("- decodedData?.body?.earthquake:", decodedData?.body?.earthquake);
+    console.log("- xmlReport?.body?.earthquake?.[0]:", xmlReport?.body?.earthquake?.[0]);
+    console.log("- Final earthquake:", earthquake);
+    
+    // イベントIDを取得 (優先順位: decodedData.eventId > head.eventId > message.id)
+    const eventId = decodedData?.eventId || head?.eventId || message.id || `event-${Date.now()}`;
+    console.log("Event ID:", eventId);
+    
+    // 震源情報を取得（デコードデータを優先）
     const hypocenter = earthquake?.hypocenter;
-    const hypoName = hypocenter?.area?.name || "震源不明";
+    console.log("Hypocenter object:", hypocenter);
+    const hypoName = hypocenter?.name || hypocenter?.area?.name || "震源不明";
     const hypoDepth = hypocenter?.depth?.value ? 
       parseInt(hypocenter.depth.value) : undefined;
+    console.log("Extracted hypocenter name:", hypoName, "Depth:", hypoDepth);
     
-    // マグニチュード情報を取得
+    // マグニチュード情報を取得（デコードデータを優先）
     const magnitudeValue = earthquake?.magnitude?.value ? 
       parseFloat(earthquake.magnitude.value) : undefined;
+    console.log("Magnitude:", magnitudeValue);
     
-    // 時刻情報を取得
-    const arrivalTime = earthquake?.arrivalTime || message.head.time;
+    // 時刻情報を取得（デコードデータを優先）
+    const arrivalTime = earthquake?.arrivalTime || decodedData?.reportDateTime || message.head?.time || new Date().toISOString();
     const originTime = earthquake?.originTime;
+    console.log("Arrival time:", arrivalTime, "Origin time:", originTime);
     
     // 最大震度を取得
-    const maxInt = getMaxIntensity(message);
+    console.log("=== Getting Max Intensity ===");
+    let maxInt = getMaxIntensity(message);
+    console.log("Extracted max intensity:", maxInt);
+    
+    // 震源速報の場合は確認中として扱う
+    if (isHypocenterInfo && maxInt === "0") {
+      maxInt = "-"; // 確認中
+      console.log("震源速報のため震度を確認中（-）に設定");
+    }
+    
+    console.log("Final max intensity:", maxInt);
     
     // テストかどうかを判定
-    const isTest = message.head.test || false;
+    const isTest = message.head?.test || false;
+    console.log("Is test:", isTest);
+    
+    // 確定状態の判定：地震情報（震源・震度）なら確定
+    let isConfirmed = false; // デフォルトは未確定
+    
+    const title = message.xmlReport?.control?.title || decodedData?.type;
+    console.log("Report title:", title);
+    
+    if (title?.includes("震源・震度") || infoKind === "地震情報") {
+      // 「震源・震度に関する情報」または「地震情報」なら確定
+      console.log("✅ Confirmed: Final earthquake report (震源・震度情報)");
+      isConfirmed = true;
+    } else if (isHypocenterInfo) {
+      // 震源速報は未確定
+      console.log("⚠️ Unconfirmed: Hypocenter information only");
+      isConfirmed = false;
+    } else if (infoKind?.includes("震度")) {
+      // 震度速報は未確定（震源・震度の詳細情報を待つ）
+      console.log("⚠️ Unconfirmed: Intensity information only");
+      isConfirmed = false;
+    } else if (hypoName !== "震源不明" && maxInt !== "0") {
+      // 震源地と震度がある場合は確定
+      console.log("✅ Confirmed: Has both hypocenter and intensity");
+      isConfirmed = true;
+    }
     
     const eventItem: EventItem = {
       eventId,
       arrivalTime,
       originTime,
       maxInt,
+      currentMaxInt: isHypocenterInfo ? "-" : maxInt, // 震源速報は確認中
       magnitude: magnitudeValue ? { value: magnitudeValue } : undefined,
       hypocenter: {
         name: hypoName,
         depth: hypoDepth ? { value: hypoDepth } : undefined,
       },
       isTest,
+      isConfirmed,
     };
     
-    console.log("Processed earthquake event:", eventItem);
+    console.log("=== Final Processed Event Item ===");
+    console.log("Event item:", JSON.stringify(eventItem, null, 2));
     return eventItem;
     
   } catch (error) {
@@ -320,6 +541,20 @@ export class WebSocketManager {
       try {
         const contracts = await this.apiService.contractList();
         console.log("Contract list:", contracts);
+        
+        // 利用可能な分類も確認
+        try {
+          const classifications = await this.apiService.telegramList();
+          console.log("Available telegram classifications:", classifications);
+          
+          // 地震関連の分類のみを抽出して表示
+          const earthquakeClassifications = classifications.items?.filter(item => 
+            item.id.includes('earthquake') || item.id.includes('seismic') || item.id.includes('eew')
+          );
+          console.log("Earthquake-related classifications:", earthquakeClassifications);
+        } catch (classError) {
+          console.error("Failed to get telegram classifications:", classError);
+        }
       } catch (contractError) {
         console.error("Failed to get contracts:", contractError);
         // 契約確認に失敗した場合でも続行を試みる
@@ -339,6 +574,9 @@ export class WebSocketManager {
       ], "anpikakunin");
       
       console.log("Socket response:", socketResponse);
+      console.log("Socket URL:", socketResponse.websocket?.url);
+      console.log("Socket classifications:", socketResponse.classifications);
+      console.log("Socket expiration:", socketResponse.websocket?.expiration);
       
       if (!socketResponse.websocket?.url) {
         throw new Error("No WebSocket URL in response");
@@ -349,7 +587,9 @@ export class WebSocketManager {
       this.ws = new WebSocket(socketResponse.websocket.url);
       
       this.ws.onopen = () => {
-        console.log("WebSocket connected");
+        console.log("WebSocket connected successfully");
+        console.log("WebSocket readyState:", this.ws?.readyState);
+        console.log("WebSocket URL:", this.ws?.url);
         this.onStatusChange?.("open");
         
         // 接続成功時は再接続タイマーをクリア
@@ -357,14 +597,41 @@ export class WebSocketManager {
           clearTimeout(this.reconnectTimeout);
           this.reconnectTimeout = null;
         }
+        
+        // 接続直後にテストメッセージを送信（必要に応じて）
+        console.log("WebSocket is ready to receive messages");
       };
       
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage;
           
+          // 受信メッセージの詳細ログ（デバッグ用）
+          console.log("=== WebSocket Message Received ===");
+          console.log("Message type:", message.type);
+          console.log("Classification:", message.classification);
+          console.log("Head:", message.head);
+          if (message.xmlReport?.head) {
+            console.log("XML Report head:", message.xmlReport.head);
+          }
+          console.log("Full message:", JSON.stringify(message, null, 2));
+          
           // サーバー時刻を抽出してコールバック実行
           this.extractAndUpdateServerTime(message);
+          
+          // pingメッセージにはpongで応答
+          if (message.type === 'ping') {
+            console.log(`Received ping (${message.pingId}), sending pong response`);
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+              const pongResponse = {
+                type: 'pong',
+                pingId: message.pingId
+              };
+              this.ws.send(JSON.stringify(pongResponse));
+              console.log(`Sent pong response:`, pongResponse);
+            }
+            return;
+          }
           
           // エラーメッセージで close=true の場合、接続を閉じる
           if (message.type === 'error' && message.close) {
@@ -384,8 +651,19 @@ export class WebSocketManager {
           
           const eventItem = processWebSocketMessage(message);
           
-          if (eventItem && this.onMessage) {
-            this.onMessage(eventItem);
+          console.log("=== WebSocketManager: Event Processing Result ===");
+          console.log("Event item created:", !!eventItem);
+          if (eventItem) {
+            console.log("Event item details:", JSON.stringify(eventItem, null, 2));
+            console.log("Calling onMessage callback...");
+            if (this.onMessage) {
+              this.onMessage(eventItem);
+              console.log("✅ onMessage callback called successfully");
+            } else {
+              console.error("❌ No onMessage callback registered!");
+            }
+          } else {
+            console.log("❌ No event item created - processWebSocketMessage returned null");
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);

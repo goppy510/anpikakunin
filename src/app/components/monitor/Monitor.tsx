@@ -36,17 +36,7 @@ const MapComponent = dynamic(() => import("./map/MapCompnent"), {
 
 
 const dummyEvents: EventItem[] = [
-  {
-    eventId: "20250428120000",
-    arrivalTime: "2025-04-28T12:00:00+09:00",
-    originTime: "2025-04-28T11:58:10+09:00",
-    maxInt: "-",
-    currentMaxInt: "4",
-    magnitude: { value: 5.8 },
-    hypocenter: { name: "茨城県沖", depth: { value: 50 } },
-    isConfirmed: false,
-  },
-  // …モックデータ続く
+  // 実際のWebSocketデータを使用するため、ダミーデータは空にする
 ];
 
 export default function Monitor() {
@@ -54,7 +44,7 @@ export default function Monitor() {
     "open" | "connecting" | "closed" | "error"
   >("closed");
   const [soundPlay, setSoundPlay] = useState(false);
-  const [events, setEvents] = useState<EventItem[]>(dummyEvents);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [viewEventId, setViewEventId] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
   const [runMapSimulation, setRunMapSimulation] = useState(false);
@@ -72,8 +62,19 @@ export default function Monitor() {
         const storedEvents = await EventDatabase.getLatestEvents(50);
         
         if (storedEvents.length > 0) {
-          setEvents(storedEvents);
-          console.log(`IndexedDBから ${storedEvents.length}件 の地震イベントを復元しました`);
+          // 読み込み時に確定状態を修正（震源と震度の両方があれば確定）
+          const correctedEvents = storedEvents.map(event => {
+            const hasHypocenter = event.hypocenter?.name && event.hypocenter.name !== "震源不明";
+            const hasIntensity = event.maxInt && event.maxInt !== "0" && event.maxInt !== "-";
+            const shouldBeConfirmed = hasHypocenter && hasIntensity;
+            
+            return {
+              ...event,
+              isConfirmed: shouldBeConfirmed || event.isConfirmed
+            };
+          });
+          setEvents(correctedEvents);
+          console.log(`IndexedDBから ${correctedEvents.length}件 の地震イベントを復元しました（確定状態を修正）`);
         } else {
           console.log("IndexedDBに保存された地震イベントはありません");
         }
@@ -108,6 +109,15 @@ export default function Monitor() {
             const apiService = new ApiService();
             const contracts = await apiService.contractList();
             console.log("Contract verification successful:", contracts);
+            
+            // 契約詳細をログ出力
+            console.log("=== 契約詳細確認 ===");
+            contracts.items?.forEach(contract => {
+              console.log(`契約ID: ${contract.id}`);
+              console.log(`プラン: ${contract.planName}`);
+              console.log(`ステータス: ${contract.status}`);
+              console.log(`分類: ${JSON.stringify(contract.classification, null, 2)}`);
+            });
           } catch (apiError) {
             console.error("API access failed despite authentication:", apiError);
             setAuthStatus("not_authenticated");
@@ -135,55 +145,81 @@ export default function Monitor() {
   useEffect(() => {
     if (authStatus === "authenticated") {
       const handleNewEvent = (event: EventItem) => {
-        console.log("Received earthquake event:", event);
+        console.log("=== Monitor: Received earthquake event ===");
+        console.log("Event details:", JSON.stringify(event, null, 2));
         
         // 通知震度フィルタリング
         const maxIntensity = getIntensityValue(event.maxInt);
-        if (maxIntensity < notificationThreshold) {
+        console.log(`地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity}), 通知震度設定: ${notificationThreshold}`);
+        
+        // 震度が"-"（確認中）の場合は常に通知
+        if (event.maxInt === "-") {
+          console.log("震度が確認中（-）のため、フィルタリングをスキップして表示します");
+        } else if (maxIntensity < notificationThreshold) {
           console.log(`地震データを受信しましたが、震度${event.maxInt}は通知震度${notificationThreshold}未満のため表示されません`);
           return; // 通知震度未満の場合は表示しない
         }
         
-        console.log(`震度${event.maxInt}の地震データを追加します（通知震度${notificationThreshold}以上）`);
+        console.log(`震度${event.maxInt}の地震データを追加します（通知震度${notificationThreshold}以上またはテスト）`);
         
         // 既存のイベントを更新するか新規追加
+        console.log("=== Monitor: Updating events state ===");
+        console.log("Current events count:", events.length);
+        
         setEvents(prevEvents => {
+          console.log("Previous events in state:", prevEvents.length);
+          console.log("Looking for existing event with ID:", event.eventId);
+          
           const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
+          console.log("Existing event index:", existingIndex);
+          
           let updatedEvents: EventItem[];
           
           if (existingIndex >= 0) {
             // 既存イベントを更新
+            console.log("Updating existing event");
             const existingEvent = prevEvents[existingIndex];
             updatedEvents = [...prevEvents];
             
-            // 既存イベントが確定済みの場合は震度を更新しない
-            if (existingEvent.isConfirmed) {
-              // 確定済みの場合は地図用の現在震度のみ更新
-              updatedEvents[existingIndex] = {
-                ...existingEvent,
-                currentMaxInt: event.maxInt
-              };
-            } else {
-              // 未確定の場合は現在震度のみ更新、表示震度は保持
-              updatedEvents[existingIndex] = {
-                ...existingEvent,
-                currentMaxInt: event.maxInt,
-                // その他の情報は更新（震源、マグニチュードなど）
-                magnitude: event.magnitude || existingEvent.magnitude,
-                hypocenter: event.hypocenter || existingEvent.hypocenter,
-                originTime: event.originTime || existingEvent.originTime
-              };
-            }
+            // 既存イベントを動的に更新（震度・震源・マグニチュードなど）
+            console.log("Updating existing event dynamically");
+            console.log("Existing event:", existingEvent);
+            console.log("New event data:", event);
+            
+            updatedEvents[existingIndex] = {
+              ...existingEvent,
+              // 新しいデータで更新（より詳細な情報があれば採用）
+              maxInt: event.maxInt || existingEvent.maxInt,
+              currentMaxInt: event.maxInt || event.currentMaxInt || existingEvent.currentMaxInt,
+              magnitude: event.magnitude || existingEvent.magnitude,
+              hypocenter: event.hypocenter || existingEvent.hypocenter,
+              originTime: event.originTime || existingEvent.originTime,
+              isConfirmed: event.isConfirmed || existingEvent.isConfirmed, // 一度確定したら確定を維持
+              isTest: existingEvent.isTest || event.isTest
+            };
+            
+            console.log("Updated event:", updatedEvents[existingIndex]);
           } else {
-            // 新規イベントを追加（確認中状態で）
+            // 新規イベントを追加（DMDATAからのデータは確定状態で）
+            console.log("Adding new event to list");
             const newEvent = {
               ...event,
-              isConfirmed: false,
-              currentMaxInt: event.maxInt,
-              maxInt: "-" // 震度はハイフン表示
+              isConfirmed: event.isConfirmed !== undefined ? event.isConfirmed : true, // processWebSocketMessageの判定を優先
+              currentMaxInt: event.currentMaxInt || event.maxInt,
+              maxInt: event.maxInt
             };
+            console.log("New event to add:", JSON.stringify(newEvent, null, 2));
             updatedEvents = [newEvent, ...prevEvents.slice(0, 9)];
           }
+          
+          console.log("Final updated events count:", updatedEvents.length);
+          console.log("Updated events summary:", updatedEvents.map(e => ({
+            eventId: e.eventId,
+            maxInt: e.maxInt,
+            currentMaxInt: e.currentMaxInt,
+            hypocenter: e.hypocenter?.name,
+            isConfirmed: e.isConfirmed
+          })));
           
           // IndexedDBに保存（非同期で実行）
           const eventToSave = updatedEvents.find(e => e.eventId === event.eventId);
@@ -195,6 +231,8 @@ export default function Monitor() {
           
           return updatedEvents;
         });
+        
+        console.log("✅ Monitor: setEvents completed");
       };
 
       const handleStatusChange = (newStatus: "open" | "connecting" | "closed" | "error") => {
@@ -307,31 +345,7 @@ export default function Monitor() {
     }
   };
 
-  const cleanupDatabase = async () => {
-    if (confirm("データベースの古いイベントを削除しますか？（最新100件のみ残します）")) {
-      try {
-        await EventDatabase.cleanupOldEvents(100);
-        const stats = await EventDatabase.getStats();
-        alert(`クリーンアップ完了\n保存イベント数: ${stats.totalEvents}件`);
-      } catch (error) {
-        console.error("Database cleanup failed:", error);
-        alert("データベースのクリーンアップに失敗しました");
-      }
-    }
-  };
 
-  const clearDatabase = async () => {
-    if (confirm("すべての地震イベントデータを削除しますか？\nこの操作は取り消せません。")) {
-      try {
-        await EventDatabase.clearAll();
-        setEvents([]);
-        alert("すべての地震イベントデータを削除しました");
-      } catch (error) {
-        console.error("Database clear failed:", error);
-        alert("データベースのクリアに失敗しました");
-      }
-    }
-  };
   
   // イベント確定処理
   const confirmEvent = (eventId: string) => {
@@ -416,7 +430,7 @@ export default function Monitor() {
         maxInt: "-", // 確認中なのでハイフン
         currentMaxInt: "2", // 地図用の初期震度
         magnitude: undefined,
-        hypocenter: { name: "震源不明" },
+        hypocenter: { name: "テスト震源" },
         isConfirmed: false,
         isTest: true
       };
@@ -457,7 +471,7 @@ export default function Monitor() {
               ? { 
                   ...event, 
                   maxInt: "4", // 確定震度
-                  hypocenter: { name: "千葉県東方沖", depth: { value: 30 } },
+                  hypocenter: { name: "テスト震源（確定）", depth: { value: 30 } },
                   magnitude: { value: 5.2 },
                   isConfirmed: true 
                 }
@@ -603,22 +617,6 @@ export default function Monitor() {
           )}
         </div>
 
-        {/* データベース管理 */}
-        <div className="flex items-center mx-3">
-          <span className="text-xs mr-2">DB:</span>
-          <button
-            className="mx-1 px-2 py-1 border border-blue-500 rounded bg-blue-900 hover:bg-blue-800 text-blue-300 transition-colors text-xs"
-            onClick={cleanupDatabase}
-          >
-            古いデータ削除
-          </button>
-          <button
-            className="mx-1 px-2 py-1 border border-red-500 rounded bg-red-900 hover:bg-red-800 text-red-300 transition-colors text-xs"
-            onClick={clearDatabase}
-          >
-            全削除
-          </button>
-        </div>
 
         <div className="flex-grow" />
 
