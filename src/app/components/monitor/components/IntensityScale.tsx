@@ -22,8 +22,8 @@ export function IntensityScale() {
     { intensity: 4, color: "#66ff33", label: "震度4" },
     { intensity: 3, color: "#00ff99", label: "震度3" },
     { intensity: 2, color: "#00ccff", label: "震度2" },
-    { intensity: 1, color: "#0080ff", label: "震度1" },
-    { intensity: 0, color: "#0066ff", label: "震度0" },
+    { intensity: 1, color: "#888888", label: "震度1" },
+    { intensity: 0, color: "#666666", label: "震度0" },
   ];
 
   return (

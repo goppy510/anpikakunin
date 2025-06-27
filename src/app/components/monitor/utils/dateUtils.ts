@@ -21,3 +21,18 @@ export function renderDepth(
   if (depth.value !== undefined) return `${depth.value}km`;
   return "不明";
 }
+
+// マグニチュードの値を小数点第1位まで表示する関数
+export function renderMagnitude(magnitude?: { value?: string | number }): string {
+  if (!magnitude?.value) return "-";
+  
+  const value = magnitude.value;
+  
+  // 数値に変換
+  const numericValue = typeof value === "string" ? parseFloat(value) : value;
+  
+  if (isNaN(numericValue)) return "-";
+  
+  // 小数点第1位まで表示
+  return numericValue.toFixed(1);
+}

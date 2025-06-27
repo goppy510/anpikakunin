@@ -9,8 +9,8 @@ export const getIntensityColor = (intensity: string): string => {
   if (intensity === "6弱" || intensity === "6-") return "#ff9900";
   if (intensity === "6強" || intensity === "6+") return "#ff6600";
 
-  if (normalizedIntensity === 0) return "#0066ff";
-  if (normalizedIntensity === 1) return "#0080ff";
+  if (normalizedIntensity === 0) return "#666666";
+  if (normalizedIntensity === 1) return "#888888";
   if (normalizedIntensity === 2) return "#00ccff";
   if (normalizedIntensity === 3) return "#00ff99";
   if (normalizedIntensity === 4) return "#66ff33";
@@ -36,8 +36,8 @@ export const getIntensityBorderClass = (intensity: string): string => {
   if (intensity === "6弱" || intensity === "6-") return "border-l-orange-500";
   if (intensity === "6強" || intensity === "6+") return "border-l-orange-600";
 
-  if (normalizedIntensity === 0) return "border-l-blue-500";
-  if (normalizedIntensity === 1) return "border-l-blue-400";
+  if (normalizedIntensity === 0) return "border-l-gray-600";
+  if (normalizedIntensity === 1) return "border-l-gray-500";
   if (normalizedIntensity === 2) return "border-l-cyan-400";
   if (normalizedIntensity === 3) return "border-l-green-400";
   if (normalizedIntensity === 4) return "border-l-lime-400";

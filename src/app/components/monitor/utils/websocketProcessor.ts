@@ -4,116 +4,8 @@ import { EventItem } from "../types/EventItem";
 import { ApiService } from "@/app/api/ApiService";
 import { oauth2 } from "@/app/api/Oauth2Service";
 import * as pako from "pako";
+import { WebSocketMessage, getMessageType } from "../types/WebSocketTypes";
 
-// DMDATA WebSocketメッセージの型定義
-interface WebSocketMessage {
-  id?: string;
-  classification?: string;
-  type?: string;
-  error?: string;
-  code?: number;
-  close?: boolean;
-  passing?: Array<{
-    name: string;
-    time: string;
-  }>;
-  head?: {
-    type: string;
-    author: string;
-    time: string;
-    designation?: string;
-    test?: boolean;
-  };
-  xmlReport?: {
-    control?: {
-      title?: string;
-      dateTime?: string;
-      status?: string;
-      editorialOffice?: string;
-      publishingOffice?: string;
-    };
-    head?: {
-      title?: string;
-      reportDateTime?: string;
-      targetDateTime?: string;
-      eventId?: string;
-      infoType?: string;
-      infoKind?: string;
-      infoKindVersion?: string;
-      headline?: {
-        text?: string;
-        information?: Array<{
-          type?: string;
-          item?: Array<{
-            kind?: {
-              name?: string;
-              code?: string;
-            };
-            areas?: {
-              codeType?: string;
-              area?: Array<{
-                name?: string;
-                code?: string;
-                maxInt?: string;
-                revise?: string;
-              }>;
-            };
-          }>;
-        }>;
-      };
-    };
-    body?: {
-      earthquake?: Array<{
-        arrivalTime?: string;
-        originTime?: string;
-        hypocenter?: {
-          area?: {
-            name?: string;
-            code?: string;
-            coordinate?: Array<{
-              value?: string;
-              description?: string;
-            }>;
-          };
-          depth?: {
-            value?: string;
-            condition?: string;
-          };
-        };
-        magnitude?: {
-          value?: string;
-          condition?: string;
-        };
-      }>;
-      intensity?: {
-        observation?: Array<{
-          maxInt?: string;
-          prefecture?: Array<{
-            name?: string;
-            code?: string;
-            maxInt?: string;
-            area?: Array<{
-              name?: string;
-              code?: string;
-              maxInt?: string;
-              city?: Array<{
-                name?: string;
-                code?: string;
-                maxInt?: string;
-                intensityStation?: Array<{
-                  name?: string;
-                  code?: string;
-                  int?: string;
-                  revise?: string;
-                }>;
-              }>;
-            }>;
-          }>;
-        }>;
-      };
-    };
-  };
-}
 
 // 震度文字列を正規化する関数
 const normalizeIntensity = (intensity: string): string => {
@@ -496,7 +388,7 @@ export class WebSocketManager {
   private ws: WebSocket | null = null;
   private onMessage: ((event: EventItem) => void) | null = null;
   private onStatusChange: ((status: "open" | "connecting" | "closed" | "error") => void) | null = null;
-  private onTimeUpdate: ((serverTime: string) => void) | null = null;
+  private onTimeUpdate: ((serverTime: string, messageType: string) => void) | null = null;
   private apiService: ApiService;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private shouldReconnect = true;
@@ -504,7 +396,7 @@ export class WebSocketManager {
   constructor(
     onMessage: (event: EventItem) => void,
     onStatusChange: (status: "open" | "connecting" | "closed" | "error") => void,
-    onTimeUpdate?: (serverTime: string) => void
+    onTimeUpdate?: (serverTime: string, messageType: string) => void
   ) {
     this.onMessage = onMessage;
     this.onStatusChange = onStatusChange;
@@ -640,9 +532,7 @@ export class WebSocketManager {
             
             // 最大接続数エラーの場合、時間をおいて再接続
             if (message.error?.includes('maximum number of simultaneous connections')) {
-              console.log("Max connections reached, will retry in 30 seconds...");
-              setTimeout(() => {
-                console.log("Retrying connection after timeout...");
+                    setTimeout(() => {
                 this.connect();
               }, 30000); // 30秒後に再試行
             }
@@ -825,7 +715,6 @@ export class WebSocketManager {
         isTest: message.head.test || false
       };
 
-      console.log("Created EEW event:", event);
       return event;
 
     } catch (error) {
@@ -834,9 +723,19 @@ export class WebSocketManager {
     }
   }
 
-  // WebSocketメッセージからサーバー時刻を抽出
+  // WebSocketメッセージ受信時の時刻を更新
   private extractAndUpdateServerTime(message: WebSocketMessage): void {
     try {
+      // ping/pongメッセージや地震データなど、すべてのWebSocketメッセージ受信時に
+      // 受信時のローカル時刻を「サーバー時刻」として扱う
+      if (this.onTimeUpdate) {
+        const receptionTime = new Date().toISOString();
+        const messageType = getMessageType(message);
+        this.onTimeUpdate(receptionTime, messageType);
+      }
+
+      // 従来の時刻抽出ロジックはコメントアウト（必要に応じて後で復活可能）
+      /*
       let serverTime: string | null = null;
 
       // 優先順位でサーバー時刻を抽出
@@ -859,6 +758,7 @@ export class WebSocketManager {
           this.onTimeUpdate(serverTime);
         }
       }
+      */
     } catch (error) {
       // 時刻抽出エラーは静かに処理（メイン機能に影響させない）
       console.debug("Server time extraction failed:", error);

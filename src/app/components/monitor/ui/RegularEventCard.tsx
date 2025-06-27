@@ -1,7 +1,7 @@
 import cn from "classnames";
 import { EventItem } from "../types/EventItem";
 import { getIntensityColor, needsDarkText, getIntensityBorderClass } from "../utils/intensityUtils";
-import { formatJPDateTime, renderDepth } from "../utils/dateUtils";
+import { formatJPDateTime, renderDepth, renderMagnitude } from "../utils/dateUtils";
 
 interface RegularEventCardProps {
   event: EventItem;
@@ -10,10 +10,12 @@ interface RegularEventCardProps {
 }
 
 export function RegularEventCard({ event, isSelected, onClick }: RegularEventCardProps) {
+  const yahooUrl = `https://typhoon.yahoo.co.jp/weather/jp/earthquake/${event.eventId}.html`;
+
   return (
     <li
       className={cn(
-        "relative list-none cursor-pointer border-l-4 hover:bg-gray-700 transition-colors duration-100 rounded-r-lg",
+        "relative list-none cursor-pointer border-l-4 hover:bg-gray-700 transition-colors duration-100 rounded-r-lg group",
         isSelected && "bg-gray-600",
         getIntensityBorderClass(event.maxInt ?? "0"),
         "bg-gray-800 mb-2"
@@ -66,12 +68,26 @@ export function RegularEventCard({ event, isSelected, onClick }: RegularEventCar
         {/* 右側: マグニチュードと深さ */}
         <div className="flex flex-col items-end justify-center text-right shrink-0">
           <div className="text-yellow-300 leading-relaxed font-black mb-2 text-2xl">
-            M{event.magnitude?.value ?? "-"}
+            M{renderMagnitude(event.magnitude)}
           </div>
           <div className="text-gray-200 leading-relaxed font-bold text-base">
             深さ{renderDepth(event.hypocenter?.depth)}
           </div>
         </div>
+      </div>
+
+      {/* ホバー時のリンク表示 */}
+      <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <a
+          href={yahooUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center px-1.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded shadow-lg transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="mr-1">🔗</span>
+          詳細
+        </a>
       </div>
     </li>
   );
