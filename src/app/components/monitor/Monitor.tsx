@@ -192,7 +192,7 @@ export default function Monitor() {
               maxInt: event.maxInt
             };
             console.log("New event to add:", JSON.stringify(newEvent, null, 2));
-            updatedEvents = [newEvent, ...prevEvents.slice(0, 9)];
+            updatedEvents = [newEvent, ...prevEvents];
           }
           
           console.log("Final updated events count:", updatedEvents.length);
@@ -523,7 +523,7 @@ export default function Monitor() {
                   return updatedEvents;
                 } else {
                   // 新規イベントを追加
-                  return [{ ...newEvent, isConfirmed: true }, ...prevEvents.slice(0, 9)];
+                  return [{ ...newEvent, isConfirmed: true }, ...prevEvents];
                 }
               });
             }}
