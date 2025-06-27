@@ -1,4 +1,5 @@
 import { Keypair } from "@dmdata/oauth2-client";
+import { SafetyConfirmationConfig } from "../../components/safety-confirmation/types/SafetyConfirmationTypes";
 
 export type AppSettings = {
   oauthRefreshToken: string;
@@ -6,4 +7,5 @@ export type AppSettings = {
   oauthDPoPKeypair: Keypair;
   oauthCodeVerifier: string;
   oauthState: string;
+  safetyConfirmationConfig: SafetyConfirmationConfig;
 };

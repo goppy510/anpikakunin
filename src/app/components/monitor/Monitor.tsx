@@ -16,6 +16,7 @@ import { EventDatabase } from "./utils/eventDatabase";
 import { CurrentTime } from "./components/CurrentTime";
 import { IntensityScale } from "./components/IntensityScale";
 import { MonitorHeader } from "./components/MonitorHeader";
+import { SafetyConfirmationSettings } from "../safety-confirmation/pages/SafetyConfirmationSettings";
 
 const MapComponent = dynamic(() => import("./map/MapCompnent"), {
   ssr: false,
@@ -54,6 +55,7 @@ export default function Monitor() {
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
   const [serverTime, setServerTime] = useState<string>("");
   const [lastMessageType, setLastMessageType] = useState<string>("");
+  const [showSafetySettings, setShowSafetySettings] = useState<boolean>(false);
 
   // データベースからイベントを読み込み
   useEffect(() => {
@@ -468,6 +470,7 @@ export default function Monitor() {
         onNotificationThresholdChange={setNotificationThreshold}
         onToggleTestMode={toggleTestMode}
         onRunTestSimulation={runTestSimulation}
+        onOpenSafetySettings={() => setShowSafetySettings(true)}
       />
 
       {/* main -------------------------------------------------------- */}
@@ -537,6 +540,13 @@ export default function Monitor() {
           />
         </main>
       </div>
+
+      {/* 安否確認設定モーダル */}
+      {showSafetySettings && (
+        <SafetyConfirmationSettings 
+          onClose={() => setShowSafetySettings(false)} 
+        />
+      )}
     </div>
   );
 }

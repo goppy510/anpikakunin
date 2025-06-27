@@ -152,6 +152,17 @@ export function MonitorHeader({
           </button>
         )}
       </div>
+
+      {/* 安否確認システムリンク */}
+      <div className="flex items-center mx-3">
+        <a
+          href="/safety-confirmation"
+          className="px-3 py-1 border border-purple-500 rounded bg-purple-900 hover:bg-purple-800 text-purple-300 transition-colors text-xs"
+        >
+          🚨 安否確認システム
+        </a>
+      </div>
+
     </div>
   );
 }
