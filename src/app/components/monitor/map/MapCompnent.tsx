@@ -31,6 +31,7 @@ interface EarthquakeData {
 }
 
 import { EventItem } from "../types/EventItem";
+import { TsunamiWarning, TSUNAMI_COLORS, TSUNAMI_BORDER_COLORS, TSUNAMI_COASTAL_AREAS } from "../types/TsunamiTypes";
 
 interface MapComponentProps {
   onEarthquakeUpdate?: (event: {
@@ -47,6 +48,8 @@ interface MapComponentProps {
   connectionStatus?: "open" | "connecting" | "closed" | "error";
   serverTime?: string;
   lastMessageType?: string;
+  tsunamiWarnings?: TsunamiWarning[]; // 津波警報データ
+  onTsunamiSimulation?: (warning: TsunamiWarning) => void; // 津波シミュレーション用
 }
 
 export default function MapComponent({
@@ -58,6 +61,8 @@ export default function MapComponent({
   connectionStatus = "closed",
   serverTime = "",
   lastMessageType = "",
+  tsunamiWarnings = [],
+  onTsunamiSimulation,
 }: MapComponentProps = {}) {
   const [prefectureData, setPrefectureData] =
     useState<FeatureCollection | null>(null);
@@ -69,6 +74,8 @@ export default function MapComponent({
   const [markersVisible, setMarkersVisible] = useState(true);
   const [animatingEarthquake, setAnimatingEarthquake] = useState(false);
   const [intensityThreshold, setIntensityThreshold] = useState<number>(3); // 震度3以上を表示
+  const [activeTsunamiWarnings, setActiveTsunamiWarnings] = useState<Map<string, TsunamiWarning>>(new Map()); // アクティブな津波警報
+  const [tsunamiBlinking, setTsunamiBlinking] = useState(true); // 津波警報の点滅状態
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: number | string): number => {
@@ -555,6 +562,72 @@ export default function MapComponent({
     }, totalDuration);
   };
 
+  // 津波シミュレーション関数
+  const addTestTsunamiWarning = () => {
+    const testTsunamiWarning: TsunamiWarning = {
+      id: `tsunami-test-${Date.now()}`,
+      eventId: `earthquake-${Date.now()}`,
+      issueTime: new Date().toISOString(),
+      type: 'warning', // 津波警報（オレンジ）
+      areas: [
+        {
+          code: '201',
+          name: '青森県太平洋沿岸',
+          prefecture: '青森県',
+          warning_type: 'warning',
+          coordinates: TSUNAMI_COASTAL_AREAS['201']?.coordinates || [[41.0, 141.5], [40.5, 141.8], [40.0, 141.5], [40.2, 141.0]],
+          expectedArrival: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          maxHeight: { value: 2, category: 'medium', text: '2m' }
+        },
+        {
+          code: '202',
+          name: '岩手県',
+          prefecture: '岩手県',
+          warning_type: 'advisory',
+          coordinates: TSUNAMI_COASTAL_AREAS['202']?.coordinates || [[40.2, 141.0], [39.8, 142.0], [39.0, 142.0], [38.8, 141.8]],
+          expectedArrival: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+          maxHeight: { value: 1, category: 'low', text: '1m' }
+        },
+        {
+          code: '203',
+          name: '宮城県',
+          prefecture: '宮城県',
+          warning_type: 'major_warning',
+          coordinates: TSUNAMI_COASTAL_AREAS['203']?.coordinates || [[38.8, 141.8], [38.3, 141.5], [37.8, 141.0], [37.5, 140.8]],
+          expectedArrival: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          maxHeight: { value: 5, category: 'giant', text: '巨巨大' }
+        }
+      ],
+      isCancel: false,
+      expectedArrival: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      maxHeight: { value: 5, category: 'giant', text: '巨大' }
+    };
+
+    console.log('津波シミュレーションを開始:', testTsunamiWarning);
+    
+    // アクティブな津波警報に追加
+    setActiveTsunamiWarnings(prev => {
+      const newWarnings = new Map(prev);
+      newWarnings.set(testTsunamiWarning.id, testTsunamiWarning);
+      return newWarnings;
+    });
+
+    // 親コンポーネントに通知
+    if (onTsunamiSimulation) {
+      onTsunamiSimulation(testTsunamiWarning);
+    }
+
+    // 30秒後に自動解除
+    setTimeout(() => {
+      setActiveTsunamiWarnings(prev => {
+        const newWarnings = new Map(prev);
+        newWarnings.delete(testTsunamiWarning.id);
+        return newWarnings;
+      });
+      console.log('津波シミュレーション終了:', testTsunamiWarning.id);
+    }, 30000);
+  };
+
   // 手動テストデータ追加関数（アニメーション付き）
   const addTestEarthquakeData = () => {
     if (animatingEarthquake) return;
@@ -846,6 +919,49 @@ export default function MapComponent({
     }
   }, [runSimulation, earthquakeEvents]);
 
+  // tsunamiWarnings propsの変更を監視
+  useEffect(() => {
+    if (tsunamiWarnings && tsunamiWarnings.length > 0) {
+      const newWarnings = new Map();
+      tsunamiWarnings.forEach(warning => {
+        if (!warning.isCancel) {
+          newWarnings.set(warning.id, warning);
+        }
+      });
+      setActiveTsunamiWarnings(prev => {
+        // 既存の手動シミュレーションと外部からの津波警報をマージ
+        const merged = new Map(prev);
+        newWarnings.forEach((warning, id) => {
+          merged.set(id, warning);
+        });
+        return merged;
+      });
+    } else {
+      // tsunamiWarningsが空の場合はアクティブな警報をクリア
+      setActiveTsunamiWarnings(new Map());
+    }
+  }, [tsunamiWarnings]);
+  
+  // 津波警報の点滅アニメーション
+  useEffect(() => {
+    let blinkInterval: NodeJS.Timeout;
+    
+    if (activeTsunamiWarnings.size > 0 && testMode) {
+      // テストモードかつ警報がある場合のみ1秒間隔で点滅
+      blinkInterval = setInterval(() => {
+        setTsunamiBlinking(prev => !prev);
+      }, 1000);
+    } else {
+      setTsunamiBlinking(true);
+    }
+    
+    return () => {
+      if (blinkInterval) {
+        clearInterval(blinkInterval);
+      }
+    };
+  }, [activeTsunamiWarnings.size, testMode]);
+
   return (
     <div className={styles.map}>
       <MapContainer
@@ -868,15 +984,54 @@ export default function MapComponent({
           attribution="Tiles &copy; Esri"
         />
 
-        {/* 都道府県境界線（白色） */}
+        {/* 都道府県境界線（津波警報時は点滅） */}
         {prefectureData && (
           <GeoJSON
             data={prefectureData}
-            style={{
-              color: "#ffffff",
-              weight: 0.3,
-              opacity: 0.7,
-              fillOpacity: 0,
+            style={(feature) => {
+              // 津波警報が発令されている地域の境界線を点滅表示
+              let borderColor = '#ffffff';
+              let borderWeight = 0.3;
+              let borderOpacity = 0.7;
+              
+              if (activeTsunamiWarnings.size > 0) {
+                const prefName = feature?.properties?.name_ja || feature?.properties?.nam_ja || '';
+                
+                // 沿岸部の都道府県かどうかをチェック
+                const coastalPrefectures = [
+                  '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+                  '茨城県', '千葉県', '東京都', '神奈川県', '新潟県', '富山県', '石川県',
+                  '福井県', '静岡県', '愛知県', '三重県', '京都府', '大阪府', '兵庫県',
+                  '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+                  '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+                  '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+                ];
+                
+                const isCoastal = coastalPrefectures.some(pref => prefName.includes(pref.replace(/[都道府県]$/, '')));
+                
+                if (isCoastal) {
+                  // 沿岸部の場合は津波警報に応じて境界線を点滅表示
+                  for (const warning of activeTsunamiWarnings.values()) {
+                    for (const area of warning.areas) {
+                      if (area.prefecture === prefName || prefName.includes(area.prefecture.replace(/[都道府県]$/, ''))) {
+                        borderColor = TSUNAMI_BORDER_COLORS[area.warning_type];
+                        // 大津波警報は特に太く表示
+                        borderWeight = area.warning_type === 'major_warning' ? 5.0 : 3.5;
+                        borderOpacity = tsunamiBlinking ? 1.0 : 0.4; // 点滅時の最小透明度を上げる
+                        break;
+                      }
+                    }
+                    if (borderWeight > 0.3) break;
+                  }
+                }
+              }
+              
+              return {
+                color: borderColor,
+                weight: borderWeight,
+                opacity: borderOpacity,
+                fillOpacity: 0, // 塗りつぶしなし
+              };
             }}
           />
         )}
@@ -927,15 +1082,42 @@ export default function MapComponent({
             attribution=""
           />
 
-          {/* 沖縄の都道府県境界線 */}
+          {/* 沖縄の都道府県境界線（津波警報時は点滅） */}
           {prefectureData && (
             <GeoJSON
               data={prefectureData}
-              style={{
-                color: "#ffffff",
-                weight: 0.5,
-                opacity: 0.8,
-                fillOpacity: 0,
+              style={(feature) => {
+                // 沖縄の津波警報時境界線点滅表示
+                let borderColor = '#ffffff';
+                let borderWeight = 0.5;
+                let borderOpacity = 0.8;
+                
+                if (activeTsunamiWarnings.size > 0) {
+                  const prefName = feature?.properties?.name_ja || feature?.properties?.nam_ja || '';
+                  
+                  // 沖縄は沿岸部なので津波警報に応じて境界線を点滅表示
+                  if (prefName.includes('沖縄')) {
+                    for (const warning of activeTsunamiWarnings.values()) {
+                      for (const area of warning.areas) {
+                        if (area.prefecture === prefName || prefName.includes(area.prefecture.replace(/[都道府県]$/, ''))) {
+                          borderColor = TSUNAMI_BORDER_COLORS[area.warning_type];
+                          // 大津波警報は特に太く表示
+                          borderWeight = area.warning_type === 'major_warning' ? 5.0 : 3.5;
+                          borderOpacity = tsunamiBlinking ? 1.0 : 0.4; // 点滅時の最小透明度を上げる
+                          break;
+                        }
+                      }
+                      if (borderWeight > 0.5) break;
+                    }
+                  }
+                }
+                
+                return {
+                  color: borderColor,
+                  weight: borderWeight,
+                  opacity: borderOpacity,
+                  fillOpacity: 0, // 塗りつぶしなし
+                };
               }}
             />
           )}
@@ -1032,15 +1214,75 @@ export default function MapComponent({
               border: "none",
               borderRadius: "3px",
               cursor: animatingEarthquake ? "not-allowed" : "pointer",
+              display: "block",
+              width: "100%",
+              marginBottom: "3px"
             }}
           >
             {animatingEarthquake ? "アニメーション中..." : "北海道テストデータ"}
           </button>
+          <button
+            onClick={addTestTsunamiWarning}
+            style={{
+              padding: "2px 8px",
+              fontSize: "11px",
+              background: "#dc2626",
+              color: "white",
+              border: "none",
+              borderRadius: "3px",
+              cursor: "pointer",
+              display: "block",
+              width: "100%",
+            }}
+          >
+            津波テストデータ
+          </button>
+          {activeTsunamiWarnings.size > 0 && (
+            <div style={{ marginTop: "5px", fontSize: "10px", color: "#fbbf24" }}>
+              津波警報: {activeTsunamiWarnings.size}件
+            </div>
+          )}
         </div>
       )}
 
       {/* 震度スケール凡例 */}
       <IntensityScale />
+      
+      {/* 津波警報凡例 */}
+      {activeTsunamiWarnings.size > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "20px",
+            left: "20px",
+            background: "rgba(0,0,0,0.8)",
+            color: "white",
+            padding: "10px",
+            borderRadius: "5px",
+            fontSize: "11px",
+            zIndex: 1000,
+            minWidth: "150px",
+          }}
+        >
+          <div style={{ fontWeight: "bold", marginBottom: "5px" }}>津波警報</div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "2px" }}>
+            <div style={{ width: "15px", height: "15px", backgroundColor: TSUNAMI_COLORS.major_warning, marginRight: "5px" }}></div>
+            <span>大津波警報</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "2px" }}>
+            <div style={{ width: "15px", height: "15px", backgroundColor: TSUNAMI_COLORS.warning, marginRight: "5px" }}></div>
+            <span>津波警報</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "2px" }}>
+            <div style={{ width: "15px", height: "15px", backgroundColor: TSUNAMI_COLORS.advisory, marginRight: "5px" }}></div>
+            <span>津波注意報</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ width: "15px", height: "15px", backgroundColor: TSUNAMI_COLORS.forecast, marginRight: "5px" }}></div>
+            <span>津波予報</span>
+          </div>
+        </div>
+      )}
 
       {/* 現在時刻表示（震度スケールの隣） */}
       {isClient && (

@@ -5,6 +5,8 @@ import { ApiService } from "@/app/api/ApiService";
 import { oauth2 } from "@/app/api/Oauth2Service";
 import * as pako from "pako";
 import { WebSocketMessage, getMessageType } from "../types/WebSocketTypes";
+import { TsunamiWarning } from "../types/TsunamiTypes";
+import { processTsunamiMessage } from "./tsunamiProcessor";
 
 
 // 震度文字列を正規化する関数
@@ -389,6 +391,7 @@ export class WebSocketManager {
   private onMessage: ((event: EventItem) => void) | null = null;
   private onStatusChange: ((status: "open" | "connecting" | "closed" | "error") => void) | null = null;
   private onTimeUpdate: ((serverTime: string, messageType: string) => void) | null = null;
+  private onTsunamiWarning: ((warning: TsunamiWarning) => void) | null = null;
   private apiService: ApiService;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private shouldReconnect = true;
@@ -396,11 +399,13 @@ export class WebSocketManager {
   constructor(
     onMessage: (event: EventItem) => void,
     onStatusChange: (status: "open" | "connecting" | "closed" | "error") => void,
-    onTimeUpdate?: (serverTime: string, messageType: string) => void
+    onTimeUpdate?: (serverTime: string, messageType: string) => void,
+    onTsunamiWarning?: (warning: TsunamiWarning) => void
   ) {
     this.onMessage = onMessage;
     this.onStatusChange = onStatusChange;
     this.onTimeUpdate = onTimeUpdate || null;
+    this.onTsunamiWarning = onTsunamiWarning || null;
     this.apiService = new ApiService();
   }
   
@@ -510,10 +515,12 @@ export class WebSocketManager {
       // WebSocket接続開始（詳細ログ付き）
       console.log("Attempting socket start with classifications:", [
         "telegram.earthquake"
+        // "telegram.tsunami" // 403エラーのため無効化（権限なし）
       ]);
       
       const socketResponse = await this.apiService.socketStart([
         "telegram.earthquake"
+        // "telegram.tsunami" // 403エラーのため無効化（権限なし）
       ], "anpikakunin");
       
       console.log("Socket response:", socketResponse);
@@ -587,6 +594,15 @@ export class WebSocketManager {
               this.handleMaxConnectionsError();
             }
             return;
+          }
+          
+          // 津波情報の処理
+          const tsunamiWarning = processTsunamiMessage(message);
+          if (tsunamiWarning && this.onTsunamiWarning) {
+            console.log("=== WebSocketManager: Tsunami Warning Processed ===");
+            console.log("Tsunami warning details:", JSON.stringify(tsunamiWarning, null, 2));
+            this.onTsunamiWarning(tsunamiWarning);
+            return; // 津波情報の場合は地震イベント処理をスキップ
           }
           
           const eventItem = processWebSocketMessage(message);

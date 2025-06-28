@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { WebSocketManager } from "@/app/components/monitor/utils/websocketProcessor";
 import { EventItem } from "@/app/components/monitor/types/EventItem";
+import { TsunamiWarning } from "@/app/components/monitor/types/TsunamiTypes";
 import { oauth2 } from "@/app/api/Oauth2Service";
 import { ApiService } from "@/app/api/ApiService";
 import { EventDatabase } from "@/app/components/monitor/utils/eventDatabase";
@@ -10,11 +11,13 @@ import { EventDatabase } from "@/app/components/monitor/utils/eventDatabase";
 interface WebSocketContextType {
   status: "open" | "connecting" | "closed" | "error";
   events: EventItem[];
+  tsunamiWarnings: TsunamiWarning[];
   serverTime: string;
   lastMessageType: string;
   authStatus: "checking" | "authenticated" | "not_authenticated";
   isInitialized: boolean;
   addEvent: (event: EventItem) => void;
+  addTsunamiWarning: (warning: TsunamiWarning) => void;
   reconnect: () => void;
   refreshAuth: () => Promise<void>;
   clearAuth: () => Promise<void>;
@@ -38,6 +41,7 @@ interface WebSocketProviderProps {
 export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [status, setStatus] = useState<"open" | "connecting" | "closed" | "error">("closed");
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [tsunamiWarnings, setTsunamiWarnings] = useState<TsunamiWarning[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [serverTime, setServerTime] = useState<string>("");
   const [lastMessageType, setLastMessageType] = useState<string>("");
@@ -263,11 +267,35 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         setServerTime(newServerTime);
         setLastMessageType(messageType);
       };
+      
+      const handleTsunamiWarning = (warning: TsunamiWarning) => {
+        console.log("=== WebSocketProvider: Received tsunami warning ===");
+        console.log("Tsunami warning details:", JSON.stringify(warning, null, 2));
+        
+        setTsunamiWarnings(prevWarnings => {
+          const existingIndex = prevWarnings.findIndex(w => w.id === warning.id);
+          let updatedWarnings: TsunamiWarning[];
+          
+          if (existingIndex >= 0) {
+            // 既存の警報を更新
+            updatedWarnings = [...prevWarnings];
+            updatedWarnings[existingIndex] = warning;
+          } else {
+            // 新しい警報を追加
+            updatedWarnings = [warning, ...prevWarnings];
+          }
+          
+          // 解除された警報を除去
+          return updatedWarnings.filter(w => !w.isCancel);
+        });
+        
+        console.log("✅ WebSocketProvider: Tsunami warning processing completed");
+      };
 
       // WebSocketマネージャーを初期化（既存のものがあれば再利用）
       if (!wsManagerRef.current) {
         console.log("WebSocketProvider: Creating new WebSocketManager");
-        wsManagerRef.current = new WebSocketManager(handleNewEvent, handleStatusChange, handleTimeUpdate);
+        wsManagerRef.current = new WebSocketManager(handleNewEvent, handleStatusChange, handleTimeUpdate, handleTsunamiWarning);
         wsManagerRef.current.connect();
       }
 
@@ -309,6 +337,23 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       return sortedEvents;
     });
   }, []); // 依存配列を空にして安定化
+  
+  const addTsunamiWarning = useCallback((warning: TsunamiWarning) => {
+    setTsunamiWarnings(prevWarnings => {
+      const existingIndex = prevWarnings.findIndex(w => w.id === warning.id);
+      let updatedWarnings: TsunamiWarning[];
+      
+      if (existingIndex >= 0) {
+        updatedWarnings = [...prevWarnings];
+        updatedWarnings[existingIndex] = warning;
+      } else {
+        updatedWarnings = [warning, ...prevWarnings];
+      }
+      
+      // 解除された警報を除去
+      return updatedWarnings.filter(w => !w.isCancel);
+    });
+  }, []);
 
   const reconnect = () => {
     if (wsManagerRef.current) {
@@ -353,6 +398,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       
       // イベントリストもクリア
       setEvents([]);
+      setTsunamiWarnings([]);
     } catch (error) {
       console.error("Failed to clear auth:", error);
     }
@@ -371,11 +417,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const contextValue: WebSocketContextType = {
     status,
     events,
+    tsunamiWarnings,
     serverTime,
     lastMessageType,
     authStatus,
     isInitialized,
     addEvent,
+    addTsunamiWarning,
     reconnect,
     refreshAuth,
     clearAuth,

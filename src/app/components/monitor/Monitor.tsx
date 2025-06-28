@@ -47,11 +47,13 @@ export default function Monitor() {
   // WebSocketProviderから状態を取得
   const { 
     status, 
-    events: globalEvents, 
+    events: globalEvents,
+    tsunamiWarnings: globalTsunamiWarnings,
     serverTime, 
     lastMessageType, 
     authStatus, 
-    addEvent, 
+    addEvent,
+    addTsunamiWarning,
     reconnect, 
     refreshAuth, 
     clearAuth, 
@@ -60,6 +62,7 @@ export default function Monitor() {
 
   const [soundPlay, setSoundPlay] = useState(false);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [tsunamiWarnings, setTsunamiWarnings] = useState<TsunamiWarning[]>([]);
   const [viewEventId, setViewEventId] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
   const [runMapSimulation, setRunMapSimulation] = useState(false);
@@ -97,6 +100,26 @@ export default function Monitor() {
       }
     }
   }, [globalEvents, soundPlay, notificationThreshold]);
+  
+  // 津波警報の同期
+  useEffect(() => {
+    setTsunamiWarnings(globalTsunamiWarnings);
+  }, [globalTsunamiWarnings]);
+  
+  // テストモードの変更を監視して、オフ時に津波警報をクリア
+  useEffect(() => {
+    if (!testMode) {
+      // テストモードがオフになったら津波警報をクリア
+      setTsunamiWarnings([]);
+      console.log('テストモードオフ: 津波警報をクリアしました');
+    }
+  }, [testMode]);
+  
+  // 津波シミュレーションハンドラー
+  const handleTsunamiSimulation = (warning: TsunamiWarning) => {
+    console.log("津波シミュレーションを受信:", warning);
+    addTsunamiWarning(warning);
+  };
 
   // データベースからイベントを読み込み（初期化時のみ）
   useEffect(() => {
@@ -440,10 +463,12 @@ export default function Monitor() {
                 }
               });
             }}
+            onTsunamiSimulation={handleTsunamiSimulation}
             runSimulation={runMapSimulation}
             onSimulationComplete={() => setRunMapSimulation(false)}
             testMode={testMode}
             earthquakeEvents={events} // 地図用に現在のイベントを渡す
+            tsunamiWarnings={tsunamiWarnings} // 津波警報データを渡す
             connectionStatus={status}
             serverTime={serverTime}
             lastMessageType={lastMessageType}
