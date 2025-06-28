@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import cn from "classnames";
+import { ClientLink } from "../../ClientLink";
 import { SafetyConfirmationConfig, DepartmentStamp, DEFAULT_DEPARTMENT_STAMPS } from "../types/SafetyConfirmationTypes";
 import { SafetyConfirmationSettings } from "./SafetyConfirmationSettings";
 import { Settings } from "../../../lib/db/settings";
 import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
+import { useWebSocket } from "../../providers/WebSocketProvider";
 
 interface ActiveAlert {
   id: string;
@@ -23,6 +25,9 @@ interface ActiveAlert {
 }
 
 export function SafetyConfirmationDashboard() {
+  // WebSocket接続状態とイベントを取得
+  const { status: wsStatus, events: earthquakeEvents, authStatus } = useWebSocket();
+  
   const [config, setConfig] = useState<SafetyConfirmationConfig | null>(null);
   const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
   const [isSystemActive, setIsSystemActive] = useState(false);
@@ -123,7 +128,17 @@ export function SafetyConfirmationDashboard() {
       <header className="bg-gray-800 border-b border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-white">🚨 安否確認システム</h1>
+            <div className="flex items-center gap-6">
+              <h1 className="text-2xl font-bold text-white">🚨 安否確認システム</h1>
+              <div className="flex items-center gap-4">
+                <ClientLink 
+                  href="/" 
+                  className="text-blue-400 hover:text-blue-300 transition-colors text-sm"
+                >
+                  ← 地震モニター
+                </ClientLink>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-400">システム状態:</span>
               <label className="flex items-center cursor-pointer">
@@ -148,6 +163,21 @@ export function SafetyConfirmationDashboard() {
           <div className="flex items-center gap-4">
             <div className="text-sm text-gray-400">
               通知先: <span className="text-white">{config.slack.channels.filter(ch => ch.isEnabled).length}チャンネル</span>
+            </div>
+            <div className="text-sm text-gray-400">
+              WebSocket: <span className={cn(
+                "font-medium",
+                wsStatus === "open" ? "text-green-400" :
+                wsStatus === "connecting" ? "text-yellow-400" :
+                wsStatus === "error" ? "text-red-400" : "text-gray-500"
+              )}>
+                {wsStatus === "open" ? "接続中" : 
+                 wsStatus === "connecting" ? "接続中..." :
+                 wsStatus === "error" ? "エラー" : "切断"}
+              </span>
+            </div>
+            <div className="text-sm text-gray-400">
+              地震情報: <span className="text-white">{earthquakeEvents.length}件</span>
             </div>
             <button
               onClick={() => setShowSettings(true)}

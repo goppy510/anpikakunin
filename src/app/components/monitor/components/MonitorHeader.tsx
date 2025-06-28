@@ -1,6 +1,7 @@
 "use client";
 
 import cn from "classnames";
+import { ClientLink } from "../../ClientLink";
 
 interface MonitorHeaderProps {
   authStatus: "checking" | "authenticated" | "not_authenticated";
@@ -15,6 +16,7 @@ interface MonitorHeaderProps {
   onNotificationThresholdChange: (threshold: number) => void;
   onToggleTestMode: () => void;
   onRunTestSimulation: () => void;
+  onOpenSafetySettings?: () => void;
 }
 
 export function MonitorHeader({
@@ -30,6 +32,7 @@ export function MonitorHeader({
   onNotificationThresholdChange,
   onToggleTestMode,
   onRunTestSimulation,
+  onOpenSafetySettings,
 }: MonitorHeaderProps) {
   return (
     <div className="flex text-white text-sm leading-[36px] min-h-[36px] bg-gray-800 border-b border-gray-700">
@@ -155,12 +158,12 @@ export function MonitorHeader({
 
       {/* 安否確認システムリンク */}
       <div className="flex items-center mx-3">
-        <a
+        <ClientLink
           href="/safety-confirmation"
           className="px-3 py-1 border border-purple-500 rounded bg-purple-900 hover:bg-purple-800 text-purple-300 transition-colors text-xs"
         >
           🚨 安否確認システム
-        </a>
+        </ClientLink>
       </div>
 
     </div>

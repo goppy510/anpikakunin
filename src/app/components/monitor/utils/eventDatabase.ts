@@ -84,9 +84,13 @@ export class EventDatabase {
         limit
       );
 
-      // 到達時刻で降順ソート（最新順）
+      // 発生時刻で降順ソート（新しいものが上）、発生時刻がなければ到達時刻を使用
       const sortedEvents = events
-        .sort((a, b) => new Date(b.arrivalTime).getTime() - new Date(a.arrivalTime).getTime())
+        .sort((a, b) => {
+          const timeA = new Date(a.originTime || a.arrivalTime).getTime();
+          const timeB = new Date(b.originTime || b.arrivalTime).getTime();
+          return timeB - timeA; // 降順ソート（新しいものが上）
+        })
         .map(({ createdAt, updatedAt, ...event }) => event); // DB固有フィールドを除去
 
       console.log(`IndexedDBから地震イベント ${sortedEvents.length}件 を取得しました`);

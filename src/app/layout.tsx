@@ -2,6 +2,7 @@
 
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
+import { WebSocketProvider } from "@/app/components/providers/WebSocketProvider";
 import React from "react";
 
 export default function RootLayout({
@@ -14,7 +15,9 @@ export default function RootLayout({
       <head></head>
       <body className="antialiased" suppressHydrationWarning={true}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <WebSocketProvider>
+            {children}
+          </WebSocketProvider>
         </ThemeProvider>
       </body>
     </html>

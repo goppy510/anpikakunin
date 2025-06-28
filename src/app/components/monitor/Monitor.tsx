@@ -17,6 +17,7 @@ import { CurrentTime } from "./components/CurrentTime";
 import { IntensityScale } from "./components/IntensityScale";
 import { MonitorHeader } from "./components/MonitorHeader";
 import { SafetyConfirmationSettings } from "../safety-confirmation/pages/SafetyConfirmationSettings";
+import { useWebSocket } from "../providers/WebSocketProvider";
 
 const MapComponent = dynamic(() => import("./map/MapCompnent"), {
   ssr: false,
@@ -41,23 +42,35 @@ const dummyEvents: EventItem[] = [
 ];
 
 export default function Monitor() {
-  const [status, setStatus] = useState<
-    "open" | "connecting" | "closed" | "error"
-  >("closed");
+  // WebSocketProviderから状態を取得
+  const { 
+    status, 
+    events: globalEvents, 
+    serverTime, 
+    lastMessageType, 
+    authStatus, 
+    addEvent, 
+    reconnect, 
+    refreshAuth, 
+    clearAuth, 
+    handleLogin 
+  } = useWebSocket();
+
   const [soundPlay, setSoundPlay] = useState(false);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [viewEventId, setViewEventId] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
   const [runMapSimulation, setRunMapSimulation] = useState(false);
-  const [authStatus, setAuthStatus] = useState<"checking" | "authenticated" | "not_authenticated">("checking");
   const [notificationThreshold, setNotificationThreshold] = useState(1); // デフォルト震度1
-  const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
-  const [serverTime, setServerTime] = useState<string>("");
-  const [lastMessageType, setLastMessageType] = useState<string>("");
   const [showSafetySettings, setShowSafetySettings] = useState<boolean>(false);
 
-  // データベースからイベントを読み込み
+  // グローバルイベントをローカル状態に同期
+  useEffect(() => {
+    setEvents(globalEvents);
+  }, [globalEvents]);
+
+  // データベースからイベントを読み込み（初期化時のみ）
   useEffect(() => {
     const loadEventsFromDB = async () => {
       try {
@@ -75,8 +88,11 @@ export default function Monitor() {
               isConfirmed: shouldBeConfirmed || event.isConfirmed
             };
           });
-          setEvents(correctedEvents);
-        } else {
+          
+          // グローバル状態に追加（既存のものと重複しないように）
+          correctedEvents.forEach(event => {
+            addEvent(event);
+          });
         }
       } catch (error) {
         console.error("IndexedDBからのイベント読み込みに失敗:", error);
@@ -86,36 +102,7 @@ export default function Monitor() {
     };
 
     loadEventsFromDB();
-  }, []);
-
-  // 認証状態確認
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const oauth2Service = oauth2();
-        
-        const hasToken = await oauth2Service.refreshTokenCheck();
-        
-        setAuthStatus(hasToken ? "authenticated" : "not_authenticated");
-        
-        // 認証済みの場合、簡単なAPI呼び出しでテスト
-        if (hasToken) {
-          try {
-            const apiService = new ApiService();
-            const contracts = await apiService.contractList();
-          } catch (apiError) {
-            console.error("API access failed despite authentication:", apiError);
-            setAuthStatus("not_authenticated");
-          }
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error);
-        setAuthStatus("not_authenticated");
-      }
-    };
-    
-    checkAuth();
-  }, []);
+  }, [addEvent]);
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: string): number => {
@@ -126,182 +113,14 @@ export default function Monitor() {
     return parseFloat(intensity) || 0;
   };
 
-  // WebSocket接続を初期化
-  useEffect(() => {
-    if (authStatus === "authenticated") {
-      const handleNewEvent = (event: EventItem) => {
-        console.log("=== Monitor: Received earthquake event ===");
-        console.log("Event details:", JSON.stringify(event, null, 2));
-        
-        // 通知震度フィルタリング
-        const maxIntensity = getIntensityValue(event.maxInt);
-        console.log(`地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity}), 通知震度設定: ${notificationThreshold}`);
-        
-        // 震度が"-"（確認中）の場合は常に通知
-        if (event.maxInt === "-") {
-          console.log("震度が確認中（-）のため、フィルタリングをスキップして表示します");
-        } else if (maxIntensity < notificationThreshold) {
-          console.log(`地震データを受信しましたが、震度${event.maxInt}は通知震度${notificationThreshold}未満のため表示されません`);
-          return; // 通知震度未満の場合は表示しない
-        }
-        
-        console.log(`震度${event.maxInt}の地震データを追加します（通知震度${notificationThreshold}以上またはテスト）`);
-        
-        // 既存のイベントを更新するか新規追加
-        console.log("=== Monitor: Updating events state ===");
-        console.log("Current events count:", events.length);
-        
-        setEvents(prevEvents => {
-          console.log("Previous events in state:", prevEvents.length);
-          console.log("Looking for existing event with ID:", event.eventId);
-          
-          const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
-          console.log("Existing event index:", existingIndex);
-          
-          let updatedEvents: EventItem[];
-          
-          if (existingIndex >= 0) {
-            // 既存イベントを更新
-            console.log("Updating existing event");
-            const existingEvent = prevEvents[existingIndex];
-            updatedEvents = [...prevEvents];
-            
-            // 既存イベントを動的に更新（震度・震源・マグニチュードなど）
-            console.log("Updating existing event dynamically");
-            console.log("Existing event:", existingEvent);
-            console.log("New event data:", event);
-            
-            updatedEvents[existingIndex] = {
-              ...existingEvent,
-              // 新しいデータで更新（より詳細な情報があれば採用）
-              maxInt: event.maxInt || existingEvent.maxInt,
-              currentMaxInt: event.maxInt || event.currentMaxInt || existingEvent.currentMaxInt,
-              magnitude: event.magnitude || existingEvent.magnitude,
-              hypocenter: event.hypocenter || existingEvent.hypocenter,
-              originTime: event.originTime || existingEvent.originTime,
-              isConfirmed: event.isConfirmed || existingEvent.isConfirmed, // 一度確定したら確定を維持
-              isTest: existingEvent.isTest || event.isTest
-            };
-            
-            console.log("Updated event:", updatedEvents[existingIndex]);
-          } else {
-            // 新規イベントを追加（DMDATAからのデータは確定状態で）
-            console.log("Adding new event to list");
-            const newEvent = {
-              ...event,
-              isConfirmed: event.isConfirmed !== undefined ? event.isConfirmed : true, // processWebSocketMessageの判定を優先
-              currentMaxInt: event.currentMaxInt || event.maxInt,
-              maxInt: event.maxInt
-            };
-            console.log("New event to add:", JSON.stringify(newEvent, null, 2));
-            updatedEvents = [newEvent, ...prevEvents];
-          }
-          
-          console.log("Final updated events count:", updatedEvents.length);
-          console.log("Updated events summary:", updatedEvents.map(e => ({
-            eventId: e.eventId,
-            maxInt: e.maxInt,
-            currentMaxInt: e.currentMaxInt,
-            hypocenter: e.hypocenter?.name,
-            isConfirmed: e.isConfirmed
-          })));
-          
-          // IndexedDBに保存（非同期で実行）
-          const eventToSave = updatedEvents.find(e => e.eventId === event.eventId);
-          if (eventToSave) {
-            EventDatabase.saveEvent(eventToSave).catch(error => {
-              console.error("IndexedDBへの保存に失敗:", error);
-            });
-          }
-          
-          return updatedEvents;
-        });
-        
-        console.log("✅ Monitor: setEvents completed");
-      };
-
-      const handleStatusChange = (newStatus: "open" | "connecting" | "closed" | "error") => {
-        setStatus(newStatus);
-      };
-
-      const handleTimeUpdate = (newServerTime: string, messageType: string) => {
-        setServerTime(newServerTime);
-        setLastMessageType(messageType);
-      };
-
-      // WebSocketマネージャーを初期化
-      wsManagerRef.current = new WebSocketManager(handleNewEvent, handleStatusChange, handleTimeUpdate);
-      
-      // 自動接続開始
-      wsManagerRef.current.connect();
-
-      // クリーンアップ
-      return () => {
-        if (wsManagerRef.current) {
-          wsManagerRef.current.disconnect();
-        }
-      };
-    }
-  }, [authStatus, notificationThreshold]);
-
   /* ---------- UIハンドラ例 ---------- */
   const reconnectWs = () => {
-    if (wsManagerRef.current) {
-      wsManagerRef.current.reconnect();
-    }
+    reconnect();
   };
   
   const toggleSound = (v: boolean) => setSoundPlay(v);
   
   const toggleTestMode = () => setTestMode(!testMode);
-  
-  const handleLogin = async () => {
-    try {
-      const oauth2Service = oauth2();
-      const authUrl = await oauth2Service.buildAuthorizationUrl();
-      window.open(authUrl, '_blank');
-    } catch (error) {
-      console.error("Failed to build auth URL:", error);
-    }
-  };
-  
-  const refreshAuth = async () => {
-    setAuthStatus("checking");
-    const checkAuth = async () => {
-      try {
-        const oauth2Service = oauth2();
-        
-        const hasToken = await oauth2Service.refreshTokenCheck();
-        
-        setAuthStatus(hasToken ? "authenticated" : "not_authenticated");
-        
-        if (hasToken) {
-          try {
-            const apiService = new ApiService();
-            const contracts = await apiService.contractList();
-          } catch (apiError) {
-            console.error("Manual API access failed despite authentication:", apiError);
-            setAuthStatus("not_authenticated");
-          }
-        }
-      } catch (error) {
-        console.error("Manual auth check failed:", error);
-        setAuthStatus("not_authenticated");
-      }
-    };
-    
-    await checkAuth();
-  };
-  
-  const clearAuth = async () => {
-    try {
-      const oauth2Service = oauth2();
-      await oauth2Service.refreshTokenDelete();
-      setAuthStatus("not_authenticated");
-    } catch (error) {
-      console.error("Failed to clear auth:", error);
-    }
-  };
   
   const cleanupConnections = async () => {
     try {

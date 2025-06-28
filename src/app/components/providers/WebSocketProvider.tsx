@@ -1,0 +1,286 @@
+"use client";
+
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { WebSocketManager } from "@/app/components/monitor/utils/websocketProcessor";
+import { EventItem } from "@/app/components/monitor/types/EventItem";
+import { oauth2 } from "@/app/api/Oauth2Service";
+import { ApiService } from "@/app/api/ApiService";
+
+interface WebSocketContextType {
+  status: "open" | "connecting" | "closed" | "error";
+  events: EventItem[];
+  serverTime: string;
+  lastMessageType: string;
+  authStatus: "checking" | "authenticated" | "not_authenticated";
+  addEvent: (event: EventItem) => void;
+  reconnect: () => void;
+  refreshAuth: () => Promise<void>;
+  clearAuth: () => Promise<void>;
+  handleLogin: () => Promise<void>;
+}
+
+const WebSocketContext = createContext<WebSocketContextType | null>(null);
+
+export function useWebSocket() {
+  const context = useContext(WebSocketContext);
+  if (!context) {
+    throw new Error("useWebSocket must be used within a WebSocketProvider");
+  }
+  return context;
+}
+
+interface WebSocketProviderProps {
+  children: React.ReactNode;
+}
+
+export function WebSocketProvider({ children }: WebSocketProviderProps) {
+  const [status, setStatus] = useState<"open" | "connecting" | "closed" | "error">("closed");
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [serverTime, setServerTime] = useState<string>("");
+  const [lastMessageType, setLastMessageType] = useState<string>("");
+  const [authStatus, setAuthStatus] = useState<"checking" | "authenticated" | "not_authenticated">("checking");
+  const wsManagerRef = useRef<WebSocketManager | null>(null);
+  const [notificationThreshold] = useState(1); // デフォルト震度1
+
+  // 震度を数値に変換するヘルパー関数
+  const getIntensityValue = (intensity: string): number => {
+    if (intensity === '5弱' || intensity === '5-') return 5.0;
+    if (intensity === '5強' || intensity === '5+') return 5.5;
+    if (intensity === '6弱' || intensity === '6-') return 6.0;
+    if (intensity === '6強' || intensity === '6+') return 6.5;
+    return parseFloat(intensity) || 0;
+  };
+
+  // 認証状態確認
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const oauth2Service = oauth2();
+        const hasToken = await oauth2Service.refreshTokenCheck();
+        setAuthStatus(hasToken ? "authenticated" : "not_authenticated");
+        
+        if (hasToken) {
+          try {
+            const apiService = new ApiService();
+            await apiService.contractList();
+          } catch (apiError) {
+            console.error("API access failed despite authentication:", apiError);
+            setAuthStatus("not_authenticated");
+          }
+        }
+      } catch (error) {
+        console.error("Auth check failed:", error);
+        setAuthStatus("not_authenticated");
+      }
+    };
+    
+    checkAuth();
+  }, []);
+
+  // WebSocket接続を初期化（認証済みの場合のみ）
+  useEffect(() => {
+    if (authStatus === "authenticated") {
+      const handleNewEvent = (event: EventItem) => {
+        console.log("=== WebSocketProvider: Received earthquake event ===");
+        console.log("Event details:", JSON.stringify(event, null, 2));
+        
+        // 通知震度フィルタリング
+        const maxIntensity = getIntensityValue(event.maxInt);
+        console.log(`地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity}), 通知震度設定: ${notificationThreshold}`);
+        
+        // 震度が"-"（確認中）の場合は常に通知
+        if (event.maxInt === "-") {
+          console.log("震度が確認中（-）のため、フィルタリングをスキップして表示します");
+        } else if (maxIntensity < notificationThreshold) {
+          console.log(`地震データを受信しましたが、震度${event.maxInt}は通知震度${notificationThreshold}未満のため表示されません`);
+          return;
+        }
+        
+        console.log(`震度${event.maxInt}の地震データを追加します（通知震度${notificationThreshold}以上またはテスト）`);
+        
+        setEvents(prevEvents => {
+          console.log("Previous events in WebSocketProvider state:", prevEvents.length);
+          console.log("Looking for existing event with ID:", event.eventId);
+          
+          const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
+          console.log("Existing event index:", existingIndex);
+          
+          let updatedEvents: EventItem[];
+          
+          if (existingIndex >= 0) {
+            // 既存イベントを更新
+            console.log("Updating existing event in WebSocketProvider");
+            const existingEvent = prevEvents[existingIndex];
+            updatedEvents = [...prevEvents];
+            
+            updatedEvents[existingIndex] = {
+              ...existingEvent,
+              maxInt: event.maxInt || existingEvent.maxInt,
+              currentMaxInt: event.maxInt || event.currentMaxInt || existingEvent.currentMaxInt,
+              magnitude: event.magnitude || existingEvent.magnitude,
+              hypocenter: event.hypocenter || existingEvent.hypocenter,
+              originTime: event.originTime || existingEvent.originTime,
+              isConfirmed: event.isConfirmed || existingEvent.isConfirmed,
+              isTest: existingEvent.isTest || event.isTest
+            };
+            
+            console.log("Updated event in WebSocketProvider:", updatedEvents[existingIndex]);
+          } else {
+            // 新規イベントを追加
+            console.log("Adding new event to WebSocketProvider list");
+            const newEvent = {
+              ...event,
+              isConfirmed: event.isConfirmed !== undefined ? event.isConfirmed : true,
+              currentMaxInt: event.currentMaxInt || event.maxInt,
+              maxInt: event.maxInt
+            };
+            console.log("New event to add in WebSocketProvider:", JSON.stringify(newEvent, null, 2));
+            updatedEvents = [newEvent, ...prevEvents];
+          }
+          
+          console.log("Final updated events count in WebSocketProvider:", updatedEvents.length);
+          
+          // 発生時刻降順（新しいものが上）でソート
+          const sortedEvents = updatedEvents.sort((a, b) => {
+            const timeA = new Date(a.originTime || a.arrivalTime).getTime();
+            const timeB = new Date(b.originTime || b.arrivalTime).getTime();
+            return timeB - timeA; // 降順ソート（新しいものが上）
+          });
+          
+          return sortedEvents;
+        });
+        
+        console.log("✅ WebSocketProvider: Event processing completed");
+      };
+
+      const handleStatusChange = (newStatus: "open" | "connecting" | "closed" | "error") => {
+        console.log("WebSocketProvider: Status changed to", newStatus);
+        setStatus(newStatus);
+      };
+
+      const handleTimeUpdate = (newServerTime: string, messageType: string) => {
+        setServerTime(newServerTime);
+        setLastMessageType(messageType);
+      };
+
+      // WebSocketマネージャーを初期化（既存のものがあれば再利用）
+      if (!wsManagerRef.current) {
+        console.log("WebSocketProvider: Creating new WebSocketManager");
+        wsManagerRef.current = new WebSocketManager(handleNewEvent, handleStatusChange, handleTimeUpdate);
+        wsManagerRef.current.connect();
+      }
+
+      // クリーンアップは認証状態が変わった時のみ
+      return () => {
+        // 認証状態が変わった時のみクリーンアップ
+        if (authStatus !== "authenticated") {
+          console.log("WebSocketProvider: Cleaning up WebSocket due to auth change");
+          if (wsManagerRef.current) {
+            wsManagerRef.current.disconnect();
+            wsManagerRef.current = null;
+          }
+        }
+      };
+    }
+  }, [authStatus, notificationThreshold]);
+
+  const addEvent = (event: EventItem) => {
+    setEvents(prevEvents => {
+      const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
+      let updatedEvents: EventItem[];
+      
+      if (existingIndex >= 0) {
+        updatedEvents = [...prevEvents];
+        updatedEvents[existingIndex] = { ...updatedEvents[existingIndex], ...event };
+      } else {
+        updatedEvents = [event, ...prevEvents];
+      }
+      
+      // 発生時刻降順（新しいものが上）でソート
+      const sortedEvents = updatedEvents.sort((a, b) => {
+        const timeA = new Date(a.originTime || a.arrivalTime).getTime();
+        const timeB = new Date(b.originTime || b.arrivalTime).getTime();
+        return timeB - timeA; // 降順ソート（新しいものが上）
+      });
+      
+      return sortedEvents;
+    });
+  };
+
+  const reconnect = () => {
+    if (wsManagerRef.current) {
+      console.log("WebSocketProvider: Manual reconnect requested");
+      wsManagerRef.current.reconnect();
+    }
+  };
+
+  const refreshAuth = async () => {
+    setAuthStatus("checking");
+    try {
+      const oauth2Service = oauth2();
+      const hasToken = await oauth2Service.refreshTokenCheck();
+      setAuthStatus(hasToken ? "authenticated" : "not_authenticated");
+      
+      if (hasToken) {
+        try {
+          const apiService = new ApiService();
+          await apiService.contractList();
+        } catch (apiError) {
+          console.error("Manual API access failed despite authentication:", apiError);
+          setAuthStatus("not_authenticated");
+        }
+      }
+    } catch (error) {
+      console.error("Manual auth check failed:", error);
+      setAuthStatus("not_authenticated");
+    }
+  };
+
+  const clearAuth = async () => {
+    try {
+      const oauth2Service = oauth2();
+      await oauth2Service.refreshTokenDelete();
+      setAuthStatus("not_authenticated");
+      
+      // WebSocket接続もクリア
+      if (wsManagerRef.current) {
+        wsManagerRef.current.disconnect();
+        wsManagerRef.current = null;
+      }
+      
+      // イベントリストもクリア
+      setEvents([]);
+    } catch (error) {
+      console.error("Failed to clear auth:", error);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const oauth2Service = oauth2();
+      const authUrl = await oauth2Service.buildAuthorizationUrl();
+      window.open(authUrl, '_blank');
+    } catch (error) {
+      console.error("Failed to build auth URL:", error);
+    }
+  };
+
+  const contextValue: WebSocketContextType = {
+    status,
+    events,
+    serverTime,
+    lastMessageType,
+    authStatus,
+    addEvent,
+    reconnect,
+    refreshAuth,
+    clearAuth,
+    handleLogin
+  };
+
+  return (
+    <WebSocketContext.Provider value={contextValue}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+}
