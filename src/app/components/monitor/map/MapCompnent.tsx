@@ -9,7 +9,7 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
 import styles from "./map.module.scss";
 import type { FeatureCollection } from "geojson";
@@ -539,35 +539,39 @@ export default function MapComponent({
     const map = useMap();
     const [lastEventTime, setLastEventTime] = useState<number | null>(null);
 
-    useEffect(() => {
+    // 最新イベントの時刻のみをメモ化
+    const latestEventTime = useMemo(() => {
+      if (!events || events.length === 0) return null;
+      const latestEvent = events[0];
+      if (!latestEvent) return null;
+      return new Date(latestEvent.arrivalTime).getTime();
+    }, [events]);
+
+    // イベント処理ロジックをコールバック化
+    const handleEventUpdate = useCallback(() => {
       if (!events || events.length === 0) {
         // 初期表示時は全国地図
         map.setView([38, 120], 6);
         return;
       }
 
-      // 最新のイベントの時刻を取得
       const latestEvent = events[0];
-      if (!latestEvent) return;
+      if (!latestEvent || !latestEventTime) return;
 
-      const eventTime = new Date(latestEvent.arrivalTime).getTime();
       const currentTime = Date.now();
-      const timeDiff = currentTime - eventTime;
+      const timeDiff = currentTime - latestEventTime;
 
       // 最後のイベントから30秒以上経過していたら全国地図
       if (timeDiff > 30000) {
         map.setView([38, 120], 6);
-        setLastEventTime(eventTime);
         return;
       }
 
       // 新しいイベントの場合のみ震源地に拡大
-      if (lastEventTime === null || eventTime > lastEventTime) {
+      if (lastEventTime === null || latestEventTime > lastEventTime) {
         if (latestEvent.hypocenter?.name && latestEvent.currentMaxInt && latestEvent.currentMaxInt !== "-") {
           const coordinates = getEpicenterCoordinates(latestEvent.hypocenter.name);
           if (!coordinates) return;
-
-          setLastEventTime(eventTime);
 
           // 震度に応じたズームレベル設定
           const intensityValue = getIntensityValue(latestEvent.currentMaxInt);
@@ -587,6 +591,9 @@ export default function MapComponent({
             duration: 1.5
           });
 
+          // lastEventTimeの更新
+          setLastEventTime(latestEventTime);
+
           // 30秒後に全国地図に戻る
           setTimeout(() => {
             map.setView([38, 120], 6, {
@@ -596,7 +603,12 @@ export default function MapComponent({
           }, 30000); // 30秒後
         }
       }
-    }, [map, events, lastEventTime]);
+    }, [map, events, latestEventTime, lastEventTime]);
+
+    // latestEventTimeが変更された時のみ実行
+    useEffect(() => {
+      handleEventUpdate();
+    }, [latestEventTime]); // handleEventUpdateを依存配列から除去
 
     return null;
   };

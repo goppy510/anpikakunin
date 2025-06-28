@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { WebSocketManager } from "@/app/components/monitor/utils/websocketProcessor";
 import { EventItem } from "@/app/components/monitor/types/EventItem";
 import { oauth2 } from "@/app/api/Oauth2Service";
@@ -12,6 +12,7 @@ interface WebSocketContextType {
   serverTime: string;
   lastMessageType: string;
   authStatus: "checking" | "authenticated" | "not_authenticated";
+  isInitialized: boolean;
   addEvent: (event: EventItem) => void;
   reconnect: () => void;
   refreshAuth: () => Promise<void>;
@@ -36,13 +37,14 @@ interface WebSocketProviderProps {
 export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [status, setStatus] = useState<"open" | "connecting" | "closed" | "error">("closed");
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [serverTime, setServerTime] = useState<string>("");
   const [lastMessageType, setLastMessageType] = useState<string>("");
   const [authStatus, setAuthStatus] = useState<"checking" | "authenticated" | "not_authenticated">("checking");
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [notificationThreshold] = useState(1); // デフォルト震度1
 
-  // ページ離脱時のクリーンアップ
+  // ページ完全離脱時のクリーンアップ（タブ切り替えでは切断しない）
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (wsManagerRef.current) {
@@ -51,19 +53,10 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden && wsManagerRef.current) {
-        console.log("Page hidden, disconnecting WebSocket...");
-        wsManagerRef.current.disconnect();
-      }
-    };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -230,21 +223,15 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         wsManagerRef.current.connect();
       }
 
-      // クリーンアップは認証状態が変わった時のみ
+      // クリーンアップはコンポーネントアンマウント時のみ
       return () => {
-        // 認証状態が変わった時のみクリーンアップ
-        if (authStatus !== "authenticated") {
-          console.log("WebSocketProvider: Cleaning up WebSocket due to auth change");
-          if (wsManagerRef.current) {
-            wsManagerRef.current.disconnect();
-            wsManagerRef.current = null;
-          }
-        }
+        // コンポーネントが完全にアンマウントされる時のみクリーンアップ
+        console.log("WebSocketProvider: Component cleanup on unmount");
       };
     }
-  }, [authStatus, notificationThreshold]);
+  }, [authStatus]); // notificationThresholdを依存配列から除去
 
-  const addEvent = (event: EventItem) => {
+  const addEvent = useCallback((event: EventItem) => {
     setEvents(prevEvents => {
       const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
       let updatedEvents: EventItem[];
@@ -265,7 +252,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       
       return sortedEvents;
     });
-  };
+  }, []); // 依存配列を空にして安定化
 
   const reconnect = () => {
     if (wsManagerRef.current) {
@@ -331,6 +318,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     serverTime,
     lastMessageType,
     authStatus,
+    isInitialized,
     addEvent,
     reconnect,
     refreshAuth,

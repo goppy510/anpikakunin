@@ -72,7 +72,12 @@ export default function Monitor() {
 
   // データベースからイベントを読み込み（初期化時のみ）
   useEffect(() => {
+    let hasLoaded = false;
+    
     const loadEventsFromDB = async () => {
+      if (hasLoaded) return; // 重複実行を防止
+      hasLoaded = true;
+      
       try {
         const storedEvents = await EventDatabase.getLatestEvents(50);
         
@@ -89,10 +94,13 @@ export default function Monitor() {
             };
           });
           
-          // グローバル状態に追加（既存のものと重複しないように）
-          correctedEvents.forEach(event => {
-            addEvent(event);
-          });
+          // 初期化時のみ、空の状態に対してイベントを設定
+          if (correctedEvents.length > 0 && globalEvents.length === 0) {
+            console.log("Loading events from DB on startup:", correctedEvents.length);
+            correctedEvents.forEach(event => {
+              addEvent(event);
+            });
+          }
         }
       } catch (error) {
         console.error("IndexedDBからのイベント読み込みに失敗:", error);
@@ -101,8 +109,13 @@ export default function Monitor() {
       }
     };
 
-    loadEventsFromDB();
-  }, [addEvent]);
+    // globalEventsが空の場合のみ実行（初期化時のみ）
+    if (globalEvents.length === 0 && !hasLoaded) {
+      loadEventsFromDB();
+    } else {
+      setIsLoadingFromDB(false);
+    }
+  }, [globalEvents.length]); // globalEvents.lengthのみ監視
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: string): number => {
