@@ -42,6 +42,31 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [notificationThreshold] = useState(1); // デフォルト震度1
 
+  // ページ離脱時のクリーンアップ
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (wsManagerRef.current) {
+        console.log("Page unload detected, disconnecting WebSocket...");
+        wsManagerRef.current.disconnect();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && wsManagerRef.current) {
+        console.log("Page hidden, disconnecting WebSocket...");
+        wsManagerRef.current.disconnect();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: string): number => {
     if (intensity === '5弱' || intensity === '5-') return 5.0;
@@ -51,7 +76,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return parseFloat(intensity) || 0;
   };
 
-  // 認証状態確認
+  // 認証状態確認とWebSocket接続クリーンアップ
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -63,6 +88,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           try {
             const apiService = new ApiService();
             await apiService.contractList();
+            
+            // 古い接続をクリーンアップ
+            await cleanupOldConnections(apiService);
           } catch (apiError) {
             console.error("API access failed despite authentication:", apiError);
             setAuthStatus("not_authenticated");
@@ -76,6 +104,38 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     
     checkAuth();
   }, []);
+
+  // 古い接続をクリーンアップする関数
+  const cleanupOldConnections = async (apiService: ApiService) => {
+    try {
+      console.log("=== WebSocket Connection Cleanup ===");
+      const socketList = await apiService.socketList();
+      console.log("Found existing connections:", socketList.items?.length || 0);
+      
+      if (socketList.items && socketList.items.length > 0) {
+        console.log("Cleaning up old connections...");
+        const closePromises = socketList.items.map(async (socket) => {
+          if (socket.status === 'open' || socket.status === 'waiting') {
+            console.log(`Closing socket ${socket.id} (status: ${socket.status})`);
+            try {
+              await apiService.socketClose(socket.id);
+              console.log(`✅ Closed socket ${socket.id}`);
+            } catch (error) {
+              console.error(`❌ Failed to close socket ${socket.id}:`, error);
+            }
+          }
+        });
+        
+        await Promise.all(closePromises);
+        console.log("Connection cleanup completed");
+        
+        // 少し待ってから新しい接続を開始
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (error) {
+      console.warn("Connection cleanup failed (continuing anyway):", error.message);
+    }
+  };
 
   // WebSocket接続を初期化（認証済みの場合のみ）
   useEffect(() => {

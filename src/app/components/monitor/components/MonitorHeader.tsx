@@ -17,6 +17,7 @@ interface MonitorHeaderProps {
   onToggleTestMode: () => void;
   onRunTestSimulation: () => void;
   onOpenSafetySettings?: () => void;
+  onCleanupConnections?: () => void;
 }
 
 export function MonitorHeader({
@@ -33,6 +34,7 @@ export function MonitorHeader({
   onToggleTestMode,
   onRunTestSimulation,
   onOpenSafetySettings,
+  onCleanupConnections,
 }: MonitorHeaderProps) {
   return (
     <div className="flex text-white text-sm leading-[36px] min-h-[36px] bg-gray-800 border-b border-gray-700">
@@ -92,6 +94,15 @@ export function MonitorHeader({
         >
           WebSocket: {status}
         </span>
+        {(status === "error" || status === "closed") && onCleanupConnections && (
+          <button
+            className="mx-1 px-2 py-1 border border-orange-500 rounded bg-orange-900 hover:bg-orange-800 text-orange-300 transition-colors text-xs"
+            onClick={onCleanupConnections}
+            title="古い接続をクリーンアップ"
+          >
+            接続整理
+          </button>
+        )}
       </div>
 
       {/* sound */}

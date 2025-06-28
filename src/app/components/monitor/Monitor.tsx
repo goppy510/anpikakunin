@@ -290,6 +290,7 @@ export default function Monitor() {
         onToggleTestMode={toggleTestMode}
         onRunTestSimulation={runTestSimulation}
         onOpenSafetySettings={() => setShowSafetySettings(true)}
+        onCleanupConnections={cleanupConnections}
       />
 
       {/* main -------------------------------------------------------- */}

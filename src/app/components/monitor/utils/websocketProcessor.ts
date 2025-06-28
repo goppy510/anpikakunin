@@ -531,11 +531,10 @@ export class WebSocketManager {
             console.error("Server requested connection close due to error:", message.error);
             this.ws?.close();
             
-            // 最大接続数エラーの場合、時間をおいて再接続
+            // 最大接続数エラーの場合、緊急クリーンアップを実行
             if (message.error?.includes('maximum number of simultaneous connections')) {
-                    setTimeout(() => {
-                this.connect();
-              }, 30000); // 30秒後に再試行
+              console.log("Maximum connections error detected, performing emergency cleanup...");
+              this.handleMaxConnectionsError();
             }
             return;
           }
@@ -586,18 +585,28 @@ export class WebSocketManager {
         
         // Axiosエラーの場合、詳細情報を表示
         if ('response' in error && error.response) {
-          console.error("HTTP Status:", (error as any).response.status);
-          console.error("Response data:", (error as any).response.data);
-          console.error("Full response data JSON:", JSON.stringify((error as any).response.data, null, 2));
+          const status = (error as any).response.status;
+          const responseData = (error as any).response.data;
+          
+          console.error("HTTP Status:", status);
+          console.error("Response data:", responseData);
+          console.error("Full response data JSON:", JSON.stringify(responseData, null, 2));
+          
+          // 409エラー（最大接続数）の場合、緊急クリーンアップを実行
+          if (status === 409 && responseData?.error?.message?.includes('maximum number of simultaneous connections')) {
+            console.log("409 Maximum connections error detected during connection, performing emergency cleanup...");
+            this.handleMaxConnectionsError();
+            return; // 通常の再接続処理をスキップ
+          }
           
           // エラーオブジェクトの詳細を表示
-          if ((error as any).response.data?.error) {
-            console.error("Detailed error:", JSON.stringify((error as any).response.data.error, null, 2));
+          if (responseData?.error) {
+            console.error("Detailed error:", JSON.stringify(responseData.error, null, 2));
           }
           
           // メッセージがある場合も表示
-          if ((error as any).response.data?.message) {
-            console.error("Error message:", (error as any).response.data.message);
+          if (responseData?.message) {
+            console.error("Error message:", responseData.message);
           }
           
           console.error("Response headers:", (error as any).response.headers);

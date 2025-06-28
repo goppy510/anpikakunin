@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useClientNavigation } from "../hooks/useClientNavigation";
+import { useRouter } from "./providers/RouterProvider";
 
 interface ClientLinkProps {
   href: string;
@@ -11,7 +11,7 @@ interface ClientLinkProps {
 }
 
 export function ClientLink({ href, className, children, onClick }: ClientLinkProps) {
-  const { navigateTo } = useClientNavigation();
+  const { navigateTo } = useRouter();
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
