@@ -18,6 +18,8 @@ import { IntensityScale } from "./components/IntensityScale";
 import { MonitorHeader } from "./components/MonitorHeader";
 import { SafetyConfirmationSettings } from "../safety-confirmation/pages/SafetyConfirmationSettings";
 import { useWebSocket } from "../providers/WebSocketProvider";
+import { getSettings, setSetting } from "@/app/utils/settings";
+import { AudioManager } from "@/app/utils/audioManager";
 
 const MapComponent = dynamic(() => import("./map/MapCompnent"), {
   ssr: false,
@@ -64,11 +66,37 @@ export default function Monitor() {
   const [notificationThreshold, setNotificationThreshold] = useState(1); // デフォルト震度1
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
   const [showSafetySettings, setShowSafetySettings] = useState<boolean>(false);
+  const audioManager = useRef<AudioManager>(AudioManager.getInstance());
 
-  // グローバルイベントをローカル状態に同期
+  // 設定の初期化（ローカルストレージから読み込み）
   useEffect(() => {
+    const settings = getSettings();
+    setSoundPlay(settings.soundEnabled);
+    setNotificationThreshold(settings.notificationThreshold);
+    setTestMode(settings.testMode);
+    audioManager.current.setEnabled(settings.soundEnabled);
+  }, []);
+
+  // グローバルイベントをローカル状態に同期と音声通知
+  useEffect(() => {
+    const previousLength = events.length;
     setEvents(globalEvents);
-  }, [globalEvents]);
+    
+    // 新しいイベントが追加された時の音声通知（増加した場合のみ）
+    if (globalEvents.length > previousLength && globalEvents.length > 0 && soundPlay) {
+      const latestEvent = globalEvents[0];
+      if (latestEvent && !latestEvent.isTest) {
+        const intensity = getIntensityValue(latestEvent.maxInt || "0");
+        console.log(`音声通知チェック: 震度${latestEvent.maxInt} (数値:${intensity}) 閾値:${notificationThreshold}`);
+        if (intensity >= notificationThreshold) {
+          console.log("音声通知を再生します");
+          audioManager.current.playAlert(intensity);
+        } else {
+          console.log("音声通知をスキップします（閾値未満）");
+        }
+      }
+    }
+  }, [globalEvents, soundPlay, notificationThreshold]);
 
   // データベースからイベントを読み込み（初期化時のみ）
   useEffect(() => {
@@ -79,7 +107,7 @@ export default function Monitor() {
       hasLoaded = true;
       
       try {
-        const storedEvents = await EventDatabase.getLatestEvents(50);
+        const storedEvents = await EventDatabase.getLatestEvents(100);
         
         if (storedEvents.length > 0) {
           // 読み込み時に確定状態を修正（震源と震度の両方があれば確定）
@@ -131,23 +159,67 @@ export default function Monitor() {
     reconnect();
   };
   
-  const toggleSound = (v: boolean) => setSoundPlay(v);
+  const toggleSound = async (v: boolean) => {
+    setSoundPlay(v);
+    setSetting('soundEnabled', v);
+    audioManager.current.setEnabled(v);
+    
+    // 音声有効化時にテスト音を再生
+    if (v) {
+      await audioManager.current.playTestSound();
+    }
+  };
   
-  const toggleTestMode = () => setTestMode(!testMode);
+  const toggleTestMode = () => {
+    const newTestMode = !testMode;
+    setTestMode(newTestMode);
+    setSetting('testMode', newTestMode);
+  };
+  
+  const handleNotificationThresholdChange = (threshold: number) => {
+    setNotificationThreshold(threshold);
+    setSetting('notificationThreshold', threshold);
+  };
   
   const cleanupConnections = async () => {
     try {
+      console.log("=== Manual Connection Cleanup ===");
       const apiService = new ApiService();
-      const socketList = await apiService.socketList();
       
-      if (socketList.items && socketList.items.length > 0) {
-        for (const socket of socketList.items) {
-          if (socket.status === 'open' || socket.status === 'waiting') {
-            await apiService.socketClose(socket.id);
-          }
+      // 複数回試行でより確実にクリーンアップ
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`Manual cleanup attempt ${attempt}/3`);
+        
+        const socketList = await apiService.socketList();
+        console.log(`Found ${socketList.items?.length || 0} connections`);
+        
+        if (!socketList.items || socketList.items.length === 0) {
+          console.log("No connections to clean up");
+          break;
         }
-      } else {
+        
+        const closePromises = socketList.items.map(async (socket) => {
+          console.log(`Manually closing socket ${socket.id} (status: ${socket.status})`);
+          try {
+            await apiService.socketClose(socket.id);
+            console.log(`✅ Manually closed socket ${socket.id}`);
+          } catch (error) {
+            console.error(`❌ Failed to manually close socket ${socket.id}:`, error);
+          }
+        });
+        
+        await Promise.all(closePromises);
+        
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+      
+      console.log("Manual cleanup completed - reconnecting WebSocket...");
+      
+      // クリーンアップ後にWebSocketを再接続
+      reconnect();
+      
     } catch (error) {
       console.error("Manual cleanup failed:", error);
     }
@@ -299,7 +371,7 @@ export default function Monitor() {
         onClearAuth={clearAuth}
         onRefreshAuth={refreshAuth}
         onToggleSound={toggleSound}
-        onNotificationThresholdChange={setNotificationThreshold}
+        onNotificationThresholdChange={handleNotificationThresholdChange}
         onToggleTestMode={toggleTestMode}
         onRunTestSimulation={runTestSimulation}
         onOpenSafetySettings={() => setShowSafetySettings(true)}
@@ -312,12 +384,17 @@ export default function Monitor() {
         <aside className="flex flex-col w-[380px] max-w-[380px]">
           <header className="py-1 bg-red-600 text-center border-b-2 border-red-700">
             <h3 className="text-xs font-bold text-white tracking-wide leading-tight">
-              地震情報 [{events.length}] {isLoadingFromDB && <span className="text-yellow-300">(読み込み中...)</span>}
+              地震情報 [{events.length}件] 
+              {isLoadingFromDB && <span className="text-yellow-300">(読み込み中...)</span>}
+              <br />
+              <span className="text-xs text-gray-200">
+                音声通知: 震度{notificationThreshold}以上 | 表示: 全データ
+              </span>
             </h3>
           </header>
 
           <ul className="flex-1 overflow-y-auto m-0 p-2 bg-black max-h-full">
-            {events.slice(0, 20).map((ev, index) => {
+            {events.slice(0, 50).map((ev, index) => {
               const isLatest = index === 0;
               const isSelected = viewEventId === ev.eventId;
               

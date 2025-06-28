@@ -232,7 +232,15 @@ export const processWebSocketMessage = (message: WebSocketMessage): EventItem | 
     const isHypocenterInfo = infoKind === "震源速報";
     const isIntensityInfo = infoKind === "震度速報" || infoKind?.includes("震度") || infoKind === "地震情報";
     
-    // 確定状態の判定（複数の条件をチェック）
+    // まずはxmlReportをチェック
+    let xmlReport = message.xmlReport;
+    let decodedData = null;
+    
+    // 常にbodyをデコードしてみる（詳細な地震データが含まれている可能性）
+    console.log("Attempting to decode message body...");
+    decodedData = decodeMessageBody(message);
+    
+    // 確定状態の判定（複数の条件をチェック）- decodedData初期化後に実行
     const infoType = message.xmlReport?.head?.infoType || decodedData?.infoType;
     const serial = message.xmlReport?.head?.serial || decodedData?.serialNo;
     const headline = message.xmlReport?.head?.headline || decodedData?.headline;
@@ -251,14 +259,6 @@ export const processWebSocketMessage = (message: WebSocketMessage): EventItem | 
     
     console.log("Is final report (headline/infoType):", isFinalReport);
     console.log("Has serial number > 1:", hasSerialNumber);
-    
-    // まずはxmlReportをチェック
-    let xmlReport = message.xmlReport;
-    let decodedData = null;
-    
-    // 常にbodyをデコードしてみる（詳細な地震データが含まれている可能性）
-    console.log("Attempting to decode message body...");
-    decodedData = decodeMessageBody(message);
     
     if (decodedData) {
       console.log("Decoded data structure:", Object.keys(decodedData));
@@ -453,9 +453,37 @@ export class WebSocketManager {
         // 契約確認に失敗した場合でも続行を試みる
       }
       
-      // 注意: socket.list/socket.closeはDPoP必須の可能性があるため、現在はスキップ
+      // WebSocket接続前にクリーンアップを実行
       console.log("=== WebSocket Connection ===");
-      console.log("Skipping socket cleanup (DPoP disabled), proceeding with direct connection");
+      console.log("Performing connection cleanup before new connection...");
+      
+      try {
+        const socketList = await this.apiService.socketList();
+        console.log("Found existing connections:", socketList.items?.length || 0);
+        
+        if (socketList.items && socketList.items.length > 0) {
+          console.log("Cleaning up existing connections...");
+          const closePromises = socketList.items.map(async (socket) => {
+            if (socket.status === 'open' || socket.status === 'waiting') {
+              console.log(`Closing socket ${socket.id}`);
+              try {
+                await this.apiService.socketClose(socket.id);
+                console.log(`✅ Closed socket ${socket.id}`);
+              } catch (error) {
+                console.error(`❌ Failed to close socket ${socket.id}:`, error);
+              }
+            }
+          });
+          
+          await Promise.all(closePromises);
+          console.log("Pre-connection cleanup completed");
+          
+          // クリーンアップ後に少し待つ
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      } catch (cleanupError) {
+        console.warn("Pre-connection cleanup failed (continuing anyway):", cleanupError.message);
+      }
       
       // WebSocket接続開始（詳細ログ付き）
       console.log("Attempting socket start with classifications:", [

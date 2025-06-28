@@ -5,6 +5,7 @@ import { WebSocketManager } from "@/app/components/monitor/utils/websocketProces
 import { EventItem } from "@/app/components/monitor/types/EventItem";
 import { oauth2 } from "@/app/api/Oauth2Service";
 import { ApiService } from "@/app/api/ApiService";
+import { EventDatabase } from "@/app/components/monitor/utils/eventDatabase";
 
 interface WebSocketContextType {
   status: "open" | "connecting" | "closed" | "error";
@@ -102,31 +103,53 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const cleanupOldConnections = async (apiService: ApiService) => {
     try {
       console.log("=== WebSocket Connection Cleanup ===");
-      const socketList = await apiService.socketList();
-      console.log("Found existing connections:", socketList.items?.length || 0);
       
-      if (socketList.items && socketList.items.length > 0) {
-        console.log("Cleaning up old connections...");
+      // 複数回試行してすべての接続を確実にクリーンアップ
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`Cleanup attempt ${attempt}/3`);
+        
+        const socketList = await apiService.socketList();
+        console.log(`Found ${socketList.items?.length || 0} existing connections`);
+        
+        if (!socketList.items || socketList.items.length === 0) {
+          console.log("No connections to clean up");
+          break;
+        }
+        
+        console.log("Cleaning up connections...");
         const closePromises = socketList.items.map(async (socket) => {
-          if (socket.status === 'open' || socket.status === 'waiting') {
-            console.log(`Closing socket ${socket.id} (status: ${socket.status})`);
-            try {
-              await apiService.socketClose(socket.id);
-              console.log(`✅ Closed socket ${socket.id}`);
-            } catch (error) {
-              console.error(`❌ Failed to close socket ${socket.id}:`, error);
-            }
+          console.log(`Closing socket ${socket.id} (status: ${socket.status})`);
+          try {
+            await apiService.socketClose(socket.id);
+            console.log(`✅ Closed socket ${socket.id}`);
+          } catch (error) {
+            console.error(`❌ Failed to close socket ${socket.id}:`, error);
           }
         });
         
         await Promise.all(closePromises);
-        console.log("Connection cleanup completed");
         
-        // 少し待ってから新しい接続を開始
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 次の試行前に少し待つ
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+      
+      console.log("Connection cleanup completed");
+      
+      // 新しい接続開始前により長い待機時間
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // データベースの古いイベントをクリーンアップ（100件保持）
+      EventDatabase.cleanupOldEvents(100).catch(error => {
+        console.warn("IndexedDB cleanup failed (continuing anyway):", error);
+      });
+      
     } catch (error) {
       console.warn("Connection cleanup failed (continuing anyway):", error.message);
+      
+      // クリーンアップに失敗した場合でもより長く待つ
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
   };
 
@@ -137,19 +160,10 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         console.log("=== WebSocketProvider: Received earthquake event ===");
         console.log("Event details:", JSON.stringify(event, null, 2));
         
-        // 通知震度フィルタリング
+        // すべての地震データを表示（フィルタリングしない）
         const maxIntensity = getIntensityValue(event.maxInt);
         console.log(`地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity}), 通知震度設定: ${notificationThreshold}`);
-        
-        // 震度が"-"（確認中）の場合は常に通知
-        if (event.maxInt === "-") {
-          console.log("震度が確認中（-）のため、フィルタリングをスキップして表示します");
-        } else if (maxIntensity < notificationThreshold) {
-          console.log(`地震データを受信しましたが、震度${event.maxInt}は通知震度${notificationThreshold}未満のため表示されません`);
-          return;
-        }
-        
-        console.log(`震度${event.maxInt}の地震データを追加します（通知震度${notificationThreshold}以上またはテスト）`);
+        console.log(`震度${event.maxInt}の地震データを追加します（全データ表示）`);
         
         setEvents(prevEvents => {
           console.log("Previous events in WebSocketProvider state:", prevEvents.length);
@@ -159,6 +173,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           console.log("Existing event index:", existingIndex);
           
           let updatedEvents: EventItem[];
+          let eventToSave: EventItem;
           
           if (existingIndex >= 0) {
             // 既存イベントを更新
@@ -166,7 +181,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             const existingEvent = prevEvents[existingIndex];
             updatedEvents = [...prevEvents];
             
-            updatedEvents[existingIndex] = {
+            eventToSave = {
               ...existingEvent,
               maxInt: event.maxInt || existingEvent.maxInt,
               currentMaxInt: event.maxInt || event.currentMaxInt || existingEvent.currentMaxInt,
@@ -177,19 +192,25 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
               isTest: existingEvent.isTest || event.isTest
             };
             
-            console.log("Updated event in WebSocketProvider:", updatedEvents[existingIndex]);
+            updatedEvents[existingIndex] = eventToSave;
+            console.log("Updated event in WebSocketProvider:", eventToSave);
           } else {
             // 新規イベントを追加
             console.log("Adding new event to WebSocketProvider list");
-            const newEvent = {
+            eventToSave = {
               ...event,
               isConfirmed: event.isConfirmed !== undefined ? event.isConfirmed : true,
               currentMaxInt: event.currentMaxInt || event.maxInt,
               maxInt: event.maxInt
             };
-            console.log("New event to add in WebSocketProvider:", JSON.stringify(newEvent, null, 2));
-            updatedEvents = [newEvent, ...prevEvents];
+            console.log("New event to add in WebSocketProvider:", JSON.stringify(eventToSave, null, 2));
+            updatedEvents = [eventToSave, ...prevEvents];
           }
+          
+          // IndexedDBに自動保存
+          EventDatabase.saveEvent(eventToSave).catch(error => {
+            console.error("WebSocketイベントのIndexedDB自動保存に失敗:", error);
+          });
           
           console.log("Final updated events count in WebSocketProvider:", updatedEvents.length);
           
@@ -235,13 +256,21 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     setEvents(prevEvents => {
       const existingIndex = prevEvents.findIndex(e => e.eventId === event.eventId);
       let updatedEvents: EventItem[];
+      let eventToSave: EventItem;
       
       if (existingIndex >= 0) {
         updatedEvents = [...prevEvents];
-        updatedEvents[existingIndex] = { ...updatedEvents[existingIndex], ...event };
+        eventToSave = { ...updatedEvents[existingIndex], ...event };
+        updatedEvents[existingIndex] = eventToSave;
       } else {
+        eventToSave = event;
         updatedEvents = [event, ...prevEvents];
       }
+      
+      // IndexedDBに自動保存
+      EventDatabase.saveEvent(eventToSave).catch(error => {
+        console.error("addEventでのIndexedDB自動保存に失敗:", error);
+      });
       
       // 発生時刻降順（新しいものが上）でソート
       const sortedEvents = updatedEvents.sort((a, b) => {
