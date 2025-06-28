@@ -436,7 +436,7 @@ export class WebSocketManager {
         
         // 利用可能な分類も確認
         try {
-          const classifications = await this.apiService.telegramList();
+          const classifications = await this.apiService.telegramList({});
           console.log("Available telegram classifications:", classifications);
           
           // 地震関連の分類のみを抽出して表示
@@ -445,7 +445,8 @@ export class WebSocketManager {
           );
           console.log("Earthquake-related classifications:", earthquakeClassifications);
         } catch (classError) {
-          console.error("Failed to get telegram classifications:", classError);
+          console.warn("Could not fetch telegram classifications (continuing anyway):", classError);
+          // Continue with WebSocket connection even if classification fetch fails
         }
       } catch (contractError) {
         console.error("Failed to get contracts:", contractError);

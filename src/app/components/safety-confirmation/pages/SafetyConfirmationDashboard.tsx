@@ -5,6 +5,7 @@ import cn from "classnames";
 import { SafetyConfirmationConfig, DepartmentStamp, DEFAULT_DEPARTMENT_STAMPS } from "../types/SafetyConfirmationTypes";
 import { SafetyConfirmationSettings } from "./SafetyConfirmationSettings";
 import { Settings } from "../../../lib/db/settings";
+import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 
 interface ActiveAlert {
   id: string;
@@ -43,25 +44,12 @@ export function SafetyConfirmationDashboard() {
               workspaces: [],
               channels: []
             },
-            conditions: {
-              minIntensity: 3,
-              targetPrefectures: ["13", "14", "12"], // 東京、神奈川、千葉
-              enableMentions: false,
-              mentionTargets: []
-            },
-            departments: DEFAULT_DEPARTMENT_STAMPS,
-            template: {
-              title: "🚨 地震発生通知",
-              message: "地震が発生しました。安否確認のため、該当部署のスタンプを押してください。",
-              includeEventDetails: true,
-              includeMapLink: true,
-              customFields: {}
-            },
             training: {
               isEnabled: false,
               testMessage: "これは訓練メッセージです。",
               enableMentions: false,
-              mentionTargets: []
+              mentionTargets: [],
+              scheduledTrainings: []
             },
             isActive: false
           };
@@ -73,10 +61,7 @@ export function SafetyConfirmationDashboard() {
         // エラー時はデフォルト設定を使用
         const defaultConfig: SafetyConfirmationConfig = {
           slack: { workspaces: [], channels: [] },
-          conditions: { minIntensity: 3, targetPrefectures: [], enableMentions: false, mentionTargets: [] },
-          departments: DEFAULT_DEPARTMENT_STAMPS,
-          template: { title: "🚨 地震発生通知", message: "地震が発生しました。", includeEventDetails: true, includeMapLink: true, customFields: {} },
-          training: { isEnabled: false, testMessage: "これは訓練メッセージです。", enableMentions: false, mentionTargets: [] },
+          training: { isEnabled: false, testMessage: "これは訓練メッセージです。", enableMentions: false, mentionTargets: [], scheduledTrainings: [] },
           isActive: false
         };
         setConfig(defaultConfig);
@@ -85,6 +70,14 @@ export function SafetyConfirmationDashboard() {
     };
 
     loadConfig();
+
+    // 訓練スケジューラーを開始
+    const scheduler = TrainingScheduleExecutor.getInstance();
+    scheduler.start();
+
+    return () => {
+      scheduler.stop();
+    };
   }, []);
 
   const handleSystemToggle = async (active: boolean) => {
@@ -183,13 +176,17 @@ export function SafetyConfirmationDashboard() {
           </div>
           
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-            <div className="text-2xl font-bold text-blue-400">{config.departments.length}</div>
-            <div className="text-sm text-gray-400">登録部署数</div>
+            <div className="text-2xl font-bold text-blue-400">
+              {config.slack.workspaces.reduce((total, ws) => total + ws.departments.length, 0)}
+            </div>
+            <div className="text-sm text-gray-400">総部署数</div>
           </div>
           
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-            <div className="text-2xl font-bold text-purple-400">{config.conditions.targetPrefectures.length}</div>
-            <div className="text-sm text-gray-400">監視対象都道府県</div>
+            <div className="text-2xl font-bold text-purple-400">
+              {config.slack.workspaces.reduce((total, ws) => total + ws.conditions.targetPrefectures.length, 0)}
+            </div>
+            <div className="text-sm text-gray-400">総監視対象都道府県</div>
           </div>
         </div>
 
@@ -236,26 +233,29 @@ export function SafetyConfirmationDashboard() {
 
                 {/* 部署別回答状況 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {config.departments.map(dept => {
-                    const responses = alert.responses[dept.id] || [];
-                    return (
-                      <div key={dept.id} className="bg-gray-700 p-4 rounded border border-gray-600">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-lg">{dept.emoji}</span>
-                          <span className="font-medium text-white">{dept.name}</span>
+                  {config.slack.workspaces.flatMap(workspace => 
+                    workspace.departments.map(dept => {
+                      const responses = alert.responses[dept.id] || [];
+                      return (
+                        <div key={`${workspace.id}-${dept.id}`} className="bg-gray-700 p-4 rounded border border-gray-600">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">{dept.emoji}</span>
+                            <span className="font-medium text-white">{dept.name}</span>
+                            <span className="text-xs text-gray-500">({workspace.name})</span>
+                          </div>
+                          <div className="text-sm">
+                            <div className="text-gray-400">回答数: {responses.length}名</div>
+                            {responses.length > 0 && (
+                              <div className="mt-1 text-xs text-gray-500">
+                                {responses.slice(0, 3).join(", ")}
+                                {responses.length > 3 && ` 他${responses.length - 3}名`}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-sm">
-                          <div className="text-gray-400">回答数: {responses.length}名</div>
-                          {responses.length > 0 && (
-                            <div className="mt-1 text-xs text-gray-500">
-                              {responses.slice(0, 3).join(", ")}
-                              {responses.length > 3 && ` 他${responses.length - 3}名`}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
             ))}
@@ -275,19 +275,31 @@ export function SafetyConfirmationDashboard() {
           <h2 className="text-lg font-bold text-white mb-4">現在の設定</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-medium text-gray-300 mb-2">通知条件</h3>
-              <ul className="text-sm text-gray-400 space-y-1">
-                <li>最小震度: 震度{config.conditions.minIntensity}以上</li>
-                <li>対象地域: {config.conditions.targetPrefectures.length}都道府県</li>
-                <li>メンション: {config.conditions.enableMentions ? "有効" : "無効"}</li>
-              </ul>
+              <h3 className="font-medium text-gray-300 mb-2">ワークスペース別設定</h3>
+              <div className="space-y-2">
+                {config.slack.workspaces.length > 0 ? (
+                  config.slack.workspaces.map(ws => (
+                    <div key={ws.id} className="text-sm text-gray-400">
+                      <div className="font-medium text-gray-300">{ws.name || "未設定"}</div>
+                      <ul className="ml-4 space-y-1">
+                        <li>震度{ws.conditions.minIntensity}以上 / {ws.conditions.targetPrefectures.length}都道府県</li>
+                        <li>部署数: {ws.departments.length}件</li>
+                        <li>メンション: {ws.conditions.enableMentions ? "有効" : "無効"}</li>
+                      </ul>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">ワークスペースが設定されていません</div>
+                )}
+              </div>
             </div>
             <div>
-              <h3 className="font-medium text-gray-300 mb-2">Slack設定</h3>
+              <h3 className="font-medium text-gray-300 mb-2">システム設定</h3>
               <ul className="text-sm text-gray-400 space-y-1">
                 <li>ワークスペース: {config.slack.workspaces.filter(ws => ws.isEnabled).length}件</li>
                 <li>チャンネル: {config.slack.channels.filter(ch => ch.isEnabled).length}件</li>
                 <li>訓練モード: {config.training.isEnabled ? "有効" : "無効"}</li>
+                <li>スケジュール: {config.training.scheduledTrainings.filter(t => t.isActive).length}件</li>
               </ul>
             </div>
           </div>

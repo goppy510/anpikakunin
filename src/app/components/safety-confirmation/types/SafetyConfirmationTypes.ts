@@ -1,10 +1,29 @@
 // 安否確認システムの型定義
 
+export interface DepartmentStamp {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+}
+
+export interface NotificationTemplate {
+  title: string;
+  message: string;
+  includeEventDetails: boolean;
+  includeMapLink: boolean;
+  customFields: Record<string, string>;
+}
+
 export interface SlackWorkspace {
   id: string;
   name: string;
   botToken?: string;
   isEnabled: boolean;
+  // ワークスペース固有の設定
+  departments: DepartmentStamp[];
+  template: NotificationTemplate;
+  conditions: NotificationConditions;
 }
 
 export interface SlackChannel {
@@ -29,19 +48,17 @@ export interface NotificationConditions {
   mentionTargets: string[]; // メンション対象（@channel, @here, 個別ユーザー）
 }
 
-export interface DepartmentStamp {
+export interface ScheduledTraining {
   id: string;
-  name: string;
-  emoji: string;
-  color: string;
-}
-
-export interface NotificationTemplate {
-  title: string;
+  workspaceId?: string; // 特定のワークスペース向け、未指定は全体
+  scheduledTime: Date;
   message: string;
-  includeEventDetails: boolean;
-  includeMapLink: boolean;
-  customFields: Record<string, string>;
+  enableMentions: boolean;
+  mentionTargets: string[];
+  isRecurring: boolean;
+  recurringPattern?: 'daily' | 'weekly' | 'monthly';
+  isActive: boolean;
+  lastExecuted?: Date;
 }
 
 export interface TrainingMode {
@@ -49,14 +66,15 @@ export interface TrainingMode {
   testMessage: string;
   enableMentions: boolean;
   mentionTargets: string[];
-  scheduleTime?: string;
+  scheduledTrainings: ScheduledTraining[];
 }
 
 export interface SafetyConfirmationConfig {
   slack: SlackNotificationSettings;
-  conditions: NotificationConditions;
-  departments: DepartmentStamp[];
-  template: NotificationTemplate;
+  // 以下は削除：ワークスペース固有になったため
+  // conditions: NotificationConditions;
+  // departments: DepartmentStamp[];
+  // template: NotificationTemplate;
   training: TrainingMode;
   isActive: boolean;
 }
@@ -121,3 +139,31 @@ export const DEFAULT_DEPARTMENT_STAMPS: DepartmentStamp[] = [
   { id: 'finance', name: '経理部', emoji: '💰', color: '#EF4444' },
   { id: 'marketing', name: 'マーケティング部', emoji: '📊', color: '#06B6D4' },
 ];
+
+// デフォルト通知テンプレート
+export const DEFAULT_NOTIFICATION_TEMPLATE: NotificationTemplate = {
+  title: "🚨 地震発生通知",
+  message: "地震が発生しました。安否確認のため、該当部署のスタンプを押してください。",
+  includeEventDetails: true,
+  includeMapLink: true,
+  customFields: {}
+};
+
+// デフォルト通知条件
+export const DEFAULT_NOTIFICATION_CONDITIONS: NotificationConditions = {
+  minIntensity: 3,
+  targetPrefectures: ["13", "14", "12"], // 東京、神奈川、千葉
+  enableMentions: false,
+  mentionTargets: []
+};
+
+// ワークスペース作成時のデフォルト設定
+export const createDefaultWorkspace = (id: string, name: string = ""): SlackWorkspace => ({
+  id,
+  name,
+  botToken: "",
+  isEnabled: true,
+  departments: [...DEFAULT_DEPARTMENT_STAMPS],
+  template: { ...DEFAULT_NOTIFICATION_TEMPLATE },
+  conditions: { ...DEFAULT_NOTIFICATION_CONDITIONS }
+});

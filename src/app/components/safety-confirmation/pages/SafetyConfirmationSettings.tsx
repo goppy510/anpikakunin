@@ -4,16 +4,13 @@ import { useState, useEffect } from "react";
 import cn from "classnames";
 import { 
   SafetyConfirmationConfig, 
-  JAPANESE_PREFECTURES, 
-  DEFAULT_DEPARTMENT_STAMPS,
   SlackNotificationSettings,
-  NotificationConditions,
-  NotificationTemplate,
-  TrainingMode,
-  DepartmentStamp
+  TrainingMode
 } from "../types/SafetyConfirmationTypes";
 import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettings";
+import { TrainingScheduler } from "../components/TrainingScheduler";
 import { Settings } from "../../../lib/db/settings";
+import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 
 interface SafetyConfirmationSettingsProps {
   onClose: () => void;
@@ -25,25 +22,12 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
       workspaces: [],
       channels: []
     },
-    conditions: {
-      minIntensity: 3,
-      targetPrefectures: [],
-      enableMentions: false,
-      mentionTargets: []
-    },
-    departments: DEFAULT_DEPARTMENT_STAMPS,
-    template: {
-      title: "🚨 地震発生通知",
-      message: "地震が発生しました。安否確認のため、該当部署のスタンプを押してください。",
-      includeEventDetails: true,
-      includeMapLink: true,
-      customFields: {}
-    },
     training: {
       isEnabled: false,
       testMessage: "これは訓練メッセージです。",
       enableMentions: false,
-      mentionTargets: []
+      mentionTargets: [],
+      scheduledTrainings: []
     },
     isActive: false
   });
@@ -64,7 +48,7 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
     loadConfig();
   }, []);
 
-  const [activeTab, setActiveTab] = useState<'slack' | 'conditions' | 'template' | 'preview' | 'training'>('slack');
+  const [activeTab, setActiveTab] = useState<'slack' | 'preview' | 'training'>('slack');
 
   const updateSlackSettings = (newSettings: SlackNotificationSettings) => {
     setConfig(prev => ({
@@ -73,53 +57,11 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
     }));
   };
 
-  const updateConditions = (updates: Partial<NotificationConditions>) => {
-    setConfig(prev => ({
-      ...prev,
-      conditions: { ...prev.conditions, ...updates }
-    }));
-  };
-
-  const updateTemplate = (updates: Partial<NotificationTemplate>) => {
-    setConfig(prev => ({
-      ...prev,
-      template: { ...prev.template, ...updates }
-    }));
-  };
 
   const updateTraining = (updates: Partial<TrainingMode>) => {
     setConfig(prev => ({
       ...prev,
       training: { ...prev.training, ...updates }
-    }));
-  };
-
-  const addDepartment = () => {
-    const newDept: DepartmentStamp = {
-      id: `dept_${Date.now()}`,
-      name: "新しい部署",
-      emoji: "🏢",
-      color: "#3B82F6"
-    };
-    setConfig(prev => ({
-      ...prev,
-      departments: [...prev.departments, newDept]
-    }));
-  };
-
-  const updateDepartment = (id: string, updates: Partial<DepartmentStamp>) => {
-    setConfig(prev => ({
-      ...prev,
-      departments: prev.departments.map(dept => 
-        dept.id === id ? { ...dept, ...updates } : dept
-      )
-    }));
-  };
-
-  const removeDepartment = (id: string) => {
-    setConfig(prev => ({
-      ...prev,
-      departments: prev.departments.filter(dept => dept.id !== id)
     }));
   };
 
@@ -134,10 +76,17 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
     }
   };
 
-  const sendTestNotification = () => {
-    // TODO: テスト通知の送信
-    console.log("Sending test notification:", config.training);
-    alert("テスト通知を送信しました");
+  const sendTestNotification = async () => {
+    try {
+      const scheduler = TrainingScheduleExecutor.getInstance();
+      await scheduler.executeImmediateTraining(
+        config.training.testMessage || "これはテスト通知です。"
+      );
+      alert("テスト通知を送信しました");
+    } catch (error) {
+      console.error("テスト通知送信エラー:", error);
+      alert("テスト通知の送信に失敗しました");
+    }
   };
 
   return (
@@ -169,8 +118,6 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
         <div className="flex border-b border-gray-700">
           {[
             { key: 'slack', label: 'Slack設定' },
-            { key: 'conditions', label: '通知条件' },
-            { key: 'template', label: 'メッセージ設定' },
             { key: 'preview', label: 'プレビュー' },
             { key: 'training', label: '訓練モード' }
           ].map(tab => (
@@ -197,22 +144,6 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
               onUpdate={updateSlackSettings} 
             />
           )}
-          {activeTab === 'conditions' && (
-            <ConditionsTab 
-              conditions={config.conditions} 
-              onUpdate={updateConditions} 
-            />
-          )}
-          {activeTab === 'template' && (
-            <TemplateTab 
-              template={config.template}
-              departments={config.departments}
-              onUpdateTemplate={updateTemplate}
-              onAddDepartment={addDepartment}
-              onUpdateDepartment={updateDepartment}
-              onRemoveDepartment={removeDepartment}
-            />
-          )}
           {activeTab === 'preview' && (
             <PreviewTab 
               config={config} 
@@ -221,6 +152,7 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
           {activeTab === 'training' && (
             <TrainingTab 
               training={config.training}
+              workspaces={config.slack.workspaces}
               onUpdate={updateTraining}
               onSendTest={sendTestNotification}
             />
@@ -265,95 +197,6 @@ function SlackSettingsTab({
   );
 }
 
-// 通知条件タブ
-function ConditionsTab({ 
-  conditions, 
-  onUpdate 
-}: { 
-  conditions: NotificationConditions; 
-  onUpdate: (updates: Partial<NotificationConditions>) => void; 
-}) {
-  const handlePrefectureToggle = (prefCode: string) => {
-    const isSelected = conditions.targetPrefectures.includes(prefCode);
-    const newPrefectures = isSelected
-      ? conditions.targetPrefectures.filter(code => code !== prefCode)
-      : [...conditions.targetPrefectures, prefCode];
-    
-    onUpdate({ targetPrefectures: newPrefectures });
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            最小震度
-          </label>
-          <select
-            value={conditions.minIntensity}
-            onChange={(e) => onUpdate({ minIntensity: Number(e.target.value) })}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
-          >
-            <option value={1}>震度1以上</option>
-            <option value={2}>震度2以上</option>
-            <option value={3}>震度3以上</option>
-            <option value={4}>震度4以上</option>
-            <option value={5}>震度5弱以上</option>
-            <option value={5.5}>震度5強以上</option>
-            <option value={6}>震度6弱以上</option>
-            <option value={6.5}>震度6強以上</option>
-            <option value={7}>震度7のみ</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={conditions.enableMentions}
-              onChange={(e) => onUpdate({ enableMentions: e.target.checked })}
-              className="mr-2 w-4 h-4"
-            />
-            <span className="text-gray-300">メンション機能を有効にする</span>
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          対象都道府県（{conditions.targetPrefectures.length}件選択中）
-        </label>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-60 overflow-y-auto bg-gray-700 p-4 rounded">
-          {JAPANESE_PREFECTURES.map(pref => (
-            <label key={pref.code} className="flex items-center cursor-pointer hover:bg-gray-600 p-1 rounded">
-              <input
-                type="checkbox"
-                checked={conditions.targetPrefectures.includes(pref.code)}
-                onChange={() => handlePrefectureToggle(pref.code)}
-                className="mr-2 w-3 h-3"
-              />
-              <span className="text-sm text-gray-300">{pref.name}</span>
-            </label>
-          ))}
-        </div>
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => onUpdate({ targetPrefectures: JAPANESE_PREFECTURES.map(p => p.code) })}
-            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
-          >
-            全選択
-          </button>
-          <button
-            onClick={() => onUpdate({ targetPrefectures: [] })}
-            className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded"
-          >
-            全解除
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // メッセージ設定タブ
 function TemplateTab({ 
@@ -488,6 +331,9 @@ function TemplateTab({
 
 // プレビュータブ
 function PreviewTab({ config }: { config: SafetyConfirmationConfig }) {
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
+  
+  const selectedWorkspace = config.slack.workspaces.find(ws => ws.id === selectedWorkspaceId) || config.slack.workspaces[0];
   const mockEarthquake = {
     eventId: "20240101123000",
     hypocenter: { name: "千葉県東方沖" },
@@ -497,9 +343,30 @@ function PreviewTab({ config }: { config: SafetyConfirmationConfig }) {
     prefectures: ["千葉県", "茨城県", "東京都"]
   };
 
+  if (!selectedWorkspace) {
+    return (
+      <div className="p-6 text-center">
+        <div className="text-gray-400">
+          プレビューを表示するには、まずワークスペースを追加してください。
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
-      <h3 className="text-lg font-medium text-white">Slack通知プレビュー</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-medium text-white">Slack通知プレビュー</h3>
+        <select
+          value={selectedWorkspaceId}
+          onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+          className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+        >
+          {config.slack.workspaces.map(ws => (
+            <option key={ws.id} value={ws.id}>{ws.name}</option>
+          ))}
+        </select>
+      </div>
       
       {/* Slackライクなプレビュー */}
       <div className="bg-white p-4 rounded-lg shadow-lg max-w-md">
@@ -518,10 +385,10 @@ function PreviewTab({ config }: { config: SafetyConfirmationConfig }) {
             
             {/* メッセージ */}
             <div className="space-y-2">
-              <div className="font-bold text-gray-900">{config.template.title}</div>
-              <div className="text-gray-700 text-sm">{config.template.message}</div>
+              <div className="font-bold text-gray-900">{selectedWorkspace.template.title}</div>
+              <div className="text-gray-700 text-sm">{selectedWorkspace.template.message}</div>
               
-              {config.template.includeEventDetails && (
+              {selectedWorkspace.template.includeEventDetails && (
                 <div className="bg-gray-50 p-3 rounded border-l-4 border-orange-400">
                   <div className="text-sm space-y-1">
                     <div><strong>震源:</strong> {mockEarthquake.hypocenter.name}</div>
@@ -536,7 +403,7 @@ function PreviewTab({ config }: { config: SafetyConfirmationConfig }) {
               <div className="space-y-2">
                 <div className="text-sm font-medium text-gray-700">安否確認（該当部署のスタンプを押してください）:</div>
                 <div className="flex flex-wrap gap-1">
-                  {config.departments.map(dept => (
+                  {selectedWorkspace.departments.map(dept => (
                     <button
                       key={dept.id}
                       className="flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 text-xs"
@@ -550,7 +417,7 @@ function PreviewTab({ config }: { config: SafetyConfirmationConfig }) {
                 </div>
               </div>
               
-              {config.template.includeMapLink && (
+              {selectedWorkspace.template.includeMapLink && (
                 <div>
                   <a href="#" className="text-blue-600 hover:underline text-sm">
                     📍 地図で詳細を確認
@@ -577,10 +444,12 @@ function PreviewTab({ config }: { config: SafetyConfirmationConfig }) {
 // 訓練モードタブ
 function TrainingTab({ 
   training, 
+  workspaces,
   onUpdate, 
   onSendTest 
 }: {
   training: TrainingMode;
+  workspaces: any[];
   onUpdate: (updates: Partial<TrainingMode>) => void;
   onSendTest: () => void;
 }) {
@@ -620,6 +489,14 @@ function TrainingTab({
           <span className="text-gray-300">訓練モードを有効にする</span>
         </label>
       </div>
+
+      {/* スケジュール機能 */}
+      <TrainingScheduler
+        scheduledTrainings={training.scheduledTrainings}
+        workspaces={workspaces}
+        onUpdate={(trainings) => onUpdate({ scheduledTrainings: trainings })}
+        onSendTest={onSendTest}
+      />
 
       {training.isEnabled && (
         <div className="space-y-4">
