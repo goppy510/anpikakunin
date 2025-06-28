@@ -206,45 +206,54 @@ export default function Monitor() {
   
   const cleanupConnections = async () => {
     try {
-      console.log("=== Manual Connection Cleanup ===");
+      console.log("🎆 === EMERGENCY CONNECTION CLEANUP ===");
       const apiService = new ApiService();
       
-      // 複数回試行でより確実にクリーンアップ
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`Manual cleanup attempt ${attempt}/3`);
+      // 緊急時は10回試行で確実にクリーンアップ
+      for (let attempt = 1; attempt <= 10; attempt++) {
+        console.log(`🚑 EMERGENCY cleanup attempt ${attempt}/10`);
         
         const socketList = await apiService.socketList();
-        console.log(`Found ${socketList.items?.length || 0} connections`);
+        const connectionCount = socketList.items?.length || 0;
+        console.log(`📡 Found ${connectionCount} connections to destroy`);
         
-        if (!socketList.items || socketList.items.length === 0) {
-          console.log("No connections to clean up");
+        if (connectionCount === 0) {
+          console.log("🎉 EMERGENCY SUCCESS: All connections destroyed");
           break;
         }
         
-        const closePromises = socketList.items.map(async (socket) => {
-          console.log(`Manually closing socket ${socket.id} (status: ${socket.status})`);
+        // 全接続を並列で強制終了
+        const closePromises = socketList.items!.map(async (socket, index) => {
+          console.log(`💥 EMERGENCY DESTROY ${index + 1}/${connectionCount}: ${socket.id}`);
           try {
             await apiService.socketClose(socket.id);
-            console.log(`✅ Manually closed socket ${socket.id}`);
+            console.log(`☠️ DESTROYED: ${socket.id}`);
           } catch (error) {
-            console.error(`❌ Failed to manually close socket ${socket.id}:`, error);
+            console.error(`⚠️ Destruction failed for ${socket.id}:`, error);
           }
         });
         
         await Promise.all(closePromises);
+        console.log(`🎆 EMERGENCY BATCH ${attempt} COMPLETE`);
         
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // 段階的待機時間 (最大7秒)
+        if (attempt < 10) {
+          const waitTime = Math.min(attempt * 800, 7000);
+          console.log(`⏱️ EMERGENCY COOLING: ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
       
-      console.log("Manual cleanup completed - reconnecting WebSocket...");
+      console.log("🎆 EMERGENCY CLEANUP COMPLETED - Reconnecting...");
+      
+      // 最終待機
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       // クリーンアップ後にWebSocketを再接続
       reconnect();
       
     } catch (error) {
-      console.error("Manual cleanup failed:", error);
+      console.error("🚑 EMERGENCY cleanup failed:", error);
     }
   };
 

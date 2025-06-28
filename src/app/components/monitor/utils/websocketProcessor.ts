@@ -463,47 +463,62 @@ export class WebSocketManager {
       console.log("🚀 Performing MAXIMUM AGGRESSIVE connection cleanup...");
       
       try {
-        // リロード対応: 最大3回試行で残存接続を完全除去
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          console.log(`🔥 MAX cleanup attempt ${attempt}/3`);
+        // 最終段階: 10回試行で絶対に全接続を消去
+        for (let attempt = 1; attempt <= 10; attempt++) {
+          console.log(`🛡️ ULTIMATE cleanup attempt ${attempt}/10`);
           
           const socketList = await this.apiService.socketList();
           const connectionCount = socketList.items?.length || 0;
           console.log(`📡 Found ${connectionCount} existing connections`);
           
           if (connectionCount === 0) {
-            console.log("✨ No connections to clean up");
+            console.log("✨ ULTIMATE SUCCESS: No connections remain");
             break;
           }
           
-          console.log("💥 MAXIMUM FORCE: Destroying ALL existing connections...");
-          const closePromises = socketList.items!.map(async (socket, index) => {
-            console.log(`⚡ DESTROYING socket ${socket.id} (${index + 1}/${connectionCount})`);
-            try {
-              await this.apiService.socketClose(socket.id);
-              console.log(`💀 DESTROYED socket ${socket.id}`);
-            } catch (error) {
-              console.error(`🔥 Failed to destroy socket ${socket.id}:`, error);
-              // エラーでも続行
-            }
-          });
+          console.log(`💥 ULTIMATE FORCE ${attempt}: Destroying ALL ${connectionCount} connections...`);
           
-          await Promise.all(closePromises);
-          console.log(`🎆 OBLITERATED ${connectionCount} connections`);
-          
-          // 段階的待機時間増加
-          if (attempt < 3) {
-            const waitTime = attempt * 1500; // 1.5s, 3s
-            console.log(`⏰ Cooling down ${waitTime}ms...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
+          // バッチ処理で同時に全てクローズ
+          const batchSize = 5; // 5件ずつバッチ処理
+          const batches = [];
+          for (let i = 0; i < socketList.items!.length; i += batchSize) {
+            batches.push(socketList.items!.slice(i, i + batchSize));
           }
+          
+          for (const [batchIndex, batch] of batches.entries()) {
+            console.log(`🔥 Processing batch ${batchIndex + 1}/${batches.length}`);
+            const closePromises = batch.map(async (socket, index) => {
+              console.log(`⚙️ ULTIMATE DESTROY: ${socket.id} (status: ${socket.status})`);
+              try {
+                await this.apiService.socketClose(socket.id);
+                console.log(`✅ OBLITERATED: ${socket.id}`);
+              } catch (error) {
+                console.error(`⚠️ Obliteration failed for ${socket.id}:`, error);
+                // エラーでも続行
+              }
+            });
+            
+            await Promise.all(closePromises);
+            
+            // バッチ間の小休止
+            if (batchIndex < batches.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
+          
+          console.log(`🎆 ULTIMATE BATCH COMPLETE: Attempted ${connectionCount} destructions`);
+          
+          // 段階的待機時間増加 (最大10秒)
+          const waitTime = Math.min(attempt * 1000, 10000);
+          console.log(`⏰ ULTIMATE COOLING: ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
         
-        console.log("🏆 MAXIMUM cleanup completed");
+        console.log("🎆 ULTIMATE CLEANUP COMPLETED");
         
-        // 最大待機時間でサーバー完全クリア確保
-        console.log("🛡️ Maximum wait for server-side completion...");
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // 最終確認待機 (サーバー側の処理完了を待つ)
+        console.log("🕰️ ULTIMATE WAIT: Ensuring server-side cleanup completion...");
+        await new Promise(resolve => setTimeout(resolve, 8000));
         
       } catch (cleanupError) {
         console.warn("💥 MAXIMUM cleanup failed (emergency fallback):", cleanupError.message);

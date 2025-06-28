@@ -167,6 +167,18 @@ export function MonitorHeader({
         )}
       </div>
 
+      {/* 緊急クリーンアップボタン */}
+      {status === "error" && onCleanupConnections && (
+        <div className="flex items-center mx-3">
+          <button
+            className="px-3 py-1 border border-red-500 rounded bg-red-900 hover:bg-red-800 text-red-300 transition-colors text-xs font-bold animate-pulse"
+            onClick={onCleanupConnections}
+          >
+            🎆 緊急クリーンアップ
+          </button>
+        </div>
+      )}
+      
       {/* 安否確認システムリンク */}
       <div className="flex items-center mx-3">
         <ClientLink
