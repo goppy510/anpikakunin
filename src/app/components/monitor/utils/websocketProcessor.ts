@@ -453,51 +453,58 @@ export class WebSocketManager {
         // 契約確認に失敗した場合でも続行を試みる
       }
       
-      // WebSocket接続前に強力なクリーンアップを実行
-      console.log("=== WebSocket Connection ===");
-      console.log("Performing AGGRESSIVE connection cleanup before new connection...");
+      // WebSocket接続前に最強レベルのクリーンアップを実行
+      console.log("=== MAXIMUM STRENGTH WebSocket Connection Cleanup ===");
+      console.log("🚀 Performing MAXIMUM AGGRESSIVE connection cleanup...");
       
       try {
-        // 複数回の試行で確実にクリーンアップ
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          console.log(`Pre-connection cleanup attempt ${attempt}/2`);
+        // リロード対応: 最大3回試行で残存接続を完全除去
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          console.log(`🔥 MAX cleanup attempt ${attempt}/3`);
           
           const socketList = await this.apiService.socketList();
-          console.log(`Found ${socketList.items?.length || 0} existing connections`);
+          const connectionCount = socketList.items?.length || 0;
+          console.log(`📡 Found ${connectionCount} existing connections`);
           
-          if (!socketList.items || socketList.items.length === 0) {
-            console.log("No connections to clean up");
+          if (connectionCount === 0) {
+            console.log("✨ No connections to clean up");
             break;
           }
           
-          console.log("Aggressively cleaning up ALL existing connections...");
-          const closePromises = socketList.items.map(async (socket) => {
-            console.log(`Force closing socket ${socket.id} (status: ${socket.status})`);
+          console.log("💥 MAXIMUM FORCE: Destroying ALL existing connections...");
+          const closePromises = socketList.items!.map(async (socket, index) => {
+            console.log(`⚡ DESTROYING socket ${socket.id} (${index + 1}/${connectionCount})`);
             try {
               await this.apiService.socketClose(socket.id);
-              console.log(`✅ Force closed socket ${socket.id}`);
+              console.log(`💀 DESTROYED socket ${socket.id}`);
             } catch (error) {
-              console.error(`❌ Failed to force close socket ${socket.id}:`, error);
+              console.error(`🔥 Failed to destroy socket ${socket.id}:`, error);
+              // エラーでも続行
             }
           });
           
           await Promise.all(closePromises);
+          console.log(`🎆 OBLITERATED ${connectionCount} connections`);
           
-          // 次の試行前に待機
-          if (attempt < 2) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          // 段階的待機時間増加
+          if (attempt < 3) {
+            const waitTime = attempt * 1500; // 1.5s, 3s
+            console.log(`⏰ Cooling down ${waitTime}ms...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
           }
         }
         
-        console.log("Aggressive pre-connection cleanup completed");
+        console.log("🏆 MAXIMUM cleanup completed");
         
-        // より長い待機時間でサーバー側の処理完了を待つ
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        // 最大待機時間でサーバー完全クリア確保
+        console.log("🛡️ Maximum wait for server-side completion...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
       } catch (cleanupError) {
-        console.warn("Aggressive pre-connection cleanup failed (continuing anyway):", cleanupError.message);
-        // 失敗時はさらに長く待つ
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.warn("💥 MAXIMUM cleanup failed (emergency fallback):", cleanupError.message);
+        // 緊急時は最大待機
+        console.log("🚨 EMERGENCY: Maximum fallback wait...");
+        await new Promise(resolve => setTimeout(resolve, 6000));
       }
       
       // WebSocket接続開始（詳細ログ付き）
