@@ -179,7 +179,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
                         type="password"
                         value={workspace.botToken}
                         onChange={(e) => updateWorkspace(workspace.id, { botToken: e.target.value })}
-                        placeholder="xoxb-1234567890123-1234567890123-XXXXXXXXXXXXXXXXXXXXXXXX"
+                        placeholder="xoxb-YOUR-TEAM-ID-YOUR-USER-ID-YOUR-BOT-TOKEN"
                         className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
                       />
                     </div>
@@ -300,7 +300,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
                       type="url"
                       value={channel.webhookUrl}
                       onChange={(e) => updateChannel(channel.id, { webhookUrl: e.target.value })}
-                      placeholder="https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+                      placeholder="https://hooks.slack.com/services/YOUR-TEAM-ID/YOUR-WEBHOOK-ID/YOUR-TOKEN"
                       className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
                     />
                   </div>
