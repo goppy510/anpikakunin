@@ -97,50 +97,52 @@ export default function MapComponent({
   };
 
   // 震源地に応じた座標を取得する関数
-  const getEpicenterCoordinates = (hypocentername: string): [number, number] | null => {
-    const hypocenter = hypocentername?.toLowerCase() || '';
-    
+  const getEpicenterCoordinates = (
+    hypocentername: string
+  ): [number, number] | null => {
+    const hypocenter = hypocentername?.toLowerCase() || "";
+
     // 主要な震源地の座標定義
-    if (hypocenter.includes('トカラ列島') || hypocenter.includes('tokara')) {
+    if (hypocenter.includes("トカラ列島") || hypocenter.includes("tokara")) {
       return [29.3, 129.4]; // トカラ列島近海
     }
-    if (hypocenter.includes('長野') || hypocenter.includes('nagano')) {
+    if (hypocenter.includes("長野") || hypocenter.includes("nagano")) {
       return [36.2, 138.2]; // 長野県中部
     }
-    if (hypocenter.includes('千葉') || hypocenter.includes('東方沖')) {
+    if (hypocenter.includes("千葉") || hypocenter.includes("東方沖")) {
       return [35.7, 140.8]; // 千葉県東方沖
     }
-    if (hypocenter.includes('北海道') || hypocenter.includes('石狩')) {
+    if (hypocenter.includes("北海道") || hypocenter.includes("石狩")) {
       return [43.2, 141.0]; // 北海道石狩湾
     }
-    if (hypocenter.includes('茨城') || hypocenter.includes('ibaraki')) {
+    if (hypocenter.includes("茨城") || hypocenter.includes("ibaraki")) {
       return [36.3, 140.5]; // 茨城県沖
     }
-    if (hypocenter.includes('福島') || hypocenter.includes('fukushima')) {
+    if (hypocenter.includes("福島") || hypocenter.includes("fukushima")) {
       return [37.4, 140.9]; // 福島県沖
     }
-    if (hypocenter.includes('宮城') || hypocenter.includes('miyagi')) {
+    if (hypocenter.includes("宮城") || hypocenter.includes("miyagi")) {
       return [38.4, 141.5]; // 宮城県沖
     }
-    if (hypocenter.includes('岩手') || hypocenter.includes('iwate')) {
+    if (hypocenter.includes("岩手") || hypocenter.includes("iwate")) {
       return [39.7, 141.8]; // 岩手県沖
     }
-    if (hypocenter.includes('青森') || hypocenter.includes('aomori')) {
+    if (hypocenter.includes("青森") || hypocenter.includes("aomori")) {
       return [40.8, 141.0]; // 青森県東方沖
     }
-    if (hypocenter.includes('熊本') || hypocenter.includes('kumamoto')) {
+    if (hypocenter.includes("熊本") || hypocenter.includes("kumamoto")) {
       return [32.8, 130.7]; // 熊本県
     }
-    if (hypocenter.includes('大分') || hypocenter.includes('oita')) {
+    if (hypocenter.includes("大分") || hypocenter.includes("oita")) {
       return [33.2, 131.6]; // 大分県
     }
-    if (hypocenter.includes('鹿児島') || hypocenter.includes('kagoshima')) {
+    if (hypocenter.includes("鹿児島") || hypocenter.includes("kagoshima")) {
       return [31.6, 130.6]; // 鹿児島県
     }
-    if (hypocenter.includes('沖縄') || hypocenter.includes('okinawa')) {
+    if (hypocenter.includes("沖縄") || hypocenter.includes("okinawa")) {
       return [26.2, 127.7]; // 沖縄県
     }
-    
+
     return null; // 座標が分からない場合
   };
 
@@ -287,6 +289,125 @@ export default function MapComponent({
 
     return null;
   };
+
+  // 沖縄用マーカー管理コンポーネント
+  const OkinawaMarkers = () => {
+    const map = useMap();
+
+    useEffect(() => {
+      // 沖縄県の観測点のみをフィルタリングして表示
+      const okinawaStations = stationData.filter((station) => {
+        const lat = parseFloat(station.lat);
+        const lng = parseFloat(station.lon);
+        // 沖縄県の緯度経度範囲
+        return lat >= 24 && lat <= 28 && lng >= 122 && lng <= 132;
+      });
+
+      // 既存のマーカーをクリア
+      map.eachLayer((layer) => {
+        if (layer instanceof L.CircleMarker) {
+          map.removeLayer(layer);
+        }
+      });
+
+      const newMarkers: L.CircleMarker[] = [];
+
+      okinawaStations.forEach((station) => {
+        const lat = parseFloat(station.lat);
+        const lng = parseFloat(station.lon);
+
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        // 地震データを取得
+        const earthquakeInfo = earthquakeData.get(station.code);
+
+        let marker: L.CircleMarker;
+
+        if (earthquakeInfo && shouldShowIntensity(earthquakeInfo.intensity)) {
+          // 震度データがある場合
+          const getMarkerColor = (intensity: number | string) => {
+            let normalizedIntensity: number;
+            if (typeof intensity === "string") {
+              if (intensity === "5弱" || intensity === "5-")
+                normalizedIntensity = 5.0;
+              else if (intensity === "5強" || intensity === "5+")
+                normalizedIntensity = 5.5;
+              else if (intensity === "6弱" || intensity === "6-")
+                normalizedIntensity = 6.0;
+              else if (intensity === "6強" || intensity === "6+")
+                normalizedIntensity = 6.5;
+              else normalizedIntensity = parseFloat(intensity) || 0;
+            } else {
+              normalizedIntensity = intensity;
+            }
+
+            const clampedIntensity = Math.max(
+              0,
+              Math.min(7, normalizedIntensity)
+            );
+            if (clampedIntensity === 0) return "#666666";
+            if (clampedIntensity === 1) return "#888888";
+            if (clampedIntensity === 2) return "#00ccff";
+            if (clampedIntensity === 3) return "#00ff99";
+            if (clampedIntensity === 4) return "#66ff33";
+            if (clampedIntensity === 5.0) return "#ffff00";
+            if (clampedIntensity === 5.5) return "#ffcc00";
+            if (clampedIntensity === 6.0) return "#ff9900";
+            if (clampedIntensity === 6.5) return "#ff6600";
+            return "#ff0000";
+          };
+
+          const markerColor = getMarkerColor(earthquakeInfo.intensity);
+          marker = L.circleMarker([lat, lng], {
+            radius: 2,
+            fillColor: markerColor,
+            color: markerColor,
+            opacity: 1.0,
+            fillOpacity: 1.0,
+            weight: 0,
+          });
+
+          const popupContent = `
+            <div style="font-size: 10px;">
+              <strong>${station.name}</strong><br/>
+              震度: ${earthquakeInfo.intensity}
+            </div>
+          `;
+          marker.bindPopup(popupContent);
+        } else {
+          // 震度データがない場合
+          marker = L.circleMarker([lat, lng], {
+            radius: 1,
+            fillColor: "#0d33ff",
+            color: "#0d33ff",
+            opacity: 0.7,
+            fillOpacity: 0.7,
+            weight: 0,
+          });
+        }
+
+        marker.addTo(map);
+        newMarkers.push(marker);
+      });
+
+      // クリーンアップ関数
+      return () => {
+        newMarkers.forEach((marker) => {
+          map.removeLayer(marker);
+        });
+      };
+    }, [
+      map,
+      stationData,
+      earthquakeData,
+      markersVisible,
+      forceRender,
+      intensityThreshold,
+    ]);
+
+    return null;
+  };
+
   const [wsStatus, setWsStatus] = useState<
     "closed" | "connecting" | "open" | "error"
   >("closed");
@@ -569,14 +690,20 @@ export default function MapComponent({
 
       // 新しいイベントの場合のみ震源地に拡大
       if (lastEventTime === null || latestEventTime > lastEventTime) {
-        if (latestEvent.hypocenter?.name && latestEvent.currentMaxInt && latestEvent.currentMaxInt !== "-") {
-          const coordinates = getEpicenterCoordinates(latestEvent.hypocenter.name);
+        if (
+          latestEvent.hypocenter?.name &&
+          latestEvent.currentMaxInt &&
+          latestEvent.currentMaxInt !== "-"
+        ) {
+          const coordinates = getEpicenterCoordinates(
+            latestEvent.hypocenter.name
+          );
           if (!coordinates) return;
 
           // 震度に応じたズームレベル設定
           const intensityValue = getIntensityValue(latestEvent.currentMaxInt);
           let zoomLevel = 7; // デフォルト
-          
+
           if (intensityValue >= 5) {
             zoomLevel = 9; // 震度5以上は詳細表示
           } else if (intensityValue >= 3) {
@@ -588,7 +715,7 @@ export default function MapComponent({
           // スムーズに震源地に移動
           map.setView(coordinates, zoomLevel, {
             animate: true,
-            duration: 1.5
+            duration: 1.5,
           });
 
           // lastEventTimeの更新
@@ -598,7 +725,7 @@ export default function MapComponent({
           setTimeout(() => {
             map.setView([38, 120], 6, {
               animate: true,
-              duration: 2.0
+              duration: 2.0,
             });
           }, 30000); // 30秒後
         }
@@ -752,10 +879,83 @@ export default function MapComponent({
 
         {/* ネイティブLeafletマーカー */}
         {markersVisible && <CustomMarkers />}
-        
+
         {/* 震源地自動拡大 */}
         <EpicenterZoom events={earthquakeEvents || []} />
       </MapContainer>
+
+      {/* 沖縄ミニマップ */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50px", // ヘッダーの下に移動
+          left: "500px", // さらに右に移動
+          width: "370px",
+          height: "270px",
+          border: "2px solid #fff",
+          borderRadius: "5px",
+          overflow: "hidden",
+          zIndex: 1000,
+          backgroundColor: "rgba(0,0,0,0.8)",
+        }}
+      >
+        <MapContainer
+          center={[10, 130.7]} // 沖縄県の中心
+          zoom={5.5} // 本州と同じ縮尺に変更（8から6に）
+          maxZoom={10}
+          minZoom={2}
+          maxBounds={[
+            [23.5, 126], // 沖縄の南西
+            [41, 127], // 沖縄の北東
+          ]}
+          maxBoundsViscosity={1.0}
+          style={{ height: "100%", width: "100%" }}
+          attributionControl={false}
+          zoomControl={false}
+          dragging={false}
+          scrollWheelZoom={false}
+          doubleClickZoom={false}
+          touchZoom={false}
+        >
+          {/* 沖縄用の地図タイル */}
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+            attribution=""
+          />
+
+          {/* 沖縄の都道府県境界線 */}
+          {prefectureData && (
+            <GeoJSON
+              data={prefectureData}
+              style={{
+                color: "#ffffff",
+                weight: 0.5,
+                opacity: 0.8,
+                fillOpacity: 0,
+              }}
+            />
+          )}
+
+          {/* 沖縄用マーカー */}
+          {markersVisible && <OkinawaMarkers />}
+        </MapContainer>
+
+        {/* 沖縄ラベル */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "2px",
+            left: "5px",
+            color: "white",
+            fontSize: "10px",
+            fontWeight: "bold",
+            textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+            zIndex: 1001,
+          }}
+        >
+          沖縄県
+        </div>
+      </div>
 
       {/* WebSocketステータス表示（テストモード時のみ） */}
       {isClient && testMode && (
