@@ -45,7 +45,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [notificationThreshold] = useState(1); // デフォルト震度1
 
-  // ページ完全離脱時のクリーンアップ（タブ切り替えでは切断しない）
+  // ページ離脱時とフォーカス管理
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (wsManagerRef.current) {
@@ -54,12 +54,30 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       }
     };
 
+    // ページがフォーカスを取り戻した時の接続チェック
+    const handleVisibilityChange = () => {
+      if (!document.hidden && authStatus === "authenticated") {
+        console.log("Page focused, checking connection status...");
+        // フォーカス復帰時に接続状態をチェック
+        if (!wsManagerRef.current || status === "closed" || status === "error") {
+          console.log("Reconnecting on page focus...");
+          setTimeout(() => {
+            if (wsManagerRef.current) {
+              wsManagerRef.current.reconnect();
+            }
+          }, 1000);
+        }
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [authStatus, status]);
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: string): number => {
@@ -83,7 +101,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             const apiService = new ApiService();
             await apiService.contractList();
             
-            // 古い接続をクリーンアップ
+            // リロード時は必ず全接続をクリーンアップ
+            console.log("=== Page Load: Cleaning up ALL existing connections ===");
             await cleanupOldConnections(apiService);
           } catch (apiError) {
             console.error("API access failed despite authentication:", apiError);

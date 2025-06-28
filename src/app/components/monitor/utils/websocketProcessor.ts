@@ -453,36 +453,51 @@ export class WebSocketManager {
         // 契約確認に失敗した場合でも続行を試みる
       }
       
-      // WebSocket接続前にクリーンアップを実行
+      // WebSocket接続前に強力なクリーンアップを実行
       console.log("=== WebSocket Connection ===");
-      console.log("Performing connection cleanup before new connection...");
+      console.log("Performing AGGRESSIVE connection cleanup before new connection...");
       
       try {
-        const socketList = await this.apiService.socketList();
-        console.log("Found existing connections:", socketList.items?.length || 0);
-        
-        if (socketList.items && socketList.items.length > 0) {
-          console.log("Cleaning up existing connections...");
+        // 複数回の試行で確実にクリーンアップ
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          console.log(`Pre-connection cleanup attempt ${attempt}/2`);
+          
+          const socketList = await this.apiService.socketList();
+          console.log(`Found ${socketList.items?.length || 0} existing connections`);
+          
+          if (!socketList.items || socketList.items.length === 0) {
+            console.log("No connections to clean up");
+            break;
+          }
+          
+          console.log("Aggressively cleaning up ALL existing connections...");
           const closePromises = socketList.items.map(async (socket) => {
-            if (socket.status === 'open' || socket.status === 'waiting') {
-              console.log(`Closing socket ${socket.id}`);
-              try {
-                await this.apiService.socketClose(socket.id);
-                console.log(`✅ Closed socket ${socket.id}`);
-              } catch (error) {
-                console.error(`❌ Failed to close socket ${socket.id}:`, error);
-              }
+            console.log(`Force closing socket ${socket.id} (status: ${socket.status})`);
+            try {
+              await this.apiService.socketClose(socket.id);
+              console.log(`✅ Force closed socket ${socket.id}`);
+            } catch (error) {
+              console.error(`❌ Failed to force close socket ${socket.id}:`, error);
             }
           });
           
           await Promise.all(closePromises);
-          console.log("Pre-connection cleanup completed");
           
-          // クリーンアップ後に少し待つ
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          // 次の試行前に待機
+          if (attempt < 2) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
+        
+        console.log("Aggressive pre-connection cleanup completed");
+        
+        // より長い待機時間でサーバー側の処理完了を待つ
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        
       } catch (cleanupError) {
-        console.warn("Pre-connection cleanup failed (continuing anyway):", cleanupError.message);
+        console.warn("Aggressive pre-connection cleanup failed (continuing anyway):", cleanupError.message);
+        // 失敗時はさらに長く待つ
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
       
       // WebSocket接続開始（詳細ログ付き）
