@@ -611,10 +611,10 @@ export default function MapComponent({
     }
   };
 
-  // 日本の境界（北海道を含むように調整）
+  // 日本の境界（全方向に十分なスクロール範囲を確保）
   const japanBounds: [[number, number], [number, number]] = [
-    [33, 125], // 南西
-    [45, 180], // 北東（北海道を含む）
+    [20, 96], // 南西（南側を20度まで拡張してフィリピン・東南アジアまで）
+    [50, 200], // 北東（北海道を含む）
   ];
 
   useEffect(() => {
@@ -672,7 +672,7 @@ export default function MapComponent({
     const handleEventUpdate = useCallback(() => {
       if (!events || events.length === 0) {
         // 初期表示時は全国地図
-        map.setView([38, 120], 6);
+        map.setView([38.5, 138], 5.7);
         return;
       }
 
@@ -684,7 +684,7 @@ export default function MapComponent({
 
       // 最後のイベントから30秒以上経過していたら全国地図
       if (timeDiff > 30000) {
-        map.setView([38, 120], 6);
+        map.setView([38.5, 138], 5.7);
         return;
       }
 
@@ -849,14 +849,18 @@ export default function MapComponent({
   return (
     <div className={styles.map}>
       <MapContainer
-        center={[38, 120]} // 北海道が見えるように南寄りに調整
-        zoom={6}
+        center={[38.5, 138]} // さらに南寄りに調整
+        zoom={5.7}
         maxZoom={10}
         minZoom={2}
         maxBounds={japanBounds}
         maxBoundsViscosity={1.0}
         style={{ height: "100%", width: "100%" }}
         attributionControl={true}
+        zoomControl={false} // ズームコントロールボタンを非表示
+        zoomSnap={0.25} // ズーム感度を細かく（デフォルト1→0.25）
+        zoomDelta={0.25} // ズーム変化量を細かく
+        wheelPxPerZoomLevel={120} // マウスホイールの感度調整
       >
         {/* 濃いグレーの地図 */}
         <TileLayer
