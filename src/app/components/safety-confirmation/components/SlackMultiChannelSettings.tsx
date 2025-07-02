@@ -5,6 +5,7 @@ import cn from "classnames";
 import { SlackNotificationSettings, SlackWorkspace, SlackChannel, createDefaultWorkspace } from "../types/SafetyConfirmationTypes";
 import { WorkspaceDetailSettings } from "./WorkspaceDetailSettings";
 import { SlackApiService, SlackTestResult } from "../utils/slackApiService";
+import { ScopeVerification } from "./ScopeVerification";
 
 interface SlackMultiChannelSettingsProps {
   settings: SlackNotificationSettings;
@@ -19,6 +20,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
     status: 'idle' | 'verifying' | 'success' | 'error'; 
     message?: string;
     workspaceInfo?: any;
+    scopes?: string[];
   }>>({});
 
   const addWorkspace = () => {
@@ -74,7 +76,8 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
           [workspaceId]: { 
             status: 'success', 
             message: `✓ 接続成功: ${result.workspaceInfo?.name}`,
-            workspaceInfo: result.workspaceInfo
+            workspaceInfo: result.workspaceInfo,
+            scopes: result.scopes || []
           }
         }));
 
@@ -135,10 +138,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
       id: `channel_${Date.now()}`,
       workspaceId: settings.workspaces[0].id,
       channelId: "",
-      channelName: "",
-      webhookUrl: "",
-      isEnabled: true,
-      priority: 'medium',
+      channelName: undefined,
       channelType: 'production',
       healthStatus: 'unknown'
     };
@@ -149,14 +149,35 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
     });
   };
 
-  const updateChannel = (id: string, updates: Partial<SlackChannel>) => {
-    onUpdate({
+  const updateChannel = async (id: string, updates: Partial<SlackChannel>) => {
+    const newSettings = {
       ...settings,
       channels: settings.channels.map(ch => 
         ch.id === id ? { ...ch, ...updates } : ch
       )
-    });
+    };
+    
+    onUpdate(newSettings);
+    
+    // チャンネルIDが更新された場合、自動でチャンネル名を取得
+    if (updates.channelId && updates.channelId.trim()) {
+      await fetchChannelName(id, updates.channelId, updates.workspaceId || newSettings.channels.find(ch => ch.id === id)?.workspaceId);
+    }
+    
+    // 通常の自動保存
+    if (currentConfig) {
+      try {
+        const { SafetySettingsDatabase } = await import('../utils/settingsDatabase');
+        await SafetySettingsDatabase.saveSettings({
+          ...currentConfig,
+          slack: newSettings
+        });
+      } catch (error) {
+        console.error('チャンネル設定の自動保存に失敗:', error);
+      }
+    }
   };
+
 
   const removeChannel = (id: string) => {
     onUpdate({
@@ -170,25 +191,45 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
     return workspace?.name || "不明なワークスペース";
   };
 
-  const getPriorityBadge = (priority: SlackChannel['priority']) => {
-    const styles = {
-      high: "bg-red-900 text-red-300 border-red-500",
-      medium: "bg-yellow-900 text-yellow-300 border-yellow-500", 
-      low: "bg-gray-700 text-gray-300 border-gray-500"
-    };
+  const fetchChannelName = async (channelId: string, slackChannelId: string, workspaceId?: string) => {
+    if (!workspaceId || !slackChannelId.trim()) {
+      return;
+    }
     
-    const labels = {
-      high: "高",
-      medium: "中",
-      low: "低"
-    };
+    const workspace = settings.workspaces.find(ws => ws.id === workspaceId);
+    if (!workspace?.botToken) {
+      return;
+    }
 
-    return (
-      <span className={cn("px-2 py-1 text-xs border rounded", styles[priority])}>
-        {labels[priority]}
-      </span>
-    );
+    try {
+      const result = await SlackApiService.getChannelInfo(workspace.botToken, slackChannelId);
+      
+      if (result.success && result.channelName) {
+        const updatedSettings = {
+          ...settings,
+          channels: settings.channels.map(ch => 
+            ch.id === channelId ? { ...ch, channelName: result.channelName } : ch
+          )
+        };
+        onUpdate(updatedSettings);
+        
+        if (currentConfig) {
+          try {
+            const { SafetySettingsDatabase } = await import('../utils/settingsDatabase');
+            await SafetySettingsDatabase.saveSettings({
+              ...currentConfig,
+              slack: updatedSettings
+            });
+          } catch (error) {
+            console.error('チャンネル名自動保存に失敗:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('チャンネル情報取得エラー:', error);
+    }
   };
+
 
   const getHealthStatusBadge = (status: SlackChannel['healthStatus']) => {
     const styles = {
@@ -215,16 +256,21 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
     updateChannel(channel.id, { healthStatus: 'unknown' });
     
     try {
-      // TODO: 実際のSlack APIを使ったヘルスチェック実装
-      // とりあえずモック実装
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // チャンネルIDとWebhook URLが設定されているかチェック
-      if (channel.channelId && channel.webhookUrl) {
-        updateChannel(channel.id, { healthStatus: 'healthy' });
-      } else {
+      // チャンネルIDが設定されているかチェック
+      if (!channel.channelId) {
         updateChannel(channel.id, { healthStatus: 'error' });
+        return;
       }
+
+      // ワークスペースのBot Tokenを取得
+      const workspace = settings.workspaces.find(ws => ws.id === channel.workspaceId);
+      if (!workspace?.botToken) {
+        updateChannel(channel.id, { healthStatus: 'error' });
+        return;
+      }
+
+      // 簡易的なヘルスチェック（チャンネルIDとBot Tokenの存在確認のみ）
+      updateChannel(channel.id, { healthStatus: 'healthy' });
     } catch (error) {
       updateChannel(channel.id, { healthStatus: 'error' });
     }
@@ -320,18 +366,30 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
                         
                         {/* 検証結果表示 */}
                         {tokenVerificationStatus[workspace.id] && (
-                          <div className={cn(
-                            "text-xs px-3 py-2 rounded flex items-center gap-2",
-                            tokenVerificationStatus[workspace.id].status === 'success' 
-                              ? "bg-green-900 text-green-300 border border-green-500"
-                              : tokenVerificationStatus[workspace.id].status === 'error'
-                              ? "bg-red-900 text-red-300 border border-red-500"
-                              : "bg-blue-900 text-blue-300 border border-blue-500"
-                          )}>
-                            {tokenVerificationStatus[workspace.id].status === 'verifying' && (
-                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+                          <div>
+                            <div className={cn(
+                              "text-xs px-3 py-2 rounded flex items-center gap-2",
+                              tokenVerificationStatus[workspace.id].status === 'success' 
+                                ? "bg-green-900 text-green-300 border border-green-500"
+                                : tokenVerificationStatus[workspace.id].status === 'error'
+                                ? "bg-red-900 text-red-300 border border-red-500"
+                                : "bg-blue-900 text-blue-300 border border-blue-500"
+                            )}>
+                              {tokenVerificationStatus[workspace.id].status === 'verifying' && (
+                                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+                              )}
+                              <span>{tokenVerificationStatus[workspace.id].message}</span>
+                            </div>
+                            
+                            {/* スコープ検証 */}
+                            {tokenVerificationStatus[workspace.id].status === 'success' && (
+                              <div className="mt-2">
+                                <ScopeVerification 
+                                  actualScopes={tokenVerificationStatus[workspace.id].scopes || []}
+                                  isVisible={true}
+                                />
+                              </div>
                             )}
-                            <span>{tokenVerificationStatus[workspace.id].message}</span>
                           </div>
                         )}
                       </div>
@@ -401,10 +459,19 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       ワークスペース
+                      <span className="text-xs text-gray-400 block mt-1">
+                        通知を送信するワークスペースを選択
+                      </span>
                     </label>
                     <select
                       value={channel.workspaceId}
-                      onChange={(e) => updateChannel(channel.id, { workspaceId: e.target.value })}
+                      onChange={(e) => {
+                        updateChannel(channel.id, { workspaceId: e.target.value });
+                        // ワークスペースが変更された場合、チャンネルIDがあればチャンネル名を再取得
+                        if (channel.channelId) {
+                          setTimeout(() => fetchChannelName(channel.id, channel.channelId, e.target.value), 100);
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white"
                     >
                       {settings.workspaces.map(ws => (
@@ -415,51 +482,43 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      チャンネル名
-                    </label>
-                    <input
-                      type="text"
-                      value={channel.channelName}
-                      onChange={(e) => updateChannel(channel.id, { channelName: e.target.value })}
-                      placeholder="#emergency-notifications"
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       チャンネルID
                       <span className="text-xs text-gray-400 block mt-1">
                         チャンネル右クリック → リンクをコピー → 末尾のID部分 (C0123456789)
                       </span>
                     </label>
-                    <input
-                      type="text"
-                      value={channel.channelId}
-                      onChange={(e) => updateChannel(channel.id, { channelId: e.target.value })}
-                      placeholder="C0123456789"
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Webhook URL
-                      <span className="text-xs text-gray-400 block mt-1">
-                        Incoming Webhooks → Add New Webhook to Workspace → URLをコピー
-                      </span>
-                    </label>
-                    <input
-                      type="url"
-                      value={channel.webhookUrl}
-                      onChange={(e) => updateChannel(channel.id, { webhookUrl: e.target.value })}
-                      placeholder="https://hooks.slack.com/services/YOUR-TEAM-ID/YOUR-WEBHOOK-ID/YOUR-TOKEN"
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={channel.channelId}
+                        onChange={(e) => updateChannel(channel.id, { channelId: e.target.value })}
+                        onBlur={(e) => {
+                          const inputChannelId = e.target.value.trim();
+                          if (inputChannelId && inputChannelId.length > 0) {
+                            fetchChannelName(channel.id, inputChannelId, channel.workspaceId);
+                          }
+                        }}
+                        placeholder="C0123456789"
+                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
+                      />
+                      {channel.channelName && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-green-400">✓</span>
+                          <span className="text-gray-300">チャンネル名:</span>
+                          <span className="text-white font-medium">#{channel.channelName}</span>
+                        </div>
+                      )}
+                      {channel.channelId && !channel.channelName && (
+                        <div className="flex items-center gap-2 text-sm text-yellow-400">
+                          <span>⚠️</span>
+                          <span>チャンネル名を取得できません（channels:read スコープが必要）</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       チャンネル種別
@@ -471,21 +530,6 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
                     >
                       <option value="production">本番用</option>
                       <option value="training">訓練用</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      優先度
-                    </label>
-                    <select
-                      value={channel.priority}
-                      onChange={(e) => updateChannel(channel.id, { priority: e.target.value as SlackChannel['priority'] })}
-                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm"
-                    >
-                      <option value="high">高優先度</option>
-                      <option value="medium">中優先度</option>
-                      <option value="low">低優先度</option>
                     </select>
                   </div>
 
@@ -506,27 +550,15 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      {getPriorityBadge(channel.priority)}
-                      <span className={cn(
-                        "px-2 py-1 text-xs rounded border",
-                        channel.channelType === 'production' 
-                          ? "bg-green-900 text-green-300 border-green-500"
-                          : "bg-yellow-900 text-yellow-300 border-yellow-500"
-                      )}>
-                        {channel.channelType === 'production' ? '本番用' : '訓練用'}
-                      </span>
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={channel.isEnabled}
-                          onChange={(e) => updateChannel(channel.id, { isEnabled: e.target.checked })}
-                          className="mr-2 w-4 h-4"
-                        />
-                        <span className="text-gray-300">有効</span>
-                      </label>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "px-2 py-1 text-xs rounded border",
+                      channel.channelType === 'production' 
+                        ? "bg-green-900 text-green-300 border-green-500"
+                        : "bg-yellow-900 text-yellow-300 border-yellow-500"
+                    )}>
+                      {channel.channelType === 'production' ? '本番用' : '訓練用'}
+                    </span>
                   </div>
 
                   <button
@@ -553,46 +585,6 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
         </div>
       )}
 
-      {/* 設定手順ガイド */}
-      <div className="bg-blue-900 bg-opacity-30 border border-blue-600 p-4 rounded">
-        <h4 className="text-blue-300 font-medium mb-3">📋 Slack設定手順ガイド</h4>
-        <div className="space-y-3 text-sm text-blue-200">
-          <div>
-            <strong>1. Slackアプリの作成</strong>
-            <ul className="ml-4 mt-1 space-y-1 text-blue-300">
-              <li>• <a href="https://api.slack.com/apps" target="_blank" className="underline">api.slack.com/apps</a> でアプリを作成</li>
-              <li>• 「Create New App」→「From scratch」</li>
-              <li>• アプリ名と対象ワークスペースを選択</li>
-              <li>• ワークスペース名は識別用（本社、開発チームなど任意）</li>
-            </ul>
-          </div>
-          <div>
-            <strong>2. Bot Tokenの取得</strong>
-            <ul className="ml-4 mt-1 space-y-1 text-blue-300">
-              <li>• 「OAuth & Permissions」タブ</li>
-              <li>• Scopes → Bot Token Scopes で「chat:write」を追加</li>
-              <li>• 「Install to Workspace」をクリック</li>
-              <li>• 「Bot User OAuth Token」をコピー (xoxb-で始まる)</li>
-            </ul>
-          </div>
-          <div>
-            <strong>3. Webhook URLの取得</strong>
-            <ul className="ml-4 mt-1 space-y-1 text-blue-300">
-              <li>• 「Incoming Webhooks」タブ → 「Activate Incoming Webhooks」をON</li>
-              <li>• 「Add New Webhook to Workspace」</li>
-              <li>• 通知したいチャンネルを選択</li>
-              <li>• Webhook URLをコピー</li>
-            </ul>
-          </div>
-          <div>
-            <strong>4. チャンネルIDの取得</strong>
-            <ul className="ml-4 mt-1 space-y-1 text-blue-300">
-              <li>• Slackでチャンネルを右クリック → 「リンクをコピー」</li>
-              <li>• URLの末尾がチャンネルID (C0123456789)</li>
-            </ul>
-          </div>
-        </div>
-      </div>
 
       {/* 設定概要 */}
       <div className="bg-gray-700 p-4 rounded">
@@ -603,15 +595,15 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
               有効なワークスペース: <span className="text-white">{settings.workspaces.filter(ws => ws.isEnabled).length}</span>
             </div>
             <div className="text-gray-300">
-              有効なチャンネル: <span className="text-white">{settings.channels.filter(ch => ch.isEnabled).length}</span>
+              登録チャンネル数: <span className="text-white">{settings.channels.length}</span>
             </div>
           </div>
           <div>
             <div className="text-gray-300">
-              高優先度チャンネル: <span className="text-white">{settings.channels.filter(ch => ch.priority === 'high' && ch.isEnabled).length}</span>
+              本番用チャンネル: <span className="text-white">{settings.channels.filter(ch => ch.channelType === 'production').length}</span>
             </div>
             <div className="text-gray-300">
-              中優先度チャンネル: <span className="text-white">{settings.channels.filter(ch => ch.priority === 'medium' && ch.isEnabled).length}</span>
+              訓練用チャンネル: <span className="text-white">{settings.channels.filter(ch => ch.channelType === 'training').length}</span>
             </div>
           </div>
         </div>

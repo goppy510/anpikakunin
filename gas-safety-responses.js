@@ -12,8 +12,9 @@ const CONFIG = {
   TRAINING_SHEET: '訓練用応答',
   PRODUCTION_SHEET: '本番用応答',
   
-  // Slack検証用（Slackアプリの設定から取得）
-  SLACK_SIGNING_SECRET: 'YOUR_SLACK_SIGNING_SECRET'
+  // Slack設定（Slackアプリの設定から取得）
+  SLACK_SIGNING_SECRET: 'YOUR_SLACK_SIGNING_SECRET',
+  SLACK_BOT_TOKEN: 'YOUR_SLACK_BOT_TOKEN_HERE'  // ボタンカウント更新用
 };
 
 /**
@@ -104,12 +105,11 @@ function recordResponse(responseData, sheetName) {
       sheet = spreadsheet.insertSheet(sheetName);
       
       // ヘッダー行を追加
-      sheet.getRange(1, 1, 1, 10).setValues([[
+      sheet.getRange(1, 1, 1, 9).setValues([[
         '日時',
         'ユーザーID', 
         'ユーザー名',
         '実名',
-        '部署ID',
         '部署名',
         '絵文字',
         'チャンネルID',
@@ -118,7 +118,7 @@ function recordResponse(responseData, sheetName) {
       ]]);
       
       // ヘッダー行のスタイル設定
-      const headerRange = sheet.getRange(1, 1, 1, 10);
+      const headerRange = sheet.getRange(1, 1, 1, 9);
       headerRange.setBackground('#4A90E2');
       headerRange.setFontColor('white');
       headerRange.setFontWeight('bold');
@@ -130,7 +130,6 @@ function recordResponse(responseData, sheetName) {
       responseData.userId,
       responseData.userName,
       responseData.userRealName,
-      responseData.departmentId,
       responseData.departmentName,
       responseData.emoji,
       responseData.channelId,
@@ -151,7 +150,16 @@ function recordResponse(responseData, sheetName) {
  */
 function updateButtonCounts(payload, clickedDepartmentId) {
   try {
-    // 簡単な応答を返す（実際のカウント更新は複雑なので省略）
+    const channel = payload.channel;
+    const message = payload.message;
+    const messageTs = message.ts;
+    
+    // 現在のメッセージのボタンカウントを取得・更新
+    const updatedBlocks = updateMessageBlocks(message.blocks, clickedDepartmentId, messageTs, channel.id);
+    
+    // Slack APIでメッセージを更新
+    updateSlackMessage(channel.id, messageTs, updatedBlocks);
+    
     return ContentService
       .createTextOutput('応答を記録しました ✅')
       .setMimeType(ContentService.MimeType.TEXT);
@@ -161,6 +169,123 @@ function updateButtonCounts(payload, clickedDepartmentId) {
     return ContentService
       .createTextOutput('OK')
       .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+/**
+ * メッセージのブロックを更新してカウントを増やす
+ */
+function updateMessageBlocks(blocks, clickedDepartmentId, messageTs, channelId) {
+  try {
+    // 部署別カウントを取得
+    const departmentCounts = getDepartmentCountsFromSheet(messageTs, channelId);
+    
+    return blocks.map(block => {
+      if (block.type === 'actions' && block.elements) {
+        block.elements = block.elements.map(element => {
+          if (element.action_id && element.action_id.startsWith('safety_')) {
+            const deptId = element.action_id.replace('safety_', '');
+            const count = departmentCounts[deptId] || 0;
+            
+            // ボタンテキストを更新（例: "🏢 総務部 (3)"）
+            const buttonValue = JSON.parse(element.value || '{}');
+            const emoji = buttonValue.emoji || '';
+            const deptName = buttonValue.departmentName || deptId;
+            
+            element.text.text = `${emoji} ${deptName} (${count})`;
+          }
+          return element;
+        });
+      }
+      return block;
+    });
+    
+  } catch (error) {
+    console.error('ブロック更新エラー:', error);
+    return blocks;
+  }
+}
+
+/**
+ * スプレッドシートから部署別カウントを取得
+ */
+function getDepartmentCountsFromSheet(messageTs, channelId) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    
+    // 訓練用と本番用の両方をチェック
+    const sheets = [
+      spreadsheet.getSheetByName(CONFIG.TRAINING_SHEET),
+      spreadsheet.getSheetByName(CONFIG.PRODUCTION_SHEET)
+    ].filter(sheet => sheet !== null);
+    
+    const counts = {};
+    
+    sheets.forEach(sheet => {
+      const data = sheet.getDataRange().getValues();
+      const responses = data.slice(1); // ヘッダー行を除く
+      
+      responses.forEach(row => {
+        const rowMessageTs = row[8]; // メッセージTS列
+        const rowChannelId = row[6];  // チャンネルID列
+        const departmentName = row[4]; // 部署名列
+        
+        if (rowMessageTs === messageTs && rowChannelId === channelId) {
+          // 部署名から部署IDを推測（emoji除去）
+          const deptId = departmentName.replace(/^[\u{1F000}-\u{1FFFF}]\s*/u, '').toLowerCase().replace(/[^\w]/g, '');
+          counts[deptId] = (counts[deptId] || 0) + 1;
+        }
+      });
+    });
+    
+    return counts;
+    
+  } catch (error) {
+    console.error('カウント取得エラー:', error);
+    return {};
+  }
+}
+
+/**
+ * Slack APIでメッセージを更新
+ */
+function updateSlackMessage(channelId, messageTs, blocks) {
+  try {
+    // Bot Tokenが必要（設定に追加する必要あり）
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken) {
+      console.warn('Bot Tokenが設定されていないため、メッセージ更新をスキップします');
+      return;
+    }
+    
+    const payload = {
+      'channel': channelId,
+      'ts': messageTs,
+      'blocks': JSON.stringify(blocks)
+    };
+    
+    const options = {
+      'method': 'POST',
+      'headers': {
+        'Authorization': 'Bearer ' + botToken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      'payload': Object.keys(payload).map(key => 
+        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+      ).join('&')
+    };
+    
+    const response = UrlFetchApp.fetch('https://slack.com/api/chat.update', options);
+    const data = JSON.parse(response.getContentText());
+    
+    if (!data.ok) {
+      console.error('Slackメッセージ更新失敗:', data.error);
+    } else {
+      console.log('Slackメッセージ更新成功');
+    }
+    
+  } catch (error) {
+    console.error('Slackメッセージ更新エラー:', error);
   }
 }
 

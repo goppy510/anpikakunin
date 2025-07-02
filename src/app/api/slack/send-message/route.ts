@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
             text: `${dept.emoji} ${dept.name} (0)`
           },
           action_id: `safety_${dept.id}`,
-          style: dept.color === "#EF4444" ? "danger" : dept.color === "#10B981" ? "primary" : undefined,
+          style: undefined,
           value: JSON.stringify({ departmentId: dept.id, departmentName: dept.name, emoji: dept.emoji })
         }))
       });

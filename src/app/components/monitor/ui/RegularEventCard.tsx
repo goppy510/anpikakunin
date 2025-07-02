@@ -1,7 +1,15 @@
 import cn from "classnames";
 import { EventItem } from "../types/EventItem";
-import { getIntensityColor, needsDarkText, getIntensityBorderClass } from "../utils/intensityUtils";
-import { formatJPDateTime, renderDepth, renderMagnitude } from "../utils/dateUtils";
+import {
+  getIntensityColor,
+  needsDarkText,
+  getIntensityBorderClass,
+} from "../utils/intensityUtils";
+import {
+  formatJPDateTime,
+  renderDepth,
+  renderMagnitude,
+} from "../utils/dateUtils";
 
 interface RegularEventCardProps {
   event: EventItem;
@@ -9,7 +17,11 @@ interface RegularEventCardProps {
   onClick: () => void;
 }
 
-export function RegularEventCard({ event, isSelected, onClick }: RegularEventCardProps) {
+export function RegularEventCard({
+  event,
+  isSelected,
+  onClick,
+}: RegularEventCardProps) {
   const yahooUrl = `https://typhoon.yahoo.co.jp/weather/jp/earthquake/${event.eventId}.html`;
 
   return (
@@ -39,7 +51,6 @@ export function RegularEventCard({ event, isSelected, onClick }: RegularEventCar
         >
           {event.maxInt === "-" ? "震度\n調査中" : event.maxInt ?? "-"}
         </div>
-
 
         {/* 地震情報エリア */}
         <div className="flex-1 min-w-0">

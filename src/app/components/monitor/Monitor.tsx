@@ -122,51 +122,52 @@ export default function Monitor() {
   };
 
   // データベースからイベントを読み込み（初期化時のみ）
+  const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false);
+  
   useEffect(() => {
-    let hasLoaded = false;
-    
     const loadEventsFromDB = async () => {
-      if (hasLoaded) return; // 重複実行を防止
-      hasLoaded = true;
+      if (hasLoadedFromDB) return; // 重複実行を防止
       
       try {
+        console.log("Starting to load events from DB...");
         const storedEvents = await EventDatabase.getLatestEvents(30);
+        console.log("Loaded", storedEvents.length, "events from DB");
+        console.log("Current globalEvents length:", globalEvents.length);
         
         if (storedEvents.length > 0) {
-          // 読み込み時に確定状態を修正（震源と震度の両方があれば確定）
-          const correctedEvents = storedEvents.map(event => {
-            const hasHypocenter = event.hypocenter?.name && event.hypocenter.name !== "震源不明";
-            const hasIntensity = event.maxInt && event.maxInt !== "0" && event.maxInt !== "-";
-            const shouldBeConfirmed = hasHypocenter && hasIntensity;
-            
-            return {
-              ...event,
-              isConfirmed: shouldBeConfirmed || event.isConfirmed
-            };
-          });
+          // DBからのイベントを重複チェックして追加
+          console.log("Adding", storedEvents.length, "events to state");
+          console.log("Sample event to add:", storedEvents[0]);
+          console.log("Current globalEvents before adding from DB:", globalEvents.map(e => e.eventId));
           
-          // 初期化時のみ、空の状態に対してイベントを設定
-          if (correctedEvents.length > 0 && globalEvents.length === 0) {
-            console.log("Loading events from DB on startup:", correctedEvents.length);
-            correctedEvents.forEach(event => {
+          storedEvents.forEach((event, index) => {
+            // 既に同じeventIdが存在しない場合のみ追加
+            const exists = globalEvents.some(e => e.eventId === event.eventId);
+            if (!exists) {
+              console.log(`Adding event ${index + 1}/${storedEvents.length}:`, event.eventId, "isConfirmed:", event.isConfirmed);
               addEvent(event);
-            });
-          }
+            } else {
+              console.log(`Skipping duplicate event:`, event.eventId);
+            }
+          });
+          console.log("Finished adding all events from DB");
         }
+        
+        setHasLoadedFromDB(true);
       } catch (error) {
         console.error("IndexedDBからのイベント読み込みに失敗:", error);
+        setHasLoadedFromDB(true); // エラー時もフラグを設定して無限ループを防止
       } finally {
+        console.log("DB loading completed, setting isLoadingFromDB to false");
         setIsLoadingFromDB(false);
       }
     };
 
-    // globalEventsが空の場合のみ実行（初期化時のみ）
-    if (globalEvents.length === 0 && !hasLoaded) {
+    // 初回のみ実行
+    if (!hasLoadedFromDB) {
       loadEventsFromDB();
-    } else {
-      setIsLoadingFromDB(false);
     }
-  }, [globalEvents.length]); // globalEvents.lengthのみ監視
+  }, [hasLoadedFromDB]); // hasLoadedFromDBのみ監視
 
 
   // 震度を数値に変換するヘルパー関数

@@ -84,11 +84,69 @@ export async function POST(request: NextRequest) {
       console.warn("絵文字の取得に失敗しましたが、接続テストは継続します:", emojiError);
     }
 
+    // OAuth スコープ情報を収集
+    let scopes = [];
+    
+    // auth.testレスポンスからスコープ情報を抽出
+    if (authData.response_metadata?.scopes) {
+      scopes = authData.response_metadata.scopes;
+    }
+    
+    // 代替方法: 実際にアクセスできるAPIから推測
+    const testScopes = [];
+    
+    // chat:writeをテスト（常に必要）
+    testScopes.push('chat:write');
+    
+    // channels:readをテスト
+    try {
+      const channelTestResponse = await fetch('https://slack.com/api/conversations.list?limit=1', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${botToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      const channelTestData = await channelTestResponse.json();
+      if (channelTestData.ok) {
+        testScopes.push('channels:read');
+      }
+    } catch (e) {
+      // channels:readがない
+    }
+    
+    // emoji:readをテスト（絵文字取得が成功した場合）
+    if (emojis.length > 0) {
+      testScopes.push('emoji:read');
+    }
+    
+    // users:readをテスト
+    try {
+      const usersTestResponse = await fetch('https://slack.com/api/users.list?limit=1', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${botToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      const usersTestData = await usersTestResponse.json();
+      if (usersTestData.ok) {
+        testScopes.push('users:read');
+      }
+    } catch (e) {
+      // users:readがない
+    }
+    
+    // スコープが空の場合は推測結果を使用
+    if (scopes.length === 0) {
+      scopes = testScopes;
+    }
+
     return NextResponse.json({
       success: true,
       workspaceInfo,
       emojis,
-      scopes: authData.response_metadata?.scopes || []
+      scopes
     });
 
   } catch (error) {

@@ -227,7 +227,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             console.log("Adding new event to WebSocketProvider list");
             eventToSave = {
               ...event,
-              isConfirmed: event.isConfirmed !== undefined ? event.isConfirmed : true,
+              isConfirmed: event.isConfirmed !== undefined ? event.isConfirmed : false,
               currentMaxInt: event.currentMaxInt || event.maxInt,
               maxInt: event.maxInt
             };
