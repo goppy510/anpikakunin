@@ -2,7 +2,7 @@
 import type { IDBPDatabase } from "idb";
 import { openDB, DBSchema } from "idb";
 
-const SCHEMA_VERSION = 6551; // 地震イベントストア追加のためバージョンアップ
+const SCHEMA_VERSION = 6552; // 安否確認設定ストア追加のためバージョンアップ
 
 /* ---------- DB スキーマ ---------- */
 export interface AppDBSchema extends DBSchema {
@@ -33,6 +33,26 @@ export interface AppDBSchema extends DBSchema {
       'by-created-at': string; // createdAt
     };
   };
+  safetySettings: {
+    key: string; // 設定ID（通常は'default'）
+    value: {
+      id: string;
+      slack: {
+        workspaces: Array<any>;
+        channels: Array<any>;
+      };
+      training: {
+        isEnabled: boolean;
+        testMessage: string;
+        enableMentions: boolean;
+        mentionTargets: string[];
+        scheduledTrainings: Array<any>;
+      };
+      isActive: boolean;
+      createdAt: string; // 保存日時
+      updatedAt: string; // 更新日時
+    };
+  };
 }
 
 /* ---------- ブラウザのみ openDB ---------- */
@@ -54,6 +74,11 @@ export async function getDb(): Promise<IDBPDatabase<AppDBSchema> | undefined> {
         // インデックスの作成
         eventStore.createIndex("by-arrival-time", "arrivalTime");
         eventStore.createIndex("by-created-at", "createdAt");
+      }
+
+      // 安否確認設定ストアの作成
+      if (!db.objectStoreNames.contains("safetySettings")) {
+        db.createObjectStore("safetySettings", { keyPath: "id" });
       }
     },
   });
