@@ -55,51 +55,23 @@ export class SlackApiService {
   static async getChannelInfo(botToken: string, channelId: string): Promise<{
     success: boolean;
     channelName?: string;
+    isPrivate?: boolean;
     error?: string;
   }> {
     try {
-      const response = await this.makeApiCall('/conversations.info', botToken, {
-        channel: channelId
-      });
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: response.error || 'チャンネル情報の取得に失敗'
-        };
-      }
-
-      return {
-        success: true,
-        channelName: response.channel?.name || 'Unknown Channel'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'チャンネル情報取得エラー'
-      };
-    }
-  }
-
-  // Webhook URLのテスト
-  static async testWebhookUrl(webhookUrl: string, testMessage: string = 'Webhook接続テスト'): Promise<{
-    success: boolean;
-    error?: string;
-  }> {
-    try {
-      const response = await fetch('/api/slack/test-webhook', {
+      const response = await fetch('/api/slack/get-channel-info', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ webhookUrl, testMessage })
+        body: JSON.stringify({ botToken, channelId })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         return {
           success: false,
-          error: errorData.error || 'Webhook テスト失敗'
+          error: errorData.error || 'チャンネル情報取得失敗'
         };
       }
 
@@ -107,10 +79,67 @@ export class SlackApiService {
       return data;
 
     } catch (error) {
-      console.error("Webhook テストエラー:", error);
+      console.error("チャンネル情報取得エラー:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Webhook テストエラー'
+        error: error instanceof Error ? error.message : 'チャンネル情報取得エラー'
+      };
+    }
+  }
+
+  // メッセージを送信
+  static async sendMessage({
+    botToken,
+    channelId,
+    title,
+    message,
+    isTraining = false,
+    departments = []
+  }: {
+    botToken: string;
+    channelId: string;
+    title: string;
+    message: string;
+    isTraining?: boolean;
+    departments?: any[];
+  }): Promise<{
+    success: boolean;
+    messageTs?: string;
+    channel?: string;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch('/api/slack/send-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          botToken,
+          channelId,
+          title,
+          message,
+          isTraining,
+          departments
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return {
+          success: false,
+          error: errorData.error || 'メッセージ送信失敗'
+        };
+      }
+
+      const data = await response.json();
+      return data;
+
+    } catch (error) {
+      console.error("Slackメッセージ送信エラー:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'メッセージ送信エラー'
       };
     }
   }

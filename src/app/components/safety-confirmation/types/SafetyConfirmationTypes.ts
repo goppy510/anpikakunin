@@ -36,10 +36,7 @@ export interface SlackChannel {
   id: string;
   workspaceId: string;
   channelId: string;
-  channelName: string;
-  webhookUrl?: string;
-  isEnabled: boolean;
-  priority: 'high' | 'medium' | 'low'; // 送信優先度
+  channelName?: string; // 自動取得されるため任意
   channelType: 'production' | 'training'; // 本番用・訓練用チャンネル区分
   healthStatus?: 'healthy' | 'error' | 'unknown'; // ヘルスチェック状況
 }

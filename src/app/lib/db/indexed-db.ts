@@ -2,7 +2,7 @@
 import type { IDBPDatabase } from "idb";
 import { openDB, DBSchema } from "idb";
 
-const SCHEMA_VERSION = 6552; // 安否確認設定ストア追加のためバージョンアップ
+const SCHEMA_VERSION = 6553; // 安否確認応答ストア追加のためバージョンアップ
 
 /* ---------- DB スキーマ ---------- */
 export interface AppDBSchema extends DBSchema {
@@ -31,6 +31,25 @@ export interface AppDBSchema extends DBSchema {
     indexes: {
       'by-arrival-time': string; // arrivalTime
       'by-created-at': string; // createdAt
+    };
+  };
+  safetyResponses: {
+    key: string; // response id
+    value: {
+      id: string;
+      userId: string;
+      userName: string;
+      userRealName: string;
+      departmentId: string;
+      departmentName: string;
+      timestamp: string;
+      channelId: string;
+      messageTs: string;
+      eventId?: string;
+    };
+    indexes: {
+      'by-timestamp': string;
+      'by-message': string; // messageTs + channelId
     };
   };
   safetySettings: {
@@ -74,6 +93,13 @@ export async function getDb(): Promise<IDBPDatabase<AppDBSchema> | undefined> {
         // インデックスの作成
         eventStore.createIndex("by-arrival-time", "arrivalTime");
         eventStore.createIndex("by-created-at", "createdAt");
+      }
+
+      // 安否確認応答ストアの作成
+      if (!db.objectStoreNames.contains("safetyResponses")) {
+        const responseStore = db.createObjectStore("safetyResponses", { keyPath: "id" });
+        responseStore.createIndex("by-timestamp", "timestamp");
+        responseStore.createIndex("by-message", ["messageTs", "channelId"]);
       }
 
       // 安否確認設定ストアの作成

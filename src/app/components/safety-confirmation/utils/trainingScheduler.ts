@@ -132,19 +132,98 @@ export class TrainingScheduleExecutor {
   }
 
   private async sendTrainingNotification(training: ScheduledTraining) {
-    // 実際のSlack送信ロジック
-    // この部分は実際のSlack API実装時に詳細化
-    const notification = {
-      workspaceId: training.workspaceId,
-      message: training.message,
-      isTraining: true,
-      enableMentions: training.enableMentions,
-      mentionTargets: training.mentionTargets,
-      timestamp: new Date().toISOString()
-    };
+    try {
+      // 設定を読み込み
+      const { SafetySettingsDatabase } = await import('./settingsDatabase');
+      const config = await SafetySettingsDatabase.loadSettings();
+      
+      if (!config) {
+        throw new Error('安否確認設定が見つかりません');
+      }
 
-    // TODO: Slack WebSocket or REST API送信
-    console.log('訓練通知送信:', notification);
+      // ワークスペースを取得
+      const targetWorkspace = training.workspaceId 
+        ? config.slack.workspaces.find(ws => ws.id === training.workspaceId)
+        : config.slack.workspaces.find(ws => ws.isEnabled); // 最初の有効ワークスペース
+
+      if (!targetWorkspace) {
+        throw new Error('送信先ワークスペースが見つかりません');
+      }
+
+      if (!targetWorkspace.botToken) {
+        throw new Error('ワークスペースのBot Tokenが設定されていません');
+      }
+
+      // 訓練用チャンネルを取得
+      const trainingChannels = config.slack.channels.filter(ch => 
+        ch.workspaceId === targetWorkspace.id && ch.channelType === 'training'
+      );
+
+      if (trainingChannels.length === 0) {
+        throw new Error('訓練用チャンネルが設定されていません');
+      }
+
+      const { SlackApiService } = await import('./slackApiService');
+      const results = [];
+
+      // 各訓練チャンネルに送信
+      for (const channel of trainingChannels) {
+        console.log(`訓練メッセージを送信中: ${channel.channelId}`);
+        
+        // チャンネル情報を事前に確認
+        try {
+          const channelInfo = await SlackApiService.getChannelInfo(
+            targetWorkspace.botToken,
+            channel.channelId
+          );
+          
+          if (!channelInfo.success) {
+            console.warn(`⚠️ チャンネル情報取得失敗: ${channel.channelId}`, channelInfo.error);
+          } else {
+            console.log(`チャンネル情報: ${channel.channelId} - ${channelInfo.channelName} (プライベート: ${channelInfo.isPrivate})`);
+          }
+        } catch (error) {
+          console.warn(`チャンネル情報取得エラー: ${channel.channelId}`, error);
+        }
+        
+        const result = await SlackApiService.sendMessage({
+          botToken: targetWorkspace.botToken,
+          channelId: channel.channelId,
+          title: targetWorkspace.template.title,
+          message: training.message,
+          isTraining: true,
+          departments: targetWorkspace.departments
+        });
+
+        results.push({ channel: channel.channelId, result });
+        
+        if (result.success) {
+          console.log(`✅ 訓練メッセージ送信成功: ${channel.channelId}`);
+        } else {
+          console.error(`❌ 訓練メッセージ送信失敗: ${channel.channelId}`, result.error);
+          
+          // エラーの原因を詳しく表示
+          if (result.error?.includes('チャンネルが見つかりません')) {
+            console.error(`📝 解決方法: チャンネルID ${channel.channelId} が正しいか確認し、プライベートチャンネルの場合はボットを招待してください。`);
+          }
+        }
+      }
+
+      // 結果をチョック
+      const successCount = results.filter(r => r.result.success).length;
+      const totalCount = results.length;
+      
+      if (successCount > 0) {
+        console.log(`🎉 訓練メッセージ送信完了: ${successCount}/${totalCount}チャンネル成功`);
+      } else {
+        throw new Error('すべてのチャンネルで送信に失敗しました');
+      }
+      
+      return { success: true, results };
+    } catch (error) {
+      console.error('訓練通知送信エラー:', error);
+      throw error;
+    }
   }
 
   private async updateLastExecuted(trainingId: string) {
