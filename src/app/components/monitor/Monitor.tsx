@@ -69,10 +69,6 @@ export default function Monitor() {
   const [notificationThreshold, setNotificationThreshold] = useState(1); // デフォルト震度1
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
   const [showSafetySettings, setShowSafetySettings] = useState<boolean>(false);
-  const [storageInfo, setStorageInfo] = useState<{
-    totalEvents: number;
-    estimatedSizeMB: number;
-  } | null>(null);
   const audioManager = useRef<AudioManager>(AudioManager.getInstance());
 
   // 設定の初期化（ローカルストレージから読み込み）
@@ -172,27 +168,6 @@ export default function Monitor() {
     }
   }, [globalEvents.length]); // globalEvents.lengthのみ監視
 
-  // ストレージ使用量の定期更新
-  useEffect(() => {
-    const updateStorageInfo = async () => {
-      try {
-        const estimate = await EventDatabase.getStorageEstimate();
-        setStorageInfo({
-          totalEvents: estimate.totalEvents,
-          estimatedSizeMB: estimate.estimatedSizeMB
-        });
-      } catch (error) {
-        console.error("ストレージ使用量の取得に失敗:", error);
-      }
-    };
-
-    // 初期化時に実行
-    updateStorageInfo();
-
-    // 30秒ごとに更新
-    const interval = setInterval(updateStorageInfo, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: string): number => {
@@ -440,25 +415,6 @@ export default function Monitor() {
       <div className="z-[5] flex flex-1 max-h-full overflow-hidden">
         {/* ---- event list ---- */}
         <aside className="flex flex-col w-[380px] max-w-[380px]">
-          <header className="py-1 bg-red-600 text-center border-b-2 border-red-700">
-            <h3 className="text-xs font-bold text-white tracking-wide leading-tight">
-              地震情報 [{events.length}件] 
-              {isLoadingFromDB && <span className="text-yellow-300">(読み込み中...)</span>}
-              <br />
-              <span className="text-xs text-gray-200">
-                音声通知: 震度{notificationThreshold}以上 | 表示: 全データ
-              </span>
-              {storageInfo && (
-                <>
-                  <br />
-                  <span className="text-xs text-blue-300">
-                    DB: {storageInfo.totalEvents}件 ({storageInfo.estimatedSizeMB}MB)
-                  </span>
-                </>
-              )}
-            </h3>
-          </header>
-
           <ul className="flex-1 overflow-y-auto m-0 p-2 bg-black max-h-full">
             {events.slice(0, 50).map((ev, index) => {
               const isLatest = index === 0;
