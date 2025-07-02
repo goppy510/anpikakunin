@@ -4,15 +4,22 @@ import { useState } from "react";
 import cn from "classnames";
 import { SlackNotificationSettings, SlackWorkspace, SlackChannel, createDefaultWorkspace } from "../types/SafetyConfirmationTypes";
 import { WorkspaceDetailSettings } from "./WorkspaceDetailSettings";
+import { SlackApiService, SlackTestResult } from "../utils/slackApiService";
 
 interface SlackMultiChannelSettingsProps {
   settings: SlackNotificationSettings;
   onUpdate: (settings: SlackNotificationSettings) => void;
+  currentConfig?: any; // 現在の全体設定を受け取る
 }
 
-export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChannelSettingsProps) {
+export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }: SlackMultiChannelSettingsProps) {
   const [activeTab, setActiveTab] = useState<'workspaces' | 'channels'>('workspaces');
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [tokenVerificationStatus, setTokenVerificationStatus] = useState<Record<string, { 
+    status: 'idle' | 'verifying' | 'success' | 'error'; 
+    message?: string;
+    workspaceInfo?: any;
+  }>>({});
 
   const addWorkspace = () => {
     const newWorkspace = createDefaultWorkspace(
@@ -25,13 +32,89 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
     });
   };
 
-  const updateWorkspace = (id: string, updates: Partial<SlackWorkspace>) => {
-    onUpdate({
+  const updateWorkspace = async (id: string, updates: Partial<SlackWorkspace>) => {
+    const newSettings = {
       ...settings,
       workspaces: settings.workspaces.map(ws => 
         ws.id === id ? { ...ws, ...updates } : ws
       )
-    });
+    };
+    
+    onUpdate(newSettings);
+    
+    // 自動保存（接続確認後やトークン更新時）
+    try {
+      const { SafetySettingsDatabase } = await import('../utils/settingsDatabase');
+      if (currentConfig) {
+        await SafetySettingsDatabase.saveSettings({
+          ...currentConfig,
+          slack: newSettings
+        });
+        console.log('ワークスペース設定を自動保存しました');
+      }
+    } catch (error) {
+      console.error('ワークスペース設定の自動保存に失敗:', error);
+    }
+  };
+
+  const verifyBotToken = async (workspaceId: string, botToken: string) => {
+    if (!botToken.trim()) return;
+
+    setTokenVerificationStatus(prev => ({
+      ...prev,
+      [workspaceId]: { status: 'verifying', message: 'トークンを検証中...' }
+    }));
+
+    try {
+      const result = await SlackApiService.testBotToken(botToken);
+      
+      if (result.success) {
+        setTokenVerificationStatus(prev => ({
+          ...prev,
+          [workspaceId]: { 
+            status: 'success', 
+            message: `✓ 接続成功: ${result.workspaceInfo?.name}`,
+            workspaceInfo: result.workspaceInfo
+          }
+        }));
+
+        // ワークスペース情報を更新（既存の名前がある場合は保持）
+        if (result.workspaceInfo) {
+          const currentWorkspace = settings.workspaces.find(ws => ws.id === workspaceId);
+          const currentName = currentWorkspace?.name;
+          
+          // 既存の名前が空またはデフォルト値の場合のみSlackワークスペース名で更新
+          if (!currentName || currentName.trim() === '' || currentName.startsWith('workspace_')) {
+            updateWorkspace(workspaceId, {
+              name: result.workspaceInfo.name || currentName
+            });
+          }
+        }
+
+        // 絵文字情報を更新
+        if (result.emojis && result.emojis.length > 0) {
+          updateWorkspace(workspaceId, {
+            availableEmojis: result.emojis
+          });
+        }
+      } else {
+        setTokenVerificationStatus(prev => ({
+          ...prev,
+          [workspaceId]: { 
+            status: 'error', 
+            message: `✗ ${result.error}` 
+          }
+        }));
+      }
+    } catch (error) {
+      setTokenVerificationStatus(prev => ({
+        ...prev,
+        [workspaceId]: { 
+          status: 'error', 
+          message: `✗ 接続エラー: ${error instanceof Error ? error.message : '不明なエラー'}` 
+        }
+      }));
+    }
   };
 
   const removeWorkspace = (id: string) => {
@@ -55,7 +138,9 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
       channelName: "",
       webhookUrl: "",
       isEnabled: true,
-      priority: 'medium'
+      priority: 'medium',
+      channelType: 'production',
+      healthStatus: 'unknown'
     };
     
     onUpdate({
@@ -103,6 +188,46 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
         {labels[priority]}
       </span>
     );
+  };
+
+  const getHealthStatusBadge = (status: SlackChannel['healthStatus']) => {
+    const styles = {
+      healthy: "bg-green-900 text-green-300 border-green-500",
+      error: "bg-red-900 text-red-300 border-red-500",
+      unknown: "bg-gray-700 text-gray-300 border-gray-500"
+    };
+    
+    const labels = {
+      healthy: "正常",
+      error: "エラー",
+      unknown: "不明"
+    };
+    
+    return (
+      <span className={cn("px-2 py-1 text-xs border rounded", styles[status || 'unknown'])}>
+        {labels[status || 'unknown']}
+      </span>
+    );
+  };
+
+  const performHealthCheck = async (channel: SlackChannel) => {
+    // ヘルステータスを「不明」に設定
+    updateChannel(channel.id, { healthStatus: 'unknown' });
+    
+    try {
+      // TODO: 実際のSlack APIを使ったヘルスチェック実装
+      // とりあえずモック実装
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // チャンネルIDとWebhook URLが設定されているかチェック
+      if (channel.channelId && channel.webhookUrl) {
+        updateChannel(channel.id, { healthStatus: 'healthy' });
+      } else {
+        updateChannel(channel.id, { healthStatus: 'error' });
+      }
+    } catch (error) {
+      updateChannel(channel.id, { healthStatus: 'error' });
+    }
   };
 
   return (
@@ -175,13 +300,41 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
                           OAuth & Permissions → Bot User OAuth Token
                         </span>
                       </label>
-                      <input
-                        type="password"
-                        value={workspace.botToken}
-                        onChange={(e) => updateWorkspace(workspace.id, { botToken: e.target.value })}
-                        placeholder="xoxb-YOUR-TEAM-ID-YOUR-USER-ID-YOUR-BOT-TOKEN"
-                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
-                      />
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={workspace.botToken}
+                            onChange={(e) => updateWorkspace(workspace.id, { botToken: e.target.value })}
+                            placeholder="xoxb-YOUR-TEAM-ID-YOUR-USER-ID-YOUR-BOT-TOKEN"
+                            className="flex-1 px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
+                          />
+                          <button
+                            onClick={() => verifyBotToken(workspace.id, workspace.botToken)}
+                            disabled={!workspace.botToken || tokenVerificationStatus[workspace.id]?.status === 'verifying'}
+                            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                          >
+                            {tokenVerificationStatus[workspace.id]?.status === 'verifying' ? '検証中...' : '接続確認'}
+                          </button>
+                        </div>
+                        
+                        {/* 検証結果表示 */}
+                        {tokenVerificationStatus[workspace.id] && (
+                          <div className={cn(
+                            "text-xs px-3 py-2 rounded flex items-center gap-2",
+                            tokenVerificationStatus[workspace.id].status === 'success' 
+                              ? "bg-green-900 text-green-300 border border-green-500"
+                              : tokenVerificationStatus[workspace.id].status === 'error'
+                              ? "bg-red-900 text-red-300 border border-red-500"
+                              : "bg-blue-900 text-blue-300 border border-blue-500"
+                          )}>
+                            {tokenVerificationStatus[workspace.id].status === 'verifying' && (
+                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+                            )}
+                            <span>{tokenVerificationStatus[workspace.id].message}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -202,7 +355,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
                         onClick={() => setSelectedWorkspaceId(workspace.id)}
                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
                       >
-                        詳細設定
+                        通知設定
                       </button>
 
                       <button
@@ -306,25 +459,64 @@ export function SlackMultiChannelSettings({ settings, onUpdate }: SlackMultiChan
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      チャンネル種別
+                    </label>
+                    <select
+                      value={channel.channelType}
+                      onChange={(e) => updateChannel(channel.id, { channelType: e.target.value as 'production' | 'training' })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm"
+                    >
+                      <option value="production">本番用</option>
+                      <option value="training">訓練用</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      優先度
+                    </label>
+                    <select
+                      value={channel.priority}
+                      onChange={(e) => updateChannel(channel.id, { priority: e.target.value as SlackChannel['priority'] })}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm"
+                    >
+                      <option value="high">高優先度</option>
+                      <option value="medium">中優先度</option>
+                      <option value="low">低優先度</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      ヘルスステータス
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {getHealthStatusBadge(channel.healthStatus)}
+                      <button
+                        onClick={() => performHealthCheck(channel)}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
+                      >
+                        テスト
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        優先度
-                      </label>
-                      <select
-                        value={channel.priority}
-                        onChange={(e) => updateChannel(channel.id, { priority: e.target.value as SlackChannel['priority'] })}
-                        className="px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm"
-                      >
-                        <option value="high">高優先度</option>
-                        <option value="medium">中優先度</option>
-                        <option value="low">低優先度</option>
-                      </select>
-                    </div>
-
                     <div className="flex items-center gap-2">
                       {getPriorityBadge(channel.priority)}
+                      <span className={cn(
+                        "px-2 py-1 text-xs rounded border",
+                        channel.channelType === 'production' 
+                          ? "bg-green-900 text-green-300 border-green-500"
+                          : "bg-yellow-900 text-yellow-300 border-yellow-500"
+                      )}>
+                        {channel.channelType === 'production' ? '本番用' : '訓練用'}
+                      </span>
                       <label className="flex items-center cursor-pointer">
                         <input
                           type="checkbox"
