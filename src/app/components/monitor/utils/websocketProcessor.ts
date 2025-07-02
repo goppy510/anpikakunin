@@ -324,10 +324,10 @@ export const processWebSocketMessage = (message: WebSocketMessage): EventItem | 
     let maxInt = getMaxIntensity(message);
     console.log("Extracted max intensity:", maxInt);
     
-    // 震源速報の場合は確認中として扱う
+    // 震源速報の場合は震源調査中として扱う
     if (isHypocenterInfo && maxInt === "0") {
-      maxInt = "-"; // 確認中
-      console.log("震源速報のため震度を確認中（-）に設定");
+      maxInt = "-"; // 震源調査中
+      console.log("震源速報のため震度を震源調査中（-）に設定");
     }
     
     console.log("Final max intensity:", maxInt);
@@ -365,7 +365,7 @@ export const processWebSocketMessage = (message: WebSocketMessage): EventItem | 
       arrivalTime,
       originTime,
       maxInt,
-      currentMaxInt: isHypocenterInfo ? "-" : maxInt, // 震源速報は確認中
+      currentMaxInt: isHypocenterInfo ? "-" : maxInt, // 震源速報は震源調査中
       magnitude: magnitudeValue ? { value: magnitudeValue } : undefined,
       hypocenter: {
         name: hypoName,
@@ -798,10 +798,10 @@ export class WebSocketManager {
         eventId: eventId,
         arrivalTime: time,
         originTime: time,
-        maxInt: "-", // リアルタイムデータは確認中として扱う
+        maxInt: "-", // リアルタイムデータは震源調査中として扱う
         currentMaxInt: "1", // 初期値
         magnitude: undefined,
-        hypocenter: { name: "確認中" },
+        hypocenter: { name: "震源 調査中" },
         isConfirmed: false,
         isTest: message.head.test || false
       };

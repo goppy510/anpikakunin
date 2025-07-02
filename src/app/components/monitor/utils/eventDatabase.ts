@@ -68,7 +68,7 @@ export class EventDatabase {
   }
 
   // 最新のイベントを取得（到達時刻順）
-  static async getLatestEvents(limit: number = 50): Promise<EventItem[]> {
+  static async getLatestEvents(limit: number = 30): Promise<EventItem[]> {
     try {
       const db = await getDb();
       if (!db) {
@@ -139,7 +139,7 @@ export class EventDatabase {
   }
 
   // 古いイベントを削除（保存件数制限）
-  static async cleanupOldEvents(keepCount: number = 100): Promise<void> {
+  static async cleanupOldEvents(keepCount: number = 30): Promise<void> {
     try {
       const db = await getDb();
       if (!db) {
@@ -208,6 +208,91 @@ export class EventDatabase {
     } catch (error) {
       console.error("データベース統計の取得に失敗:", error);
       return { totalEvents: 0, confirmedEvents: 0, testEvents: 0 };
+    }
+  }
+
+  // 日付ベースでの古いイベント削除（7日以上前のデータを削除）
+  static async cleanupOldEventsByDate(retentionDays: number = 7): Promise<void> {
+    try {
+      const db = await getDb();
+      if (!db) {
+        console.warn("IndexedDB not available (SSR)");
+        return;
+      }
+
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+      const cutoffTime = cutoffDate.toISOString();
+
+      // 全イベントを取得して日付フィルタリング
+      const allEvents = await db.getAll("earthquakeEvents");
+      const eventsToDelete = allEvents.filter(event => {
+        const eventTime = new Date(event.arrivalTime || event.createdAt);
+        return eventTime < cutoffDate;
+      });
+
+      if (eventsToDelete.length === 0) {
+        console.log(`保持期間 ${retentionDays}日 以内のイベントのみのため、日付ベースクリーンアップ不要`);
+        return;
+      }
+
+      const tx = db.transaction("earthquakeEvents", "readwrite");
+      for (const event of eventsToDelete) {
+        await tx.store.delete(event.eventId);
+      }
+      await tx.done;
+
+      console.log(`${retentionDays}日以上前の地震イベント ${eventsToDelete.length}件 を削除しました`);
+    } catch (error) {
+      console.error("日付ベースの古いイベントクリーンアップに失敗:", error);
+    }
+  }
+
+  // 包括的なクリーンアップ（件数制限と日付制限の両方を適用）
+  static async performComprehensiveCleanup(keepCount: number = 30, retentionDays: number = 7): Promise<void> {
+    try {
+      console.log("=== 包括的なIndexedDBクリーンアップ開始 ===");
+      
+      // まず日付ベースでの削除
+      await this.cleanupOldEventsByDate(retentionDays);
+      
+      // 次に件数制限での削除
+      await this.cleanupOldEvents(keepCount);
+      
+      // 統計情報を取得して結果を表示
+      const stats = await this.getStats();
+      console.log(`クリーンアップ完了: 現在の保存イベント数 ${stats.totalEvents}件`);
+      
+      console.log("=== 包括的なIndexedDBクリーンアップ完了 ===");
+    } catch (error) {
+      console.error("包括的なクリーンアップに失敗:", error);
+    }
+  }
+
+  // ストレージ使用量の概算を取得
+  static async getStorageEstimate(): Promise<{
+    totalEvents: number;
+    estimatedSizeKB: number;
+    estimatedSizeMB: number;
+  }> {
+    try {
+      const stats = await this.getStats();
+      // 1イベントあたり約2KB と仮定（JSON文字列化後のサイズ）
+      const estimatedSizeKB = stats.totalEvents * 2;
+      const estimatedSizeMB = estimatedSizeKB / 1024;
+      
+      return {
+        totalEvents: stats.totalEvents,
+        estimatedSizeKB,
+        estimatedSizeMB: Math.round(estimatedSizeMB * 100) / 100
+      };
+    } catch (error) {
+      console.error("ストレージ使用量の取得に失敗:", error);
+      return {
+        totalEvents: 0,
+        estimatedSizeKB: 0,
+        estimatedSizeMB: 0
+      };
     }
   }
 

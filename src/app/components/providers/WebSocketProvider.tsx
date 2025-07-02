@@ -170,9 +170,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       console.log("⏳ Waiting for server-side cleanup completion...");
       await new Promise(resolve => setTimeout(resolve, 4000));
       
-      // データベースの古いイベントをクリーンアップ（100件保持）
-      EventDatabase.cleanupOldEvents(100).catch(error => {
-        console.warn("IndexedDB cleanup failed (continuing anyway):", error);
+      // データベースの包括的なクリーンアップ（30件保持、7日間保持）
+      EventDatabase.performComprehensiveCleanup(30, 7).catch(error => {
+        console.warn("IndexedDB comprehensive cleanup failed (continuing anyway):", error);
       });
       
     } catch (error) {
@@ -238,8 +238,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             updatedEvents = [eventToSave, ...prevEvents];
           }
           
-          // IndexedDBに自動保存
-          EventDatabase.saveEvent(eventToSave).catch(error => {
+          // IndexedDBに自動保存 + 定期的なクリーンアップ
+          EventDatabase.saveEvent(eventToSave).then(async () => {
+            // 10回に1回の確率で包括的なクリーンアップを実行
+            if (Math.random() < 0.1) {
+              console.log("🧹 定期的なIndexedDBクリーンアップを実行中...");
+              await EventDatabase.performComprehensiveCleanup(30, 7);
+            }
+          }).catch(error => {
             console.error("WebSocketイベントのIndexedDB自動保存に失敗:", error);
           });
           

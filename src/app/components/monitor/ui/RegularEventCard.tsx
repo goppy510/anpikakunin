@@ -37,7 +37,7 @@ export function RegularEventCard({ event, isSelected, onClick }: RegularEventCar
             borderRadius: "4px",
           }}
         >
-          {event.maxInt ?? "-"}
+          {event.maxInt === "-" ? "震度\n調査中" : event.maxInt ?? "-"}
         </div>
 
 
@@ -47,7 +47,7 @@ export function RegularEventCard({ event, isSelected, onClick }: RegularEventCar
           <div className="text-white font-bold leading-relaxed mb-2 text-xl">
             <span className="truncate block">
               {!event.isConfirmed ? (
-                <span className="text-orange-300">確認中</span>
+                <span className="text-orange-300">震源 調査中</span>
               ) : (
                 event.hypocenter?.name ?? "震源不明"
               )}

@@ -69,6 +69,10 @@ export default function Monitor() {
   const [notificationThreshold, setNotificationThreshold] = useState(1); // デフォルト震度1
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
   const [showSafetySettings, setShowSafetySettings] = useState<boolean>(false);
+  const [storageInfo, setStorageInfo] = useState<{
+    totalEvents: number;
+    estimatedSizeMB: number;
+  } | null>(null);
   const audioManager = useRef<AudioManager>(AudioManager.getInstance());
 
   // 設定の初期化（ローカルストレージから読み込み）
@@ -130,7 +134,7 @@ export default function Monitor() {
       hasLoaded = true;
       
       try {
-        const storedEvents = await EventDatabase.getLatestEvents(100);
+        const storedEvents = await EventDatabase.getLatestEvents(30);
         
         if (storedEvents.length > 0) {
           // 読み込み時に確定状態を修正（震源と震度の両方があれば確定）
@@ -167,6 +171,28 @@ export default function Monitor() {
       setIsLoadingFromDB(false);
     }
   }, [globalEvents.length]); // globalEvents.lengthのみ監視
+
+  // ストレージ使用量の定期更新
+  useEffect(() => {
+    const updateStorageInfo = async () => {
+      try {
+        const estimate = await EventDatabase.getStorageEstimate();
+        setStorageInfo({
+          totalEvents: estimate.totalEvents,
+          estimatedSizeMB: estimate.estimatedSizeMB
+        });
+      } catch (error) {
+        console.error("ストレージ使用量の取得に失敗:", error);
+      }
+    };
+
+    // 初期化時に実行
+    updateStorageInfo();
+
+    // 30秒ごとに更新
+    const interval = setInterval(updateStorageInfo, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // 震度を数値に変換するヘルパー関数
   const getIntensityValue = (intensity: string): number => {
@@ -422,6 +448,14 @@ export default function Monitor() {
               <span className="text-xs text-gray-200">
                 音声通知: 震度{notificationThreshold}以上 | 表示: 全データ
               </span>
+              {storageInfo && (
+                <>
+                  <br />
+                  <span className="text-xs text-blue-300">
+                    DB: {storageInfo.totalEvents}件 ({storageInfo.estimatedSizeMB}MB)
+                  </span>
+                </>
+              )}
             </h3>
           </header>
 
