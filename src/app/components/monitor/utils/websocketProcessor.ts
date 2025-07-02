@@ -458,73 +458,49 @@ export class WebSocketManager {
         // 契約確認に失敗した場合でも続行を試みる
       }
       
-      // WebSocket接続前に最強レベルのクリーンアップを実行
-      console.log("=== MAXIMUM STRENGTH WebSocket Connection Cleanup ===");
-      console.log("🚀 Performing MAXIMUM AGGRESSIVE connection cleanup...");
+      // WebSocket接続前に軽量なクリーンアップを実行
+      console.log("=== WebSocket Connection Cleanup ===");
       
       try {
-        // 最終段階: 10回試行で絶対に全接続を消去
-        for (let attempt = 1; attempt <= 10; attempt++) {
-          console.log(`🛡️ ULTIMATE cleanup attempt ${attempt}/10`);
+        // 軽量化: 3回試行のみ
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          console.log(`🧹 Cleanup attempt ${attempt}/3`);
           
           const socketList = await this.apiService.socketList();
           const connectionCount = socketList.items?.length || 0;
           console.log(`📡 Found ${connectionCount} existing connections`);
           
           if (connectionCount === 0) {
-            console.log("✨ ULTIMATE SUCCESS: No connections remain");
+            console.log("✅ No connections to clean up");
             break;
           }
           
-          console.log(`💥 ULTIMATE FORCE ${attempt}: Destroying ALL ${connectionCount} connections...`);
-          
-          // バッチ処理で同時に全てクローズ
-          const batchSize = 5; // 5件ずつバッチ処理
-          const batches = [];
-          for (let i = 0; i < socketList.items!.length; i += batchSize) {
-            batches.push(socketList.items!.slice(i, i + batchSize));
-          }
-          
-          for (const [batchIndex, batch] of batches.entries()) {
-            console.log(`🔥 Processing batch ${batchIndex + 1}/${batches.length}`);
-            const closePromises = batch.map(async (socket, index) => {
-              console.log(`⚙️ ULTIMATE DESTROY: ${socket.id} (status: ${socket.status})`);
-              try {
-                await this.apiService.socketClose(socket.id);
-                console.log(`✅ OBLITERATED: ${socket.id}`);
-              } catch (error) {
-                console.error(`⚠️ Obliteration failed for ${socket.id}:`, error);
-                // エラーでも続行
-              }
-            });
-            
-            await Promise.all(closePromises);
-            
-            // バッチ間の小休止
-            if (batchIndex < batches.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 500));
+          // 全接続を並列でクローズ（シンプル版）
+          const closePromises = socketList.items!.map(async (socket) => {
+            try {
+              await this.apiService.socketClose(socket.id);
+              console.log(`✅ Closed socket ${socket.id}`);
+            } catch (error) {
+              console.warn(`⚠️ Failed to close ${socket.id}:`, error.message);
             }
+          });
+          
+          await Promise.all(closePromises);
+          
+          // 短い待機時間
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
-          
-          console.log(`🎆 ULTIMATE BATCH COMPLETE: Attempted ${connectionCount} destructions`);
-          
-          // 段階的待機時間増加 (最大10秒)
-          const waitTime = Math.min(attempt * 1000, 10000);
-          console.log(`⏰ ULTIMATE COOLING: ${waitTime}ms...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
         
-        console.log("🎆 ULTIMATE CLEANUP COMPLETED");
+        console.log("🎯 Cleanup completed");
         
-        // 最終確認待機 (サーバー側の処理完了を待つ)
-        console.log("🕰️ ULTIMATE WAIT: Ensuring server-side cleanup completion...");
-        await new Promise(resolve => setTimeout(resolve, 8000));
+        // 短い待機時間でサーバー側の処理完了を待つ
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
       } catch (cleanupError) {
-        console.warn("💥 MAXIMUM cleanup failed (emergency fallback):", cleanupError.message);
-        // 緊急時は最大待機
-        console.log("🚨 EMERGENCY: Maximum fallback wait...");
-        await new Promise(resolve => setTimeout(resolve, 6000));
+        console.warn("🚨 Cleanup failed (continuing anyway):", cleanupError.message);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // WebSocket接続開始（詳細ログ付き）

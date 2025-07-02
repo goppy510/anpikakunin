@@ -15,6 +15,11 @@ export interface NotificationTemplate {
   customFields: Record<string, string>;
 }
 
+export interface SlackEmoji {
+  name: string;
+  url: string;
+}
+
 export interface SlackWorkspace {
   id: string;
   name: string;
@@ -24,6 +29,7 @@ export interface SlackWorkspace {
   departments: DepartmentStamp[];
   template: NotificationTemplate;
   conditions: NotificationConditions;
+  availableEmojis?: SlackEmoji[]; // ワークスペースで利用可能な絵文字
 }
 
 export interface SlackChannel {
@@ -34,6 +40,8 @@ export interface SlackChannel {
   webhookUrl?: string;
   isEnabled: boolean;
   priority: 'high' | 'medium' | 'low'; // 送信優先度
+  channelType: 'production' | 'training'; // 本番用・訓練用チャンネル区分
+  healthStatus?: 'healthy' | 'error' | 'unknown'; // ヘルスチェック状況
 }
 
 export interface SlackNotificationSettings {
@@ -46,6 +54,7 @@ export interface NotificationConditions {
   targetPrefectures: string[]; // 対象都道府県コード
   enableMentions: boolean; // メンション有効化
   mentionTargets: string[]; // メンション対象（@channel, @here, 個別ユーザー）
+  notificationType: 'intensity' | 'comprehensive'; // 震度速報 or 震源・震度に関する情報
 }
 
 export interface ScheduledTraining {
@@ -154,7 +163,8 @@ export const DEFAULT_NOTIFICATION_CONDITIONS: NotificationConditions = {
   minIntensity: 3,
   targetPrefectures: ["13", "14", "12"], // 東京、神奈川、千葉
   enableMentions: false,
-  mentionTargets: []
+  mentionTargets: [],
+  notificationType: 'comprehensive' // デフォルトは震源・震度に関する情報
 };
 
 // ワークスペース作成時のデフォルト設定
@@ -167,3 +177,37 @@ export const createDefaultWorkspace = (id: string, name: string = ""): SlackWork
   template: { ...DEFAULT_NOTIFICATION_TEMPLATE },
   conditions: { ...DEFAULT_NOTIFICATION_CONDITIONS }
 });
+
+// 訓練モード用メッセージ変換関数
+export const formatTrainingMessage = (template: NotificationTemplate, isTrainingMode: boolean): NotificationTemplate => {
+  if (!isTrainingMode) {
+    return template;
+  }
+
+  return {
+    ...template,
+    title: `【訓練です】 ${template.title} 【訓練です】`,
+    message: `【訓練です】\n\n${template.message}\n\n【訓練です】`
+  };
+};
+
+// 送信対象チャンネルフィルタリング関数
+export const getTargetChannels = (
+  channels: SlackChannel[], 
+  isTrainingMode: boolean
+): SlackChannel[] => {
+  return channels.filter(channel => {
+    // 無効なチャンネルは除外
+    if (!channel.isEnabled) {
+      return false;
+    }
+    
+    // 訓練モードの場合は訓練用チャンネルのみ
+    if (isTrainingMode) {
+      return channel.channelType === 'training';
+    }
+    
+    // 本番モードの場合は本番用チャンネルのみ
+    return channel.channelType === 'production';
+  });
+};

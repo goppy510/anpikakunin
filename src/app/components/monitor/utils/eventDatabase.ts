@@ -29,7 +29,6 @@ export class EventDatabase {
       };
 
       await db.put("earthquakeEvents", storedEvent);
-      console.log(`地震イベント ${event.eventId} をIndexedDBに保存しました`);
     } catch (error) {
       console.error("地震イベントの保存に失敗:", error);
     }
@@ -61,7 +60,6 @@ export class EventDatabase {
       }
 
       await tx.done;
-      console.log(`地震イベント ${events.length}件 をIndexedDBに一括保存しました`);
     } catch (error) {
       console.error("地震イベントの一括保存に失敗:", error);
     }

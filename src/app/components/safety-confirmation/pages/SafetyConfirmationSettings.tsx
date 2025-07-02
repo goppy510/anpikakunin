@@ -11,6 +11,7 @@ import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettin
 import { TrainingScheduler } from "../components/TrainingScheduler";
 import { Settings } from "../../../lib/db/settings";
 import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
+import { SafetySettingsDatabase } from "../utils/settingsDatabase";
 
 interface SafetyConfirmationSettingsProps {
   onClose: () => void;
@@ -36,9 +37,23 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
   useEffect(() => {
     const loadConfig = async () => {
       try {
+        // まずIndexedDBから読み込み
+        const dbConfig = await SafetySettingsDatabase.loadSettings();
+        if (dbConfig) {
+          console.log("IndexedDBから安否確認設定を読み込みました");
+          setConfig(dbConfig);
+          return;
+        }
+
+        // IndexedDBにない場合は従来のLocalStorageから読み込み
         const savedConfig = await Settings.get("safetyConfirmationConfig");
         if (savedConfig) {
+          console.log("LocalStorageから安否確認設定を読み込みました");
           setConfig(savedConfig);
+          
+          // IndexedDBに移行保存
+          await SafetySettingsDatabase.saveSettings(savedConfig);
+          console.log("設定をIndexedDBに移行保存しました");
         }
       } catch (error) {
         console.error("設定の読み込みに失敗しました:", error);
@@ -50,11 +65,20 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
 
   const [activeTab, setActiveTab] = useState<'slack' | 'preview' | 'training'>('slack');
 
-  const updateSlackSettings = (newSettings: SlackNotificationSettings) => {
-    setConfig(prev => ({
-      ...prev,
+  const updateSlackSettings = async (newSettings: SlackNotificationSettings) => {
+    const newConfig = {
+      ...config,
       slack: newSettings
-    }));
+    };
+    setConfig(newConfig);
+    
+    // 自動保存
+    try {
+      await SafetySettingsDatabase.saveSettings(newConfig);
+      console.log('Slack設定を自動保存しました');
+    } catch (error) {
+      console.error('Slack設定の自動保存に失敗:', error);
+    }
   };
 
 
@@ -67,7 +91,12 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
 
   const handleSave = async () => {
     try {
+      // IndexedDBに保存
+      await SafetySettingsDatabase.saveSettings(config);
+      
+      // 下位互換性のためLocalStorageにも保存
       await Settings.set("safetyConfirmationConfig", config);
+      
       alert("設定を保存しました");
       onClose();
     } catch (error) {
@@ -141,7 +170,8 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
           {activeTab === 'slack' && (
             <SlackSettingsTab 
               settings={config.slack} 
-              onUpdate={updateSlackSettings} 
+              onUpdate={updateSlackSettings}
+              currentConfig={config}
             />
           )}
           {activeTab === 'preview' && (
@@ -163,16 +193,13 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
         <div className="flex justify-end gap-4 p-6 border-t border-gray-700">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
           >
-            キャンセル
+            閉じる
           </button>
-          <button
-            onClick={handleSave}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-          >
-            設定を保存
-          </button>
+          <div className="text-xs text-gray-400 flex items-center">
+            設定は自動保存されます
+          </div>
         </div>
       </div>
     </div>
@@ -182,16 +209,19 @@ export function SafetyConfirmationSettings({ onClose }: SafetyConfirmationSettin
 // Slack設定タブ
 function SlackSettingsTab({ 
   settings, 
-  onUpdate 
+  onUpdate,
+  currentConfig
 }: { 
   settings: SlackNotificationSettings; 
-  onUpdate: (newSettings: SlackNotificationSettings) => void; 
+  onUpdate: (newSettings: SlackNotificationSettings) => void;
+  currentConfig: any;
 }) {
   return (
     <div className="p-6">
       <SlackMultiChannelSettings 
         settings={settings}
         onUpdate={onUpdate}
+        currentConfig={currentConfig}
       />
     </div>
   );
