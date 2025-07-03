@@ -83,61 +83,15 @@ function handleReactionAdded(event) {
     
     console.log('リアクション情報:', { userId: user, reaction, channelId, messageTs });
     
-    // ボットのリアクションは記録しない
-    if (isBotUser(user)) {
-      console.log('ボットのリアクションのためスキップ:', user);
-      return ContentService
-        .createTextOutput('OK')
-        .setMimeType(ContentService.MimeType.TEXT);
-    }
-    
-    // 安否確認メッセージかどうかを判定
-    if (!isSafetyConfirmationMessage(channelId, messageTs)) {
-      console.log('安否確認メッセージではないためスキップ');
-      return ContentService
-        .createTextOutput('OK')
-        .setMimeType(ContentService.MimeType.TEXT);
-    }
-    
-    // 部署絵文字かどうかを判定
-    const departmentInfo = getDepartmentByEmoji(reaction);
-    if (!departmentInfo) {
-      console.log('部署絵文字ではないためスキップ:', reaction);
-      return ContentService
-        .createTextOutput('OK')
-        .setMimeType(ContentService.MimeType.TEXT);
-    }
-    
-    console.log('部署情報:', departmentInfo);
-    
-    // ユーザー情報を取得
-    const userInfo = getUserInfo(user);
-    
-    // 訓練用か本番用かを判定
-    const isTraining = isTrainingMessage(channelId, messageTs);
-    const sheetName = isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
-    
-    console.log('メッセージ種別:', { isTraining, sheetName });
-    
-    // スプレッドシートに記録
-    recordResponse({
-      timestamp: new Date(),
-      userId: user,
-      userName: userInfo.name || user,
-      userRealName: userInfo.real_name || userInfo.name || user,
-      departmentName: `${departmentInfo.emoji} ${departmentInfo.name}`,
-      emoji: departmentInfo.emoji,
-      channelId: channelId,
-      channelName: getChannelName(channelId),
-      messageTs: messageTs,
-      isTraining: isTraining
-    }, sheetName);
-    
-    console.log('=== リアクション処理完了 ===');
-    
-    return ContentService
+    // 3秒タイムアウト対応：即座にレスポンスを返す
+    const response = ContentService
       .createTextOutput('OK')
       .setMimeType(ContentService.MimeType.TEXT);
+    
+    // バックグラウンドで非同期処理を実行
+    processReactionAsync(user, reaction, channelId, messageTs);
+    
+    return response;
     
   } catch (error) {
     console.error('リアクション処理エラー:', error);
@@ -148,65 +102,253 @@ function handleReactionAdded(event) {
 }
 
 /**
+ * リアクション処理の非同期実行
+ */
+function processReactionAsync(user, reaction, channelId, messageTs) {
+  try {
+    console.log('=== バックグラウンド処理開始 ===');
+    
+    // ボットのリアクションは記録しない
+    if (isBotUser(user)) {
+      console.log('ボットのリアクションのためスキップ:', user);
+      return;
+    }
+    
+    // 安否確認メッセージかどうかを判定
+    if (!isSafetyConfirmationMessage(channelId, messageTs)) {
+      console.log('安否確認メッセージではないためスキップ');
+      return;
+    }
+    
+    // 部署絵文字かどうかを判定
+    const departmentInfo = getDepartmentByEmoji(reaction);
+    if (!departmentInfo) {
+      console.log('部署絵文字ではないためスキップ:', reaction);
+      return;
+    }
+    
+    console.log('部署情報:', departmentInfo);
+    
+    // ユーザー情報を取得
+    const userInfo = getUserInfo(user);
+    
+    // 訓練用か本番用かを判定
+    const isTraining = isTrainingMessage(channelId, messageTs);
+    
+    // イベント用のシート名を生成（スレッドIDを含む）
+    const eventSheetName = generateEventSheetName(channelId, messageTs, isTraining);
+    
+    console.log('イベントシート名:', eventSheetName);
+    
+    // 重複チェック（同じイベント内でユーザーIDのみでチェック）
+    if (isDuplicateByUserId(user, eventSheetName)) {
+      console.log('重複応答のためスキップ:', user);
+      return;
+    }
+    
+    // スプレッドシートに記録
+    recordResponse({
+      timestamp: new Date(),
+      userId: user,
+      userName: userInfo.name || user,
+      userRealName: userInfo.real_name || userInfo.name || user,
+      departmentId: departmentInfo.id,
+      departmentName: `${departmentInfo.emoji} ${departmentInfo.name}`,
+      emoji: departmentInfo.emoji,
+      channelId: channelId,
+      channelName: getChannelName(channelId),
+      messageTs: messageTs,
+      isTraining: isTraining
+    }, eventSheetName);
+    
+    console.log('=== バックグラウンド処理完了 ===');
+    
+  } catch (error) {
+    console.error('バックグラウンド処理エラー:', error);
+    // エラーログを記録して続行
+  }
+}
+
+/**
+ * イベント用のシート名を生成
+ */
+function generateEventSheetName(channelId, messageTs, isTraining) {
+  try {
+    // メッセージタイムスタンプから日時を生成
+    const timestamp = parseFloat(messageTs);
+    const date = new Date(timestamp * 1000);
+    const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd_HH-mm');
+    
+    // チャンネル名を取得（短縮）
+    const channelName = getChannelName(channelId).substring(0, 10);
+    
+    // シート名を生成
+    const prefix = isTraining ? '訓練' : '本番';
+    const sheetName = `${prefix}_${dateStr}_${channelName}`;
+    
+    console.log('生成されたシート名:', sheetName);
+    return sheetName;
+    
+  } catch (error) {
+    console.error('シート名生成エラー:', error);
+    // エラー時は従来の方式にフォールバック
+    return isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
+  }
+}
+
+/**
+ * 特定のシート内でユーザーIDの重複をチェック
+ */
+function isDuplicateByUserId(userId, sheetName) {
+  try {
+    console.log('=== ユーザーID重複チェック開始 ===');
+    console.log('チェック対象:', { userId, sheetName });
+    
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    
+    // シートが存在しない場合は重複なし
+    if (!sheet) {
+      console.log('シートが存在しないため重複なし');
+      return false;
+    }
+    
+    // シートにデータがない場合は重複なし
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      console.log('データがないため重複なし');
+      return false;
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const responses = data.slice(1); // ヘッダー行を除く
+    
+    console.log('レスポンス件数:', responses.length);
+    
+    for (let i = 0; i < responses.length; i++) {
+      const row = responses[i];
+      // 空行をスキップ
+      if (!row[1]) continue;
+      
+      const rowUserId = String(row[1]); // ユーザーID列
+      
+      console.log(`行${i + 2}: ユーザーID=${rowUserId}`);
+      
+      if (rowUserId === String(userId)) {
+        console.log('重複発見！行:', i + 2);
+        return true;
+      }
+    }
+    
+    console.log('重複なし');
+    return false;
+    
+  } catch (error) {
+    console.error('重複チェックエラー:', error);
+    console.error('エラー詳細:', error.stack);
+    // エラー時は重複ありとして処理を停止（安全側に倒す）
+    return true;
+  }
+}
+
+/**
  * 安否確認応答を処理
  */
 function handleSafetyResponse(payload) {
   try {
-    console.log('=== handleSafetyResponse 開始 ===');
+    console.log('=== ボタン応答処理開始 ===');
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+    
+    // 3秒タイムアウト対応：即座にレスポンスを返す
+    const response = ContentService
+      .createTextOutput('OK')
+      .setMimeType(ContentService.MimeType.TEXT);
+    
+    // バックグラウンドでボタン処理を実行
+    processButtonAsync(payload);
+    
+    return response;
+    
+  } catch (error) {
+    console.error('ボタン応答処理エラー:', error);
+    return ContentService
+      .createTextOutput('Error: ' + error.message)
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+/**
+ * ボタン処理の非同期実行
+ */
+function processButtonAsync(payload) {
+  try {
+    console.log('=== ボタンバックグラウンド処理開始 ===');
     
     const action = payload.actions[0];
     const user = payload.user;
     const channel = payload.channel;
     const message = payload.message;
+    const messageTs = message.ts;
     
-    // ボタンの値を解析
+    console.log('ボタン情報:', {
+      actionId: action.action_id,
+      userId: user.id,
+      channelId: channel.id,
+      messageTs: messageTs
+    });
+    
+    // 部署IDを抽出
+    const departmentId = action.action_id.replace('safety_', '');
     const buttonValue = JSON.parse(action.value || '{}');
-    const departmentId = buttonValue.departmentId || action.action_id.replace('safety_', '');
-    const departmentName = buttonValue.departmentName || departmentId;
-    const emoji = buttonValue.emoji || '';
     
-    console.log('部署情報:', { departmentId, departmentName, emoji });
+    console.log('部署情報:', { departmentId, buttonValue });
+    
+    // ユーザー情報を取得
+    const userInfo = getUserInfo(user.id);
     
     // 訓練用か本番用かを判定
-    const isTraining = message.text && message.text.includes('訓練');
-    const sheetName = isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
+    const isTraining = isTrainingMessage(channel.id, messageTs);
     
-    // 重複チェック
-    if (isDuplicateResponseByDepartment(user.id, message.ts, channel.id, departmentId)) {
-      console.log('重複応答を検出:', user.name, '部署:', departmentId);
-      // 重複の場合はSlackに即座に応答を返して処理終了
-      return ContentService
-        .createTextOutput('')
-        .setMimeType(ContentService.MimeType.TEXT);
+    // イベント用のシート名を生成
+    const eventSheetName = generateEventSheetName(channel.id, messageTs, isTraining);
+    
+    console.log('イベントシート名:', eventSheetName);
+    
+    // 重複チェック（同じイベント内でユーザーIDのみでチェック）
+    if (isDuplicateByUserId(user.id, eventSheetName)) {
+      console.log('重複応答のためスキップ:', user.id);
+      
+      // エフェメラルメッセージで既に応答済みを通知
+      sendEphemeralMessage(channel.id, user.id, '既に応答済みです。');
+      return;
     }
     
     // スプレッドシートに記録
     recordResponse({
       timestamp: new Date(),
       userId: user.id,
-      userName: user.name,
-      userRealName: user.profile?.real_name || user.name,
+      userName: userInfo.name || user.id,
+      userRealName: userInfo.real_name || userInfo.name || user.id,
       departmentId: departmentId,
-      departmentName: departmentName,
-      emoji: emoji,
+      departmentName: `${buttonValue.emoji || ''} ${buttonValue.departmentName || departmentId}`,
+      emoji: buttonValue.emoji || '',
       channelId: channel.id,
-      channelName: channel.name,
-      messageTs: message.ts,
+      channelName: getChannelName(channel.id),
+      messageTs: messageTs,
       isTraining: isTraining
-    }, sheetName);
+    }, eventSheetName);
     
-    console.log('スプレッドシート記録完了');
+    // ボタンカウントを更新
+    updateButtonCounts(payload, departmentId);
     
-    // Slackには空の応答を返す
-    return ContentService
-      .createTextOutput('')
-      .setMimeType(ContentService.MimeType.TEXT);
+    // エフェメラルメッセージで応答完了を通知
+    sendEphemeralMessage(channel.id, user.id, `✅ ${buttonValue.departmentName || departmentId} で応答を記録しました。`);
+    
+    console.log('=== ボタンバックグラウンド処理完了 ===');
     
   } catch (error) {
-    console.error('安否確認応答処理エラー:', error);
-    return ContentService
-      .createTextOutput('')
-      .setMimeType(ContentService.MimeType.TEXT);
+    console.error('ボタンバックグラウンド処理エラー:', error);
+    // エラーログを記録して続行
   }
 }
 
@@ -412,7 +554,7 @@ function updateButtonCounts(payload, clickedDepartmentId) {
     
     // 現在のメッセージのボタンカウントを取得・更新
     console.log('ブロック更新開始');
-    const updatedBlocks = updateMessageBlocks(message.blocks, clickedDepartmentId, messageTs, channel.id);
+    const updatedBlocks = updateMessageBlocks(message.blocks, messageTs, channel.id);
     
     console.log('更新されたブロック:', JSON.stringify(updatedBlocks, null, 2));
     
@@ -430,10 +572,10 @@ function updateButtonCounts(payload, clickedDepartmentId) {
 /**
  * メッセージのブロックを更新してカウントを増やす
  */
-function updateMessageBlocks(blocks, clickedDepartmentId, messageTs, channelId) {
+function updateMessageBlocks(blocks, messageTs, channelId) {
   try {
-    // 部署別カウントを取得
-    const departmentCounts = getDepartmentCountsFromSheet(messageTs, channelId);
+    // 部署別カウントを取得（新しいイベント単位でカウント）
+    const departmentCounts = getDepartmentCountsFromEventSheet(messageTs, channelId);
     
     console.log('取得したカウント:', departmentCounts);
     
@@ -505,7 +647,59 @@ function getRespondedUsers(messageTs, channelId) {
 }
 
 /**
- * スプレッドシートから部署別カウントを取得（重複除去）
+ * イベントシートから部署別カウントを取得
+ */
+function getDepartmentCountsFromEventSheet(messageTs, channelId) {
+  try {
+    console.log('=== イベントカウント取得開始 ===');
+    console.log('検索条件:', { messageTs, channelId });
+    
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    
+    // 訓練か本番かを判定してシート名を生成
+    const isTraining = isTrainingMessage(channelId, messageTs);
+    const eventSheetName = generateEventSheetName(channelId, messageTs, isTraining);
+    
+    console.log('対象シート:', eventSheetName);
+    
+    const sheet = spreadsheet.getSheetByName(eventSheetName);
+    
+    // シートが存在しない場合は空のカウント
+    if (!sheet) {
+      console.log('シートが存在しないため空のカウント');
+      return {};
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const responses = data.slice(1); // ヘッダー行を除く
+    
+    console.log('データ行数:', responses.length);
+    
+    const counts = {};
+    
+    responses.forEach((row, index) => {
+      if (!row[1]) return; // 空行をスキップ
+      
+      const departmentId = String(row[4]); // 部署ID列
+      
+      console.log(`行${index + 2}: 部署ID=${departmentId}`);
+      
+      // 部署IDでカウント
+      counts[departmentId] = (counts[departmentId] || 0) + 1;
+    });
+    
+    console.log('最終カウント:', counts);
+    console.log('=== イベントカウント取得完了 ===');
+    return counts;
+    
+  } catch (error) {
+    console.error('イベントカウント取得エラー:', error);
+    return {};
+  }
+}
+
+/**
+ * スプレッドシートから部署別カウントを取得（重複除去）- 旧関数
  */
 function getDepartmentCountsFromSheet(messageTs, channelId) {
   try {
@@ -799,10 +993,14 @@ function getUserInfo(userId) {
  * 訓練メッセージかどうかを判定
  */
 function isTrainingMessage(channelId, messageTs) {
-  // メッセージ内容を確認して訓練かどうかを判定
+  // メッセージ内容のみで判定（チャンネルは関係なし）
   try {
+    console.log('=== 訓練判定開始 ===');
+    console.log('対象:', { channelId, messageTs });
+    
     const botToken = CONFIG.SLACK_BOT_TOKEN;
     if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      console.warn('Bot Tokenが設定されていないため判定不可、デフォルトで本番扱い');
       return false;
     }
     
@@ -816,15 +1014,71 @@ function isTrainingMessage(channelId, messageTs) {
     );
     
     const data = JSON.parse(response.getContentText());
+    console.log('Slack API応答:', data.ok);
+    
     if (data.ok && data.messages.length > 0) {
-      const messageText = data.messages[0].text || '';
-      return messageText.includes('訓練');
+      const message = data.messages[0];
+      const messageText = message.text || '';
+      const blocks = message.blocks || [];
+      
+      console.log('メッセージテキスト:', messageText);
+      console.log('ブロック数:', blocks.length);
+      
+      // メッセージテキストで判定
+      let isTraining = messageText.includes('訓練') || 
+                      messageText.toLowerCase().includes('training') ||
+                      messageText.toLowerCase().includes('test') ||
+                      messageText.includes('テスト');
+      
+      // ブロック内のテキストも確認
+      if (!isTraining) {
+        blocks.forEach(block => {
+          // テキストブロック
+          if (block.text && block.text.text) {
+            const blockText = block.text.text;
+            if (blockText.includes('訓練') || 
+                blockText.toLowerCase().includes('training') ||
+                blockText.toLowerCase().includes('test') ||
+                blockText.includes('テスト')) {
+              isTraining = true;
+            }
+          }
+          
+          // セクションブロック内のテキスト
+          if (block.type === 'section' && block.text && block.text.text) {
+            const sectionText = block.text.text;
+            if (sectionText.includes('訓練') || 
+                sectionText.toLowerCase().includes('training') ||
+                sectionText.toLowerCase().includes('test') ||
+                sectionText.includes('テスト')) {
+              isTraining = true;
+            }
+          }
+          
+          // ヘッダーブロック
+          if (block.type === 'header' && block.text && block.text.text) {
+            const headerText = block.text.text;
+            if (headerText.includes('訓練') || 
+                headerText.toLowerCase().includes('training') ||
+                headerText.toLowerCase().includes('test') ||
+                headerText.includes('テスト')) {
+              isTraining = true;
+            }
+          }
+        });
+      }
+      
+      console.log('最終判定結果:', isTraining);
+      console.log('判定根拠 - メッセージテキスト:', messageText);
+      return isTraining;
     }
     
+    console.log('メッセージ取得失敗、デフォルトで本番扱い');
     return false;
     
   } catch (error) {
     console.error('メッセージ内容取得エラー:', error);
+    console.log('エラー時はデフォルトで本番扱い');
     return false;
   }
 }
@@ -924,5 +1178,56 @@ function testGASSetup() {
     
   } catch (error) {
     console.error('❌ GAS設定エラー:', error);
+  }
+}
+
+/**
+ * 新しいイベントベースシステムのテスト
+ */
+function testEventBasedSystem() {
+  console.log('=== イベントベースシステムテスト ===');
+  
+  try {
+    // テスト用のメッセージタイムスタンプ
+    const testMessageTs = String(Date.now() / 1000);
+    const testChannelId = 'C_TEST_CHANNEL';
+    
+    // 1. シート名生成テスト
+    const eventSheetName = generateEventSheetName(testChannelId, testMessageTs, false);
+    console.log('✅ イベントシート名生成成功:', eventSheetName);
+    
+    // 2. 重複チェックテスト（最初は重複なし）
+    const isDuplicate1 = isDuplicateByUserId('U_TEST_001', eventSheetName);
+    console.log('✅ 重複チェック1（重複なし）:', isDuplicate1);
+    
+    // 3. テストデータ追加
+    recordResponse({
+      timestamp: new Date(),
+      userId: 'U_TEST_001',
+      userName: 'test_user_001',
+      userRealName: 'テストユーザー001',
+      departmentId: 'dev',
+      departmentName: ':dev: 開発',
+      emoji: ':dev:',
+      channelId: testChannelId,
+      channelName: 'test-channel',
+      messageTs: testMessageTs,
+      isTraining: false
+    }, eventSheetName);
+    
+    console.log('✅ テストデータ追加成功');
+    
+    // 4. 重複チェックテスト（今度は重複あり）
+    const isDuplicate2 = isDuplicateByUserId('U_TEST_001', eventSheetName);
+    console.log('✅ 重複チェック2（重複あり）:', isDuplicate2);
+    
+    // 5. 異なるユーザーで重複チェック（重複なし）
+    const isDuplicate3 = isDuplicateByUserId('U_TEST_002', eventSheetName);
+    console.log('✅ 重複チェック3（異なるユーザー、重複なし）:', isDuplicate3);
+    
+    console.log('✅ イベントベースシステムテスト完了');
+    
+  } catch (error) {
+    console.error('❌ イベントベースシステムテストエラー:', error);
   }
 }
