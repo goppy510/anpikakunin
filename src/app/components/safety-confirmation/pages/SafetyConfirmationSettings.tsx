@@ -658,19 +658,29 @@ function MessageTab({
                     </div>
                   )}
                   
-                  {/* 部署スタンプ */}
+                  {/* 部署ボタン */}
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-gray-700">安否確認（該当部署のスタンプを押してください）:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedWorkspace.departments.map(dept => (
+                    <div className="text-sm font-medium text-gray-700">
+                      <strong>安否確認（該当部署のボタンを押してください）</strong>
+                    </div>
+                    <div className="text-xs text-gray-500 flex items-center gap-1 mb-2">
+                      <span>⚠️</span>
+                      <span>一人一回のみ回答可能です</span>
+                    </div>
+                    
+                    {/* ボタンプレビュー */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {selectedWorkspace.departments.map((dept, index) => (
                         <button
                           key={dept.id}
-                          className="flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 text-xs"
-                          style={{ borderColor: dept.color }}
+                          className="px-3 py-2 rounded text-sm font-medium border-2 bg-white transition-colors"
+                          style={{ 
+                            borderColor: dept.color,
+                            color: dept.color
+                          }}
+                          disabled
                         >
-                          <span>{dept.emoji}</span>
-                          <span>{dept.name}</span>
-                          <span className="text-gray-500">(0)</span>
+                          {dept.emoji} {dept.name} ({index % 3 === 0 ? 3 : index % 3 === 1 ? 1 : 0})
                         </button>
                       ))}
                     </div>
@@ -692,7 +702,8 @@ function MessageTab({
             <h4 className="text-white font-medium mb-2">プレビュー設定</h4>
             <ul className="text-sm text-gray-300 space-y-1">
               <li>• 実際の通知では地震の詳細情報が自動で挿入されます</li>
-              <li>• スタンプの数字は実際に押された人数が表示されます</li>
+              <li>• リアクションは一人一つまで、同じ絵文字は重複できません</li>
+              <li>• リアクション数はSlackの標準機能で自動表示されます</li>
               <li>• 地図リンクは実際の地震位置にリンクされます</li>
             </ul>
           </div>
@@ -846,19 +857,29 @@ function TrainingPreview({
                 </div>
               )}
               
-              {/* 部署スタンプ */}
+              {/* 部署ボタン */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-gray-700">安否確認（該当部署のスタンプを押してください）:</div>
-                <div className="flex flex-wrap gap-1">
-                  {selectedWorkspace.departments.map(dept => (
+                <div className="text-sm font-medium text-gray-700">
+                  <strong>安否確認（該当部署のボタンを押してください）</strong>
+                </div>
+                <div className="text-xs text-gray-500 flex items-center gap-1 mb-2">
+                  <span>⚠️</span>
+                  <span>一人一回のみ回答可能です</span>
+                </div>
+                
+                {/* ボタンプレビュー */}
+                <div className="grid grid-cols-2 gap-2">
+                  {selectedWorkspace.departments.map((dept, index) => (
                     <button
                       key={dept.id}
-                      className="flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 text-xs"
-                      style={{ borderColor: dept.color }}
+                      className="px-3 py-2 rounded text-sm font-medium border-2 bg-yellow-50 transition-colors"
+                      style={{ 
+                        borderColor: dept.color,
+                        color: dept.color
+                      }}
+                      disabled
                     >
-                      <span>{dept.emoji}</span>
-                      <span>{dept.name}</span>
-                      <span className="text-gray-500">(0)</span>
+                      {dept.emoji} {dept.name} ({index % 2 === 0 ? 2 : 0})
                     </button>
                   ))}
                 </div>

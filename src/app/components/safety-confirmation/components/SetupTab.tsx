@@ -1,12 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import cn from "classnames";
 
 export function SetupTab() {
   const [activeStep, setActiveStep] = useState<number>(1);
   const [gasUrl, setGasUrl] = useState("");
   const [spreadsheetId, setSpreadsheetId] = useState("");
+  const [botToken, setBotToken] = useState("");
+
+  // 設定の読み込み
+  useEffect(() => {
+    const loadGasSettings = () => {
+      const savedGasUrl = localStorage.getItem('gas_url');
+      const savedSpreadsheetId = localStorage.getItem('spreadsheet_id');
+      const savedBotToken = localStorage.getItem('gas_bot_token');
+      
+      if (savedGasUrl) setGasUrl(savedGasUrl);
+      if (savedSpreadsheetId) setSpreadsheetId(savedSpreadsheetId);
+      if (savedBotToken) setBotToken(savedBotToken);
+    };
+    
+    loadGasSettings();
+  }, []);
+
+  // 設定の保存
+  const saveGasSettings = () => {
+    if (gasUrl) localStorage.setItem('gas_url', gasUrl);
+    if (spreadsheetId) localStorage.setItem('spreadsheet_id', spreadsheetId);
+    if (botToken) localStorage.setItem('gas_bot_token', botToken);
+    alert('GAS設定を保存しました');
+  };
 
   const steps = [
     { id: 1, title: "GAS プロジェクト作成", completed: false },
@@ -16,14 +40,48 @@ export function SetupTab() {
     { id: 5, title: "動作確認", completed: false }
   ];
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("クリップボードにコピーしました");
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("クリップボードにコピーしました");
+    } catch (error) {
+      console.error('コピーエラー:', error);
+      alert('コピーに失敗しました');
+    }
+  };
+
+  const copyGasScript = async () => {
+    try {
+      // gas-safety-responses.jsファイルから最新のスクリプトを読み込み
+      const response = await fetch('/gas-safety-responses.js');
+      if (!response.ok) {
+        throw new Error('GASスクリプトの読み込みに失敗しました');
+      }
+      
+      let gasScript = await response.text();
+      
+      // 設定値を置換
+      gasScript = gasScript.replace(
+        /SPREADSHEET_ID: 'YOUR_SPREADSHEET_ID_HERE'/g,
+        `SPREADSHEET_ID: '${spreadsheetId || 'YOUR_SPREADSHEET_ID_HERE'}'`
+      );
+      
+      gasScript = gasScript.replace(
+        /SLACK_BOT_TOKEN: 'YOUR_SLACK_BOT_TOKEN_HERE'/g,
+        `SLACK_BOT_TOKEN: '${botToken || 'YOUR_SLACK_BOT_TOKEN_HERE'}'`
+      );
+      
+      await navigator.clipboard.writeText(gasScript);
+      alert("✅ GASスクリプトをクリップボードにコピーしました（最新版・設定値反映済み）");
+    } catch (error) {
+      console.error('GASスクリプトコピーエラー:', error);
+      alert('❌ 最新のGASスクリプトのコピーに失敗しました。手動でコピーしてください。');
+    }
   };
 
   const gasScript = `/**
  * 安否確認システム - Google Apps Script
- * Slack Interactionsを受信してスプレッドシートに記録
+ * Slack Events/Interactionsを受信してスプレッドシートに記録
  */
 
 // 設定
@@ -37,25 +95,46 @@ const CONFIG = {
   
   // Slack設定（Slackアプリの設定から取得）
   SLACK_SIGNING_SECRET: 'YOUR_SLACK_SIGNING_SECRET',
-  SLACK_BOT_TOKEN: 'YOUR_SLACK_BOT_TOKEN_HERE'  // ボタンカウント更新用
+  SLACK_BOT_TOKEN: '${botToken || 'YOUR_SLACK_BOT_TOKEN_HERE'}'  // ボタンカウント更新用
 };
 
 /**
- * Slack Interactionsを受信する関数
+ * Slack Events/Interactionsを受信する関数
  */
 function doPost(e) {
   try {
-    console.log('Slack Interaction受信:', e.postData.contents);
+    console.log('Slack要求受信:', e.postData.contents);
     
-    // Slackからのペイロードを解析
-    const payload = JSON.parse(e.parameter.payload);
+    // Content-Typeによって処理を分岐
+    const contentType = e.postData.type;
     
-    // 安否確認ボタンのクリックかどうかを確認
-    if (payload.type === 'interactive_message' || payload.type === 'block_actions') {
-      const action = payload.actions[0];
+    if (contentType === 'application/json') {
+      // Events API (リアクション)
+      const eventData = JSON.parse(e.postData.contents);
       
-      if (action.action_id && action.action_id.startsWith('safety_')) {
-        return handleSafetyResponse(payload);
+      // URL verification challenge
+      if (eventData.type === 'url_verification') {
+        return ContentService
+          .createTextOutput(eventData.challenge)
+          .setMimeType(ContentService.MimeType.TEXT);
+      }
+      
+      // リアクション追加イベント
+      if (eventData.type === 'event_callback' && 
+          eventData.event.type === 'reaction_added') {
+        return handleReactionAdded(eventData.event);
+      }
+      
+    } else {
+      // Interactive Components (ボタン処理)
+      const payload = JSON.parse(e.parameter.payload);
+      
+      if (payload.type === 'interactive_message' || payload.type === 'block_actions') {
+        const action = payload.actions[0];
+        
+        if (action.action_id && action.action_id.startsWith('safety_')) {
+          return handleSafetyResponse(payload);
+        }
       }
     }
     
@@ -72,14 +151,96 @@ function doPost(e) {
 }
 
 /**
+ * リアクション追加イベントを処理
+ */
+function handleReactionAdded(event) {
+  try {
+    console.log('=== リアクション追加イベント ===');
+    console.log('イベント:', JSON.stringify(event, null, 2));
+    
+    const { user, reaction, item } = event;
+    const channelId = item.channel;
+    const messageTs = item.ts;
+    
+    console.log('リアクション情報:', { userId: user, reaction, channelId, messageTs });
+    
+    // ボットのリアクションは記録しない
+    if (isBotUser(user)) {
+      console.log('ボットのリアクションのためスキップ:', user);
+      return ContentService
+        .createTextOutput('OK')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    
+    // 安否確認メッセージかどうかを判定
+    if (!isSafetyConfirmationMessage(channelId, messageTs)) {
+      console.log('安否確認メッセージではないためスキップ');
+      return ContentService
+        .createTextOutput('OK')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    
+    // 部署絵文字かどうかを判定
+    const departmentInfo = getDepartmentByEmoji(reaction);
+    if (!departmentInfo) {
+      console.log('部署絵文字ではないためスキップ:', reaction);
+      return ContentService
+        .createTextOutput('OK')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    
+    console.log('部署情報:', departmentInfo);
+    
+    // ユーザー情報を取得
+    const userInfo = getUserInfo(user);
+    
+    // 訓練用か本番用かを判定
+    const isTraining = isTrainingMessage(channelId, messageTs);
+    const sheetName = isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
+    
+    console.log('メッセージ種別:', { isTraining, sheetName });
+    
+    // スプレッドシートに記録
+    recordResponse({
+      timestamp: new Date(),
+      userId: user,
+      userName: userInfo.name || user,
+      userRealName: userInfo.real_name || userInfo.name || user,
+      departmentId: departmentInfo.id,
+      departmentName: \`\${departmentInfo.emoji} \${departmentInfo.name}\`,
+      emoji: departmentInfo.emoji,
+      channelId: channelId,
+      channelName: getChannelName(channelId),
+      messageTs: messageTs,
+      isTraining: isTraining
+    }, sheetName);
+    
+    console.log('=== リアクション処理完了 ===');
+    
+    return ContentService
+      .createTextOutput('OK')
+      .setMimeType(ContentService.MimeType.TEXT);
+    
+  } catch (error) {
+    console.error('リアクション処理エラー:', error);
+    return ContentService
+      .createTextOutput('Error: ' + error.message)
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+/**
  * 安否確認応答を処理
  */
 function handleSafetyResponse(payload) {
   try {
+    console.log('=== handleSafetyResponse 開始 ===');
     const action = payload.actions[0];
     const user = payload.user;
     const channel = payload.channel;
     const message = payload.message;
+    
+    console.log('ユーザー:', user.name, 'チャンネル:', channel.name);
     
     // ボタンの値を解析
     const buttonValue = JSON.parse(action.value || '{}');
@@ -87,9 +248,25 @@ function handleSafetyResponse(payload) {
     const departmentName = buttonValue.departmentName || departmentId;
     const emoji = buttonValue.emoji || '';
     
+    console.log('部署情報:', { departmentId, departmentName, emoji });
+    
     // 訓練用か本番用かを判定（メッセージ内容から判断）
     const isTraining = message.text && message.text.includes('訓練');
     const sheetName = isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
+    
+    console.log('シート名:', sheetName, '訓練モード:', isTraining);
+    
+    // 重複チェック
+    if (isDuplicateResponse(user.id, message.ts, channel.id)) {
+      console.log('重複応答を検出:', user.name);
+      
+      // 既に応答済みの場合はエフェメラルメッセージで通知
+      sendEphemeralMessage(channel.id, user.id, '⚠️ 既に応答済みです。安否確認は一人一回のみ回答可能です。');
+      
+      return ContentService
+        .createTextOutput('')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
     
     // スプレッドシートに記録
     recordResponse({
@@ -106,13 +283,95 @@ function handleSafetyResponse(payload) {
       isTraining: isTraining
     }, sheetName);
     
-    return ContentService
-      .createTextOutput('応答を記録しました ✅')
-      .setMimeType(ContentService.MimeType.TEXT);
+    console.log('スプレッドシート記録完了');
+    
+    // Slackに応答（ボタンのカウント更新）
+    console.log('ボタンカウント更新開始');
+    return updateButtonCounts(payload, departmentId);
     
   } catch (error) {
     console.error('安否確認応答処理エラー:', error);
     throw error;
+  }
+}
+
+/**
+ * エフェメラルメッセージを送信（本人のみに表示）
+ */
+function sendEphemeralMessage(channelId, userId, text) {
+  try {
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      console.warn('Bot Tokenが設定されていないため、エフェメラルメッセージをスキップ');
+      return;
+    }
+    
+    const payload = {
+      'channel': channelId,
+      'user': userId,
+      'text': text
+    };
+    
+    const options = {
+      'method': 'POST',
+      'headers': {
+        'Authorization': 'Bearer ' + botToken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      'payload': Object.keys(payload).map(key => 
+        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+      ).join('&')
+    };
+    
+    const response = UrlFetchApp.fetch('https://slack.com/api/chat.postEphemeral', options);
+    const data = JSON.parse(response.getContentText());
+    
+    if (!data.ok) {
+      console.error('エフェメラルメッセージ送信失敗:', data.error);
+    } else {
+      console.log('エフェメラルメッセージ送信成功');
+    }
+    
+  } catch (error) {
+    console.error('エフェメラルメッセージ送信エラー:', error);
+  }
+}
+
+/**
+ * 重複応答をチェック
+ */
+function isDuplicateResponse(userId, messageTs, channelId) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    
+    // 訓練用と本番用の両方をチェック
+    const sheets = [
+      spreadsheet.getSheetByName(CONFIG.TRAINING_SHEET),
+      spreadsheet.getSheetByName(CONFIG.PRODUCTION_SHEET)
+    ].filter(sheet => sheet !== null);
+    
+    for (const sheet of sheets) {
+      const data = sheet.getDataRange().getValues();
+      const responses = data.slice(1); // ヘッダー行を除く
+      
+      for (const row of responses) {
+        const rowUserId = String(row[1]);     // ユーザーID列
+        const rowMessageTs = String(row[9]);  // メッセージTS列
+        const rowChannelId = String(row[7]);  // チャンネルID列
+        
+        if (rowUserId === String(userId) && 
+            rowMessageTs === String(messageTs) && 
+            rowChannelId === String(channelId)) {
+          return true; // 重複発見
+        }
+      }
+    }
+    
+    return false; // 重複なし
+    
+  } catch (error) {
+    console.error('重複チェックエラー:', error);
+    return false; // エラー時は重複なしとして処理続行
   }
 }
 
@@ -169,6 +428,342 @@ function recordResponse(responseData, sheetName) {
     console.error('スプレッドシート記録エラー:', error);
     throw error;
   }
+}
+
+/**
+ * Slackボタンのカウントを更新
+ */
+function updateButtonCounts(payload, clickedDepartmentId) {
+  try {
+    console.log('=== updateButtonCounts 開始 ===');
+    const channel = payload.channel;
+    const message = payload.message;
+    const messageTs = message.ts;
+    
+    console.log('メッセージ情報:', { channelId: channel.id, messageTs });
+    
+    // 現在のメッセージのボタンカウントを取得・更新
+    console.log('ブロック更新開始');
+    const updatedBlocks = updateMessageBlocks(message.blocks, clickedDepartmentId, messageTs, channel.id);
+    
+    console.log('更新されたブロック:', JSON.stringify(updatedBlocks, null, 2));
+    
+    // Slack APIでメッセージを更新
+    console.log('Slackメッセージ更新開始');
+    updateSlackMessage(channel.id, messageTs, updatedBlocks);
+    
+    console.log('=== updateButtonCounts 完了 ===');
+    return ContentService
+      .createTextOutput('応答を記録しました ✅')
+      .setMimeType(ContentService.MimeType.TEXT);
+      
+  } catch (error) {
+    console.error('ボタンカウント更新エラー:', error);
+    return ContentService
+      .createTextOutput('OK')
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+/**
+ * メッセージのブロックを更新してカウントを増やす
+ */
+function updateMessageBlocks(blocks, clickedDepartmentId, messageTs, channelId) {
+  try {
+    // 部署別カウントを取得
+    const departmentCounts = getDepartmentCountsFromSheet(messageTs, channelId);
+    
+    return blocks.map(block => {
+      if (block.type === 'actions' && block.elements) {
+        block.elements = block.elements.map(element => {
+          if (element.action_id && element.action_id.startsWith('safety_')) {
+            const deptId = element.action_id.replace('safety_', '');
+            const count = departmentCounts[deptId] || 0;
+            
+            // ボタンテキストを更新（例: "🏢 総務部 (3)"）
+            const buttonValue = JSON.parse(element.value || '{}');
+            const emoji = buttonValue.emoji || '';
+            const deptName = buttonValue.departmentName || deptId;
+            
+            element.text.text = \`\${emoji} \${deptName} (\${count})\`;
+          }
+          return element;
+        });
+      }
+      return block;
+    });
+    
+  } catch (error) {
+    console.error('ブロック更新エラー:', error);
+    return blocks;
+  }
+}
+
+/**
+ * スプレッドシートから部署別カウントを取得（重複除去）
+ */
+function getDepartmentCountsFromSheet(messageTs, channelId) {
+  try {
+    console.log('=== カウント取得開始 ===');
+    console.log('検索条件:', { messageTs, channelId });
+    
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    
+    // 訓練用と本番用の両方をチェック
+    const sheets = [
+      spreadsheet.getSheetByName(CONFIG.TRAINING_SHEET),
+      spreadsheet.getSheetByName(CONFIG.PRODUCTION_SHEET)
+    ].filter(sheet => sheet !== null);
+    
+    console.log('検索対象シート数:', sheets.length);
+    
+    const counts = {};
+    const uniqueUsers = new Set(); // 重複応答を防ぐため
+    
+    sheets.forEach(sheet => {
+      console.log('シート検索中:', sheet.getName());
+      const data = sheet.getDataRange().getValues();
+      const responses = data.slice(1); // ヘッダー行を除く
+      
+      console.log('データ行数:', responses.length);
+      
+      responses.forEach((row, index) => {
+        const rowMessageTs = String(row[9]); // メッセージTS列
+        const rowChannelId = String(row[7]);  // チャンネルID列
+        const userId = String(row[1]);        // ユーザーID列
+        const departmentId = String(row[4]);  // 部署ID列
+        
+        console.log(\`行\${index + 2}:\`, { rowMessageTs, rowChannelId, userId, departmentId });
+        
+        if (rowMessageTs === String(messageTs) && rowChannelId === String(channelId)) {
+          console.log('条件一致:', { userId, departmentId });
+          
+          // 同一ユーザーの重複応答をチェック
+          const userKey = \`\${userId}_\${messageTs}_\${channelId}\`;
+          if (uniqueUsers.has(userKey)) {
+            console.log('重複応答をスキップ:', userId);
+            return;
+          }
+          uniqueUsers.add(userKey);
+          
+          // 部署IDを直接使用
+          console.log('部署IDでカウント:', { departmentId });
+          
+          counts[departmentId] = (counts[departmentId] || 0) + 1;
+        }
+      });
+    });
+    
+    console.log('最終カウント:', counts);
+    console.log('=== カウント取得完了 ===');
+    return counts;
+    
+  } catch (error) {
+    console.error('カウント取得エラー:', error);
+    return {};
+  }
+}
+
+/**
+ * Slack APIでメッセージを更新
+ */
+function updateSlackMessage(channelId, messageTs, blocks) {
+  try {
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      console.warn('Bot Tokenが設定されていないため、メッセージ更新をスキップします');
+      return;
+    }
+    
+    const payload = {
+      'channel': channelId,
+      'ts': messageTs,
+      'blocks': JSON.stringify(blocks)
+    };
+    
+    const options = {
+      'method': 'POST',
+      'headers': {
+        'Authorization': 'Bearer ' + botToken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      'payload': Object.keys(payload).map(key => 
+        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+      ).join('&')
+    };
+    
+    const response = UrlFetchApp.fetch('https://slack.com/api/chat.update', options);
+    const data = JSON.parse(response.getContentText());
+    
+    if (!data.ok) {
+      console.error('Slackメッセージ更新失敗:', data.error);
+    } else {
+      console.log('Slackメッセージ更新成功');
+    }
+    
+  } catch (error) {
+    console.error('Slackメッセージ更新エラー:', error);
+  }
+}
+
+/**
+ * 絵文字から部署情報を取得
+ */
+function getDepartmentByEmoji(emoji) {
+  const departments = {
+    // カスタム絵文字
+    'dev': { emoji: ':dev:', name: '開発', id: 'dev' },
+    'cp': { emoji: ':cp:', name: 'コーポレート', id: 'cp' },
+    'mk': { emoji: ':mk:', name: 'マーケティング', id: 'mk' },
+    'prd': { emoji: ':prd:', name: 'プロダクション', id: 'prd' },
+    'saas': { emoji: ':saas:', name: 'saas', id: 'saas' },
+    'sl': { emoji: ':sl:', name: 'sl', id: 'sl' },
+    'dc': { emoji: ':dc:', name: 'dc', id: 'dc' },
+    'gyoumu': { emoji: ':gyoumu:', name: 'gyoumu', id: 'gyoumu' },
+    'オフィス': { emoji: ':オフィス:', name: '新しい部署', id: 'office' },
+    
+    // 標準絵文字（フォールバック用）
+    'computer': { emoji: '💻', name: '開発', id: 'dev' },
+    'office_building': { emoji: '🏢', name: 'コーポレート', id: 'cp' },
+    'chart_with_upwards_trend': { emoji: '📈', name: 'マーケティング', id: 'mk' },
+    'factory': { emoji: '🏭', name: 'プロダクション', id: 'prd' },
+    'cloud': { emoji: '☁️', name: 'saas', id: 'saas' },
+    'blue_circle': { emoji: '🔵', name: 'sl', id: 'sl' },
+    'green_circle': { emoji: '🟢', name: 'dc', id: 'dc' },
+    'briefcase': { emoji: '💼', name: 'gyoumu', id: 'gyoumu' }
+  };
+  
+  return departments[emoji] || null;
+}
+
+/**
+ * ユーザー情報を取得
+ */
+function getUserInfo(userId) {
+  try {
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      return { name: userId, real_name: userId };
+    }
+    
+    const response = UrlFetchApp.fetch(\`https://slack.com/api/users.info?user=\${userId}\`, {
+      headers: {
+        'Authorization': \`Bearer \${botToken}\`
+      }
+    });
+    
+    const data = JSON.parse(response.getContentText());
+    if (data.ok) {
+      return {
+        name: data.user.name,
+        real_name: data.user.profile?.real_name || data.user.name
+      };
+    }
+    
+    return { name: userId, real_name: userId };
+    
+  } catch (error) {
+    console.error('ユーザー情報取得エラー:', error);
+    return { name: userId, real_name: userId };
+  }
+}
+
+/**
+ * 訓練メッセージかどうかを判定
+ */
+function isTrainingMessage(channelId, messageTs) {
+  try {
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      return false;
+    }
+    
+    const response = UrlFetchApp.fetch(
+      \`https://slack.com/api/conversations.history?channel=\${channelId}&latest=\${messageTs}&limit=1&inclusive=true\`,
+      {
+        headers: {
+          'Authorization': \`Bearer \${botToken}\`
+        }
+      }
+    );
+    
+    const data = JSON.parse(response.getContentText());
+    if (data.ok && data.messages.length > 0) {
+      const messageText = data.messages[0].text || '';
+      return messageText.includes('訓練');
+    }
+    
+    return false;
+    
+  } catch (error) {
+    console.error('メッセージ内容取得エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * チャンネル名を取得
+ */
+function getChannelName(channelId) {
+  try {
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      return channelId;
+    }
+    
+    const response = UrlFetchApp.fetch(\`https://slack.com/api/conversations.info?channel=\${channelId}\`, {
+      headers: {
+        'Authorization': \`Bearer \${botToken}\`
+      }
+    });
+    
+    const data = JSON.parse(response.getContentText());
+    if (data.ok) {
+      return data.channel.name || channelId;
+    }
+    
+    return channelId;
+    
+  } catch (error) {
+    console.error('チャンネル名取得エラー:', error);
+    return channelId;
+  }
+}
+
+/**
+ * ボットユーザーかどうかを判定
+ */
+function isBotUser(userId) {
+  try {
+    const botToken = CONFIG.SLACK_BOT_TOKEN;
+    if (!botToken || botToken === 'YOUR_SLACK_BOT_TOKEN_HERE') {
+      return false;
+    }
+    
+    const response = UrlFetchApp.fetch(\`https://slack.com/api/users.info?user=\${userId}\`, {
+      headers: {
+        'Authorization': \`Bearer \${botToken}\`
+      }
+    });
+    
+    const data = JSON.parse(response.getContentText());
+    if (data.ok && data.user) {
+      return data.user.is_bot === true;
+    }
+    
+    return false;
+    
+  } catch (error) {
+    console.error('ボット判定エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * 安否確認メッセージかどうかを判定
+ */
+function isSafetyConfirmationMessage(channelId, messageTs) {
+  return true; // 暫定的に全てのリアクションを対象とする
 }
 
 /**
@@ -349,15 +944,30 @@ function testGASSetup() {
                 </div>
               </li>
             </ol>
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">GAS ウェブアプリURL</label>
-              <input
-                type="text"
-                value={gasUrl}
-                onChange={(e) => setGasUrl(e.target.value)}
-                placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-                className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
-              />
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Bot Token（ボタンカウント更新用）</label>
+                <input
+                  type="text"
+                  value={botToken}
+                  onChange={(e) => setBotToken(e.target.value)}
+                  placeholder="xoxb-your-bot-token"
+                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
+                />
+                <div className="text-xs text-yellow-400 mt-1">
+                  必要な権限: chat:write, users:read, channels:read
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">GAS ウェブアプリURL</label>
+                <input
+                  type="text"
+                  value={gasUrl}
+                  onChange={(e) => setGasUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400"
+                />
+              </div>
             </div>
           </div>
         )}
@@ -445,13 +1055,13 @@ function testGASSetup() {
           <div>
             <h4 className="text-green-400 font-medium">訓練用応答シート</h4>
             <div className="bg-gray-800 p-2 rounded font-mono text-xs text-gray-300 overflow-x-auto">
-              日時 | ユーザーID | ユーザー名 | 実名 | 部署名 | 絵文字 | チャンネルID | チャンネル名 | メッセージTS
+              日時 | ユーザーID | ユーザー名 | 実名 | 部署ID | 部署名 | 絵文字 | チャンネルID | チャンネル名 | メッセージTS
             </div>
           </div>
           <div>
             <h4 className="text-red-400 font-medium">本番用応答シート</h4>
             <div className="bg-gray-800 p-2 rounded font-mono text-xs text-gray-300 overflow-x-auto">
-              日時 | ユーザーID | ユーザー名 | 実名 | 部署名 | 絵文字 | チャンネルID | チャンネル名 | メッセージTS
+              日時 | ユーザーID | ユーザー名 | 実名 | 部署ID | 部署名 | 絵文字 | チャンネルID | チャンネル名 | メッセージTS
             </div>
           </div>
         </div>
@@ -469,6 +1079,16 @@ function testGASSetup() {
           <li>• CSVエクスポートで他システム連携</li>
           <li>• 複数人での同時閲覧・編集</li>
         </ul>
+      </div>
+
+      {/* 設定保存ボタン */}
+      <div className="bg-gray-700 p-4 rounded flex justify-center">
+        <button
+          onClick={saveGasSettings}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors"
+        >
+          💾 GAS設定を保存
+        </button>
       </div>
     </div>
   );

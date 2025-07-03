@@ -83,15 +83,61 @@ function handleReactionAdded(event) {
     
     console.log('リアクション情報:', { userId: user, reaction, channelId, messageTs });
     
-    // 3秒タイムアウト対応：即座にレスポンスを返す
-    const response = ContentService
+    // ボットのリアクションは記録しない
+    if (isBotUser(user)) {
+      console.log('ボットのリアクションのためスキップ:', user);
+      return ContentService
+        .createTextOutput('OK')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    
+    // 安否確認メッセージかどうかを判定
+    if (!isSafetyConfirmationMessage(channelId, messageTs)) {
+      console.log('安否確認メッセージではないためスキップ');
+      return ContentService
+        .createTextOutput('OK')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    
+    // 部署絵文字かどうかを判定
+    const departmentInfo = getDepartmentByEmoji(reaction);
+    if (!departmentInfo) {
+      console.log('部署絵文字ではないためスキップ:', reaction);
+      return ContentService
+        .createTextOutput('OK')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    
+    console.log('部署情報:', departmentInfo);
+    
+    // ユーザー情報を取得
+    const userInfo = getUserInfo(user);
+    
+    // 訓練用か本番用かを判定
+    const isTraining = isTrainingMessage(channelId, messageTs);
+    const sheetName = isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
+    
+    console.log('メッセージ種別:', { isTraining, sheetName });
+    
+    // スプレッドシートに記録
+    recordResponse({
+      timestamp: new Date(),
+      userId: user,
+      userName: userInfo.name || user,
+      userRealName: userInfo.real_name || userInfo.name || user,
+      departmentName: `${departmentInfo.emoji} ${departmentInfo.name}`,
+      emoji: departmentInfo.emoji,
+      channelId: channelId,
+      channelName: getChannelName(channelId),
+      messageTs: messageTs,
+      isTraining: isTraining
+    }, sheetName);
+    
+    console.log('=== リアクション処理完了 ===');
+    
+    return ContentService
       .createTextOutput('OK')
       .setMimeType(ContentService.MimeType.TEXT);
-    
-    // バックグラウンドで非同期処理を実行
-    processReactionAsync(user, reaction, channelId, messageTs);
-    
-    return response;
     
   } catch (error) {
     console.error('リアクション処理エラー:', error);
@@ -102,163 +148,66 @@ function handleReactionAdded(event) {
 }
 
 /**
- * リアクション処理の非同期実行
+ * 安否確認応答を処理
  */
-function processReactionAsync(user, reaction, channelId, messageTs) {
+function handleSafetyResponse(payload) {
   try {
-    console.log('=== バックグラウンド処理開始 ===');
+    console.log('=== handleSafetyResponse 開始 ===');
     
-    // ボットのリアクションは記録しない
-    if (isBotUser(user)) {
-      console.log('ボットのリアクションのためスキップ:', user);
-      return;
-    }
+    const action = payload.actions[0];
+    const user = payload.user;
+    const channel = payload.channel;
+    const message = payload.message;
     
-    // 安否確認メッセージかどうかを判定
-    if (!isSafetyConfirmationMessage(channelId, messageTs)) {
-      console.log('安否確認メッセージではないためスキップ');
-      return;
-    }
+    // ボタンの値を解析
+    const buttonValue = JSON.parse(action.value || '{}');
+    const departmentId = buttonValue.departmentId || action.action_id.replace('safety_', '');
+    const departmentName = buttonValue.departmentName || departmentId;
+    const emoji = buttonValue.emoji || '';
     
-    // 部署絵文字かどうかを判定
-    const departmentInfo = getDepartmentByEmoji(reaction);
-    if (!departmentInfo) {
-      console.log('部署絵文字ではないためスキップ:', reaction);
-      return;
-    }
-    
-    console.log('部署情報:', departmentInfo);
-    
-    // ユーザー情報を取得
-    const userInfo = getUserInfo(user);
+    console.log('部署情報:', { departmentId, departmentName, emoji });
     
     // 訓練用か本番用かを判定
-    const isTraining = isTrainingMessage(channelId, messageTs);
+    const isTraining = message.text && message.text.includes('訓練');
+    const sheetName = isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
     
-    // イベント用のシート名を生成（スレッドIDを含む）
-    const eventSheetName = generateEventSheetName(channelId, messageTs, isTraining);
-    
-    console.log('イベントシート名:', eventSheetName);
-    
-    // 重複チェック（同じイベント内でユーザーIDのみでチェック）
-    if (isDuplicateByUserId(user, eventSheetName)) {
-      console.log('重複応答のためスキップ:', user);
-      return;
+    // 重複チェック
+    if (isDuplicateResponseByDepartment(user.id, message.ts, channel.id, departmentId)) {
+      console.log('重複応答を検出:', user.name, '部署:', departmentId);
+      // 重複の場合はSlackに即座に応答を返して処理終了
+      return ContentService
+        .createTextOutput('')
+        .setMimeType(ContentService.MimeType.TEXT);
     }
     
     // スプレッドシートに記録
     recordResponse({
       timestamp: new Date(),
-      userId: user,
-      userName: userInfo.name || user,
-      userRealName: userInfo.real_name || userInfo.name || user,
-      departmentId: departmentInfo.id,
-      departmentName: `${departmentInfo.emoji} ${departmentInfo.name}`,
-      emoji: departmentInfo.emoji,
-      channelId: channelId,
-      channelName: getChannelName(channelId),
-      messageTs: messageTs,
+      userId: user.id,
+      userName: user.name,
+      userRealName: user.profile?.real_name || user.name,
+      departmentId: departmentId,
+      departmentName: departmentName,
+      emoji: emoji,
+      channelId: channel.id,
+      channelName: channel.name,
+      messageTs: message.ts,
       isTraining: isTraining
-    }, eventSheetName);
+    }, sheetName);
     
-    console.log('=== バックグラウンド処理完了 ===');
+    console.log('スプレッドシート記録完了');
     
-  } catch (error) {
-    console.error('バックグラウンド処理エラー:', error);
-    // エラーログを記録して続行
-  }
-}
-
-/**
- * イベント用のシート名を生成
- */
-function generateEventSheetName(channelId, messageTs, isTraining) {
-  try {
-    // メッセージタイムスタンプから日時を生成
-    const timestamp = parseFloat(messageTs);
-    const date = new Date(timestamp * 1000);
-    const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd_HH-mm');
-    
-    // チャンネル名を取得（短縮）
-    const channelName = getChannelName(channelId).substring(0, 10);
-    
-    // シート名を生成
-    const prefix = isTraining ? '訓練' : '本番';
-    const sheetName = `${prefix}_${dateStr}_${channelName}`;
-    
-    console.log('生成されたシート名:', sheetName);
-    return sheetName;
+    // Slackには空の応答を返す
+    return ContentService
+      .createTextOutput('')
+      .setMimeType(ContentService.MimeType.TEXT);
     
   } catch (error) {
-    console.error('シート名生成エラー:', error);
-    // エラー時は従来の方式にフォールバック
-    return isTraining ? CONFIG.TRAINING_SHEET : CONFIG.PRODUCTION_SHEET;
+    console.error('安否確認応答処理エラー:', error);
+    return ContentService
+      .createTextOutput('')
+      .setMimeType(ContentService.MimeType.TEXT);
   }
-}
-
-/**
- * 特定のシート内でユーザーIDの重複をチェック
- */
-function isDuplicateByUserId(userId, sheetName) {
-  try {
-    console.log('=== ユーザーID重複チェック開始 ===');
-    console.log('チェック対象:', { userId, sheetName });
-    
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    
-    // シートが存在しない場合は重複なし
-    if (!sheet) {
-      console.log('シートが存在しないため重複なし');
-      return false;
-    }
-    
-    // シートにデータがない場合は重複なし
-    const lastRow = sheet.getLastRow();
-    if (lastRow <= 1) {
-      console.log('データがないため重複なし');
-      return false;
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    const responses = data.slice(1); // ヘッダー行を除く
-    
-    console.log('レスポンス件数:', responses.length);
-    
-    for (let i = 0; i < responses.length; i++) {
-      const row = responses[i];
-      // 空行をスキップ
-      if (!row[1]) continue;
-      
-      const rowUserId = String(row[1]); // ユーザーID列
-      
-      console.log(`行${i + 2}: ユーザーID=${rowUserId}`);
-      
-      if (rowUserId === String(userId)) {
-        console.log('重複発見！行:', i + 2);
-        return true;
-      }
-    }
-    
-    console.log('重複なし');
-    return false;
-    
-  } catch (error) {
-    console.error('重複チェックエラー:', error);
-    console.error('エラー詳細:', error.stack);
-    // エラー時は重複ありとして処理を停止（安全側に倒す）
-    return true;
-  }
-}
-
-/**
- * 安否確認応答を処理
- */
-function handleSafetyResponse(payload) {
-  // とりあえずWebhookは諦めて、リアクション方式のみで対応
-  return ContentService
-    .createTextOutput('この機能は現在利用できません。絵文字リアクションで応答してください。')
-    .setMimeType(ContentService.MimeType.TEXT);
 }
 
 /**
@@ -975,56 +924,5 @@ function testGASSetup() {
     
   } catch (error) {
     console.error('❌ GAS設定エラー:', error);
-  }
-}
-
-/**
- * 新しいイベントベースシステムのテスト
- */
-function testEventBasedSystem() {
-  console.log('=== イベントベースシステムテスト ===');
-  
-  try {
-    // テスト用のメッセージタイムスタンプ
-    const testMessageTs = String(Date.now() / 1000);
-    const testChannelId = 'C_TEST_CHANNEL';
-    
-    // 1. シート名生成テスト
-    const eventSheetName = generateEventSheetName(testChannelId, testMessageTs, false);
-    console.log('✅ イベントシート名生成成功:', eventSheetName);
-    
-    // 2. 重複チェックテスト（最初は重複なし）
-    const isDuplicate1 = isDuplicateByUserId('U_TEST_001', eventSheetName);
-    console.log('✅ 重複チェック1（重複なし）:', isDuplicate1);
-    
-    // 3. テストデータ追加
-    recordResponse({
-      timestamp: new Date(),
-      userId: 'U_TEST_001',
-      userName: 'test_user_001',
-      userRealName: 'テストユーザー001',
-      departmentId: 'dev',
-      departmentName: ':dev: 開発',
-      emoji: ':dev:',
-      channelId: testChannelId,
-      channelName: 'test-channel',
-      messageTs: testMessageTs,
-      isTraining: false
-    }, eventSheetName);
-    
-    console.log('✅ テストデータ追加成功');
-    
-    // 4. 重複チェックテスト（今度は重複あり）
-    const isDuplicate2 = isDuplicateByUserId('U_TEST_001', eventSheetName);
-    console.log('✅ 重複チェック2（重複あり）:', isDuplicate2);
-    
-    // 5. 異なるユーザーで重複チェック（重複なし）
-    const isDuplicate3 = isDuplicateByUserId('U_TEST_002', eventSheetName);
-    console.log('✅ 重複チェック3（異なるユーザー、重複なし）:', isDuplicate3);
-    
-    console.log('✅ イベントベースシステムテスト完了');
-    
-  } catch (error) {
-    console.error('❌ イベントベースシステムテストエラー:', error);
   }
 }

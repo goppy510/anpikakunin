@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// ボタン方式を使用するため、リアクション追加関数は削除
+
 export async function POST(request: NextRequest) {
   try {
     const { botToken, channelId, title, message, isTraining = false, departments = [] } = await request.json();
+    
+    console.log('リクエストデータ:', { 
+      botToken: botToken ? 'あり' : 'なし', 
+      channelId, 
+      title, 
+      isTraining,
+      departmentsCount: departments?.length || 0,
+      departments
+    });
 
     if (!botToken || !channelId || !message) {
       return NextResponse.json({
@@ -37,28 +48,35 @@ export async function POST(request: NextRequest) {
       ]
     };
 
-    // 部署スタンプがある場合は追加
+    // 部署ボタンがある場合は追加
     if (departments && departments.length > 0) {
+      const buttons = departments.map(dept => ({
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: `${dept.emoji} ${dept.name}`,
+          emoji: true
+        },
+        action_id: `safety_${dept.id}`,
+        value: JSON.stringify({
+          departmentId: dept.id,
+          departmentName: dept.name,
+          emoji: dept.emoji
+        }),
+        style: undefined
+      }));
+      
       payload.blocks.push({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "安否確認（該当部署のスタンプを押してください）:"
+          text: "*安否確認（該当部署のボタンを押してください）*\n\n⚠️ 一人一回のみ回答可能です"
         }
       });
       
       payload.blocks.push({
         type: "actions",
-        elements: departments.map((dept: any) => ({
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: `${dept.emoji} ${dept.name} (0)`
-          },
-          action_id: `safety_${dept.id}`,
-          style: undefined,
-          value: JSON.stringify({ departmentId: dept.id, departmentName: dept.name, emoji: dept.emoji })
-        }))
+        elements: buttons
       });
     }
 
@@ -73,6 +91,12 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
+    console.log('Slack API応答:', { 
+      ok: data.ok, 
+      ts: data.ts, 
+      error: data.error,
+      fullResponse: data
+    });
 
     if (!data.ok) {
       let errorMessage = data.error || 'メッセージ送信に失敗しました';
@@ -94,6 +118,8 @@ export async function POST(request: NextRequest) {
         originalError: data.error
       }, { status: 400 });
     }
+
+    // ボタン方式のため、リアクション追加は不要
 
     return NextResponse.json({
       success: true,
