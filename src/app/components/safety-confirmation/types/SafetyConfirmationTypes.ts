@@ -3,7 +3,7 @@
 export interface DepartmentStamp {
   id: string;
   name: string;
-  emoji: string;
+  slackEmoji: SlackEmoji; // Slackカスタムスタンプを使用
   color: string;
 }
 
@@ -136,14 +136,14 @@ export const JAPANESE_PREFECTURES = [
   { code: '47', name: '沖縄県' }
 ];
 
-// デフォルト部署スタンプ
+// デフォルト部署スタンプ（Slackカスタムスタンプ使用）
 export const DEFAULT_DEPARTMENT_STAMPS: DepartmentStamp[] = [
-  { id: 'general', name: '総務部', emoji: '🏢', color: '#3B82F6' },
-  { id: 'sales', name: '営業部', emoji: '💼', color: '#10B981' },
-  { id: 'tech', name: '技術部', emoji: '⚙️', color: '#8B5CF6' },
-  { id: 'hr', name: '人事部', emoji: '👥', color: '#F59E0B' },
-  { id: 'finance', name: '経理部', emoji: '💰', color: '#EF4444' },
-  { id: 'marketing', name: 'マーケティング部', emoji: '📊', color: '#06B6D4' },
+  { id: 'general', name: '総務部', slackEmoji: { name: 'soumu', url: '' }, color: '#3B82F6' },
+  { id: 'sales', name: '営業部', slackEmoji: { name: 'eigyou', url: '' }, color: '#10B981' },
+  { id: 'tech', name: '技術部', slackEmoji: { name: 'gijutsu', url: '' }, color: '#8B5CF6' },
+  { id: 'hr', name: '人事部', slackEmoji: { name: 'jinji', url: '' }, color: '#F59E0B' },
+  { id: 'finance', name: '経理部', slackEmoji: { name: 'kaikei', url: '' }, color: '#EF4444' },
+  { id: 'marketing', name: 'マーケティング部', slackEmoji: { name: 'marketing', url: '' }, color: '#06B6D4' },
 ];
 
 // デフォルト通知テンプレート

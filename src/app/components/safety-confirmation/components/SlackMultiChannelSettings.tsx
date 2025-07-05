@@ -14,6 +14,17 @@ interface SlackMultiChannelSettingsProps {
 }
 
 export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }: SlackMultiChannelSettingsProps) {
+  // 安全性チェック
+  if (!settings) {
+    return <div className="text-gray-400">設定を読み込み中...</div>;
+  }
+
+  // デフォルト値を設定
+  const safeSettings = {
+    workspaces: [],
+    channels: [],
+    ...settings
+  };
   const [activeTab, setActiveTab] = useState<'workspaces' | 'channels'>('workspaces');
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [tokenVerificationStatus, setTokenVerificationStatus] = useState<Record<string, { 
@@ -29,15 +40,15 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
     );
     
     onUpdate({
-      ...settings,
-      workspaces: [...settings.workspaces, newWorkspace]
+      ...safeSettings,
+      workspaces: [...safeSettings.workspaces, newWorkspace]
     });
   };
 
   const updateWorkspace = async (id: string, updates: Partial<SlackWorkspace>) => {
     const newSettings = {
       ...settings,
-      workspaces: settings.workspaces.map(ws => 
+      workspaces: (settings.workspaces || []).map(ws => 
         ws.id === id ? { ...ws, ...updates } : ws
       )
     };
@@ -83,7 +94,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
 
         // ワークスペース情報を更新（既存の名前がある場合は保持）
         if (result.workspaceInfo) {
-          const currentWorkspace = settings.workspaces.find(ws => ws.id === workspaceId);
+          const currentWorkspace = (settings.workspaces || []).find(ws => ws.id === workspaceId);
           const currentName = currentWorkspace?.name;
           
           // 既存の名前が空またはデフォルト値の場合のみSlackワークスペース名で更新
@@ -123,13 +134,13 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
   const removeWorkspace = (id: string) => {
     onUpdate({
       ...settings,
-      workspaces: settings.workspaces.filter(ws => ws.id !== id),
-      channels: settings.channels.filter(ch => ch.workspaceId !== id)
+      workspaces: (settings.workspaces || []).filter(ws => ws.id !== id),
+      channels: (settings.channels || []).filter(ch => ch.workspaceId !== id)
     });
   };
 
   const addChannel = () => {
-    if (settings.workspaces.length === 0) {
+    if (!settings.workspaces || settings.workspaces.length === 0) {
       alert("まずワークスペースを追加してください");
       return;
     }
@@ -145,14 +156,14 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
     
     onUpdate({
       ...settings,
-      channels: [...settings.channels, newChannel]
+      channels: [...(settings.channels || []), newChannel]
     });
   };
 
   const updateChannel = async (id: string, updates: Partial<SlackChannel>) => {
     const newSettings = {
       ...settings,
-      channels: settings.channels.map(ch => 
+      channels: (settings.channels || []).map(ch => 
         ch.id === id ? { ...ch, ...updates } : ch
       )
     };
@@ -182,12 +193,12 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
   const removeChannel = (id: string) => {
     onUpdate({
       ...settings,
-      channels: settings.channels.filter(ch => ch.id !== id)
+      channels: (settings.channels || []).filter(ch => ch.id !== id)
     });
   };
 
   const getWorkspaceName = (workspaceId: string): string => {
-    const workspace = settings.workspaces.find(ws => ws.id === workspaceId);
+    const workspace = (settings.workspaces || []).find(ws => ws.id === workspaceId);
     return workspace?.name || "不明なワークスペース";
   };
 
@@ -196,7 +207,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
       return;
     }
     
-    const workspace = settings.workspaces.find(ws => ws.id === workspaceId);
+    const workspace = (settings.workspaces || []).find(ws => ws.id === workspaceId);
     if (!workspace?.botToken) {
       return;
     }
@@ -207,7 +218,7 @@ export function SlackMultiChannelSettings({ settings, onUpdate, currentConfig }:
       if (result.success && result.channelName) {
         const updatedSettings = {
           ...settings,
-          channels: settings.channels.map(ch => 
+          channels: (settings.channels || []).map(ch => 
             ch.id === channelId ? { ...ch, channelName: result.channelName } : ch
           )
         };

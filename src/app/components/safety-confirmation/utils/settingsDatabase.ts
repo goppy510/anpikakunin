@@ -51,7 +51,21 @@ export class SafetySettingsDatabase {
 
       const storedSettings = await db.get("safetySettings", this.SETTINGS_ID);
       if (!storedSettings) {
-        console.log("保存済み安否確認設定が見つかりません");
+        console.log("IndexedDBに保存済み安否確認設定が見つかりません。LocalStorageからの復旧を試みます...");
+        
+        // LocalStorageからの復旧を試みる
+        try {
+          const { Settings } = await import("@/app/lib/db/settings");
+          const lsConfig = await Settings.get("safetyConfirmationConfig");
+          if (lsConfig) {
+            console.log("LocalStorageから設定を復旧しました。IndexedDBに再保存中...");
+            await this.saveSettings(lsConfig);
+            return lsConfig;
+          }
+        } catch (lsError) {
+          console.warn("LocalStorageからの復旧に失敗:", lsError);
+        }
+        
         return null;
       }
 

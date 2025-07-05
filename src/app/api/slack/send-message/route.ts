@@ -50,21 +50,29 @@ export async function POST(request: NextRequest) {
 
     // 部署ボタンがある場合は追加
     if (departments && departments.length > 0) {
-      const buttons = departments.map(dept => ({
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: `${dept.emoji} ${dept.name}`,
-          emoji: true
-        },
-        action_id: `safety_${dept.id}`,
-        value: JSON.stringify({
-          departmentId: dept.id,
-          departmentName: dept.name,
-          emoji: dept.emoji
-        }),
-        style: undefined
-      }));
+      const buttons = departments.map(dept => {
+        // slackEmojiプロパティから適切な表示を決定
+        const emojiDisplay = dept.slackEmoji?.url 
+          ? `:${dept.slackEmoji.name}:` 
+          : (dept.slackEmoji?.name ? `:${dept.slackEmoji.name}:` : '');
+        
+        return {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: `${emojiDisplay} ${dept.name}`,
+            emoji: true
+          },
+          action_id: `safety_${dept.id}`,
+          value: JSON.stringify({
+            departmentId: dept.id,
+            departmentName: dept.name,
+            emoji: emojiDisplay,
+            slackEmoji: dept.slackEmoji
+          }),
+          style: undefined
+        };
+      });
       
       payload.blocks.push({
         type: "section",
