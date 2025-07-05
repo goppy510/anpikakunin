@@ -23,10 +23,10 @@ interface RouterProviderProps {
 
 export function RouterProvider({ children }: RouterProviderProps) {
   const [currentRoute, setCurrentRoute] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       return window.location.pathname;
     }
-    return '/';
+    return "/";
   });
 
   const navigateTo = (path: string) => {
@@ -36,8 +36,8 @@ export function RouterProvider({ children }: RouterProviderProps) {
     }
 
     // URL を変更
-    window.history.pushState({}, '', path);
-    
+    window.history.pushState({}, "", path);
+
     // 状態を更新
     setCurrentRoute(path);
   };
@@ -49,10 +49,10 @@ export function RouterProvider({ children }: RouterProviderProps) {
       setCurrentRoute(newPath);
     };
 
-    window.addEventListener('popstate', handlePopState);
+    window.addEventListener("popstate", handlePopState);
 
     return () => {
-      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener("popstate", handlePopState);
     };
   }, []);
 

@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import cn from "classnames";
-import { SlackWorkspace, NotificationConditions, JAPANESE_PREFECTURES } from "../types/SafetyConfirmationTypes";
+import {
+  SlackWorkspace,
+  NotificationConditions,
+  JAPANESE_PREFECTURES,
+} from "../types/SafetyConfirmationTypes";
 
 interface WorkspaceDetailSettingsProps {
   workspace: SlackWorkspace;
@@ -10,28 +14,34 @@ interface WorkspaceDetailSettingsProps {
   onClose: () => void;
 }
 
-export function WorkspaceDetailSettings({ workspace, onUpdate, onClose }: WorkspaceDetailSettingsProps) {
-  const [activeTab, setActiveTab] = useState<'conditions'>('conditions');
+export function WorkspaceDetailSettings({
+  workspace,
+  onUpdate,
+  onClose,
+}: WorkspaceDetailSettingsProps) {
+  const [activeTab, setActiveTab] = useState<"conditions">("conditions");
 
   const updateConditions = async (updates: Partial<NotificationConditions>) => {
     const updatedWorkspace = {
-      conditions: { ...workspace.conditions, ...updates }
+      conditions: { ...workspace.conditions, ...updates },
     };
     onUpdate(updatedWorkspace);
-    
+
     // 自動保存
     await autoSaveSettings();
   };
 
   const autoSaveSettings = async () => {
     try {
-      const { SafetySettingsDatabase } = await import('../utils/settingsDatabase');
+      const { SafetySettingsDatabase } = await import(
+        "../utils/settingsDatabase"
+      );
       const currentConfig = await SafetySettingsDatabase.loadSettings();
       if (currentConfig) {
         await SafetySettingsDatabase.saveSettings(currentConfig);
       }
     } catch (error) {
-      console.error('設定の自動保存に失敗:', error);
+      console.error("設定の自動保存に失敗:", error);
     }
   };
 
@@ -58,7 +68,7 @@ export function WorkspaceDetailSettings({ workspace, onUpdate, onClose }: Worksp
 
         {/* コンテンツエリア */}
         <div className="flex-1 overflow-y-auto p-6">
-          <ConditionsTab 
+          <ConditionsTab
             conditions={workspace.conditions}
             onUpdate={updateConditions}
           />
@@ -79,26 +89,26 @@ export function WorkspaceDetailSettings({ workspace, onUpdate, onClose }: Worksp
 }
 
 // 通知条件タブ
-function ConditionsTab({ 
-  conditions, 
-  onUpdate 
-}: { 
-  conditions: NotificationConditions; 
-  onUpdate: (updates: Partial<NotificationConditions>) => void; 
+function ConditionsTab({
+  conditions,
+  onUpdate,
+}: {
+  conditions: NotificationConditions;
+  onUpdate: (updates: Partial<NotificationConditions>) => void;
 }) {
   const handlePrefectureToggle = (prefCode: string) => {
     const isSelected = conditions.targetPrefectures.includes(prefCode);
     const newPrefectures = isSelected
-      ? conditions.targetPrefectures.filter(code => code !== prefCode)
+      ? conditions.targetPrefectures.filter((code) => code !== prefCode)
       : [...conditions.targetPrefectures, prefCode];
-    
+
     onUpdate({ targetPrefectures: newPrefectures });
   };
 
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-medium text-white">通知条件設定</h3>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -127,7 +137,13 @@ function ConditionsTab({
           </label>
           <select
             value={conditions.notificationType}
-            onChange={(e) => onUpdate({ notificationType: e.target.value as 'intensity' | 'comprehensive' })}
+            onChange={(e) =>
+              onUpdate({
+                notificationType: e.target.value as
+                  | "intensity"
+                  | "comprehensive",
+              })
+            }
             className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
           >
             <option value="intensity">震度速報</option>
@@ -156,8 +172,11 @@ function ConditionsTab({
           対象都道府県（{conditions.targetPrefectures.length}件選択中）
         </label>
         <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto bg-gray-700 p-4 rounded">
-          {JAPANESE_PREFECTURES.map(pref => (
-            <label key={pref.code} className="flex items-center cursor-pointer hover:bg-gray-600 p-2 rounded">
+          {JAPANESE_PREFECTURES.map((pref) => (
+            <label
+              key={pref.code}
+              className="flex items-center cursor-pointer hover:bg-gray-600 p-2 rounded"
+            >
               <input
                 type="checkbox"
                 checked={conditions.targetPrefectures.includes(pref.code)}
@@ -170,7 +189,11 @@ function ConditionsTab({
         </div>
         <div className="flex gap-2 mt-2">
           <button
-            onClick={() => onUpdate({ targetPrefectures: JAPANESE_PREFECTURES.map(p => p.code) })}
+            onClick={() =>
+              onUpdate({
+                targetPrefectures: JAPANESE_PREFECTURES.map((p) => p.code),
+              })
+            }
             className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
           >
             全選択
@@ -186,7 +209,3 @@ function ConditionsTab({
     </div>
   );
 }
-
-
-
-

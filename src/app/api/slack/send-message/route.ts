@@ -6,14 +6,6 @@ export async function POST(request: NextRequest) {
   try {
     const { botToken, channelId, title, message, isTraining = false, departments = [] } = await request.json();
     
-    console.log('リクエストデータ:', { 
-      botToken: botToken ? 'あり' : 'なし', 
-      channelId, 
-      title, 
-      isTraining,
-      departmentsCount: departments?.length || 0,
-      departments
-    });
 
     if (!botToken || !channelId || !message) {
       return NextResponse.json({
@@ -99,12 +91,6 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
-    console.log('Slack API応答:', { 
-      ok: data.ok, 
-      ts: data.ts, 
-      error: data.error,
-      fullResponse: data
-    });
 
     if (!data.ok) {
       let errorMessage = data.error || 'メッセージ送信に失敗しました';

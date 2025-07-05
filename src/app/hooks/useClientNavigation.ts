@@ -8,12 +8,12 @@ export function useClientNavigation() {
     if (window.location.pathname === path) {
       return;
     }
-    
+
     // History APIを使用してURLを変更（リロードなし）
-    window.history.pushState({}, '', path);
-    
+    window.history.pushState({}, "", path);
+
     // popstateイベントを手動で発火（Next.jsが監視している）
-    window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
   }, []);
 
   const replaceTo = useCallback((path: string) => {
@@ -21,16 +21,16 @@ export function useClientNavigation() {
     if (window.location.pathname === path) {
       return;
     }
-    
+
     // replaceStateを使用してURLを置換（リロードなし）
-    window.history.replaceState({}, '', path);
-    
+    window.history.replaceState({}, "", path);
+
     // popstateイベントを手動で発火（Next.jsが監視している）
-    window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
   }, []);
 
   return {
     navigateTo,
-    replaceTo
+    replaceTo,
   };
 }

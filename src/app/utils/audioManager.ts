@@ -28,12 +28,13 @@ export class AudioManager {
   private async initAudioContext(): Promise<void> {
     if (!this.audioContext) {
       try {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (this.audioContext.state === 'suspended') {
+        this.audioContext = new (window.AudioContext ||
+          (window as any).webkitAudioContext)();
+        if (this.audioContext.state === "suspended") {
           await this.audioContext.resume();
         }
       } catch (error) {
-        console.error('Failed to initialize AudioContext:', error);
+        console.error("Failed to initialize AudioContext:", error);
       }
     }
   }
@@ -46,9 +47,9 @@ export class AudioManager {
 
     try {
       await this.initAudioContext();
-      
+
       if (!this.audioContext) {
-        console.warn('AudioContext not available');
+        console.warn("AudioContext not available");
         return;
       }
 
@@ -65,7 +66,7 @@ export class AudioManager {
         }
       }
     } catch (error) {
-      console.error('Failed to play alert sound:', error);
+      console.error("Failed to play alert sound:", error);
     }
   }
 
@@ -83,13 +84,22 @@ export class AudioManager {
       oscillator.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
 
-      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(
+        frequency,
+        this.audioContext.currentTime
+      );
+      oscillator.type = "sine";
 
       // フェードイン・フェードアウト
       gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
-      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + duration / 1000);
+      gainNode.gain.linearRampToValueAtTime(
+        0.3,
+        this.audioContext.currentTime + 0.01
+      );
+      gainNode.gain.linearRampToValueAtTime(
+        0,
+        this.audioContext.currentTime + duration / 1000
+      );
 
       oscillator.start(this.audioContext.currentTime);
       oscillator.stop(this.audioContext.currentTime + duration / 1000);
@@ -101,7 +111,7 @@ export class AudioManager {
   // 震度に応じた周波数を決定
   private getFrequencyForIntensity(intensity: number): number {
     if (intensity >= 5) return 1000; // 高い音（緊急）
-    if (intensity >= 3) return 800;  // 中程度の音
+    if (intensity >= 3) return 800; // 中程度の音
     return 600; // 低い音
   }
 
@@ -122,7 +132,7 @@ export class AudioManager {
 
   // スリープ関数
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // テスト音を再生

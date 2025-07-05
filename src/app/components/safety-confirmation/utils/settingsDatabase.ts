@@ -33,7 +33,6 @@ export class SafetySettingsDatabase {
       };
 
       await db.put("safetySettings", storedSettings);
-      console.log(`安否確認設定をIndexedDBに保存しました`);
     } catch (error) {
       console.error("安否確認設定の保存に失敗:", error);
       throw error;
@@ -51,14 +50,12 @@ export class SafetySettingsDatabase {
 
       const storedSettings = await db.get("safetySettings", this.SETTINGS_ID);
       if (!storedSettings) {
-        console.log("IndexedDBに保存済み安否確認設定が見つかりません。LocalStorageからの復旧を試みます...");
         
         // LocalStorageからの復旧を試みる
         try {
           const { Settings } = await import("@/app/lib/db/settings");
           const lsConfig = await Settings.get("safetyConfirmationConfig");
           if (lsConfig) {
-            console.log("LocalStorageから設定を復旧しました。IndexedDBに再保存中...");
             await this.saveSettings(lsConfig);
             return lsConfig;
           }
@@ -71,7 +68,6 @@ export class SafetySettingsDatabase {
 
       // DB固有フィールドを除去して返す
       const { id, createdAt, updatedAt, ...config } = storedSettings;
-      console.log(`IndexedDBから安否確認設定を読み込みました`);
       return config;
     } catch (error) {
       console.error("安否確認設定の読み込みに失敗:", error);
@@ -89,7 +85,6 @@ export class SafetySettingsDatabase {
       }
 
       await db.delete("safetySettings", this.SETTINGS_ID);
-      console.log("安否確認設定を削除しました");
     } catch (error) {
       console.error("安否確認設定の削除に失敗:", error);
       throw error;
@@ -146,7 +141,6 @@ export class SafetySettingsDatabase {
     try {
       const config = JSON.parse(jsonString) as SafetyConfirmationConfig;
       await this.saveSettings(config);
-      console.log("安否確認設定をインポートしました");
     } catch (error) {
       console.error("安否確認設定のインポートに失敗:", error);
       throw error;
