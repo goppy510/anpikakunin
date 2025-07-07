@@ -82,7 +82,6 @@ export interface SafetyConfirmationConfig {
   // departments: DepartmentStamp[];
   // template: NotificationTemplate;
   training: TrainingMode;
-  isActive: boolean;
 }
 
 // 日本の都道府県データ

@@ -8,12 +8,15 @@ import {
   TrainingMode,
   DepartmentStamp,
   NotificationTemplate,
+  NotificationConditions,
   DEFAULT_DEPARTMENT_STAMPS,
   DEFAULT_NOTIFICATION_TEMPLATE,
+  JAPANESE_PREFECTURES,
 } from "../types/SafetyConfirmationTypes";
 import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettings";
 import { TrainingScheduler } from "../components/TrainingScheduler";
 import { SetupTab } from "../components/SetupTab";
+import { NotificationConditionsSettings } from "../components/NotificationConditionsSettings";
 import { Settings } from "../../../lib/db/settings";
 import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 import { SafetySettingsDatabase } from "../utils/settingsDatabase";
@@ -31,12 +34,11 @@ export function SafetyConfirmationDashboard() {
       mentionTargets: [],
       scheduledTrainings: [],
     },
-    isActive: false,
   });
 
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "slack" | "departments" | "message" | "training" | "setup"
+    "slack" | "departments" | "conditions" | "message" | "training" | "setup"
   >("slack");
 
   // 設定読み込み
@@ -247,43 +249,6 @@ export function SafetyConfirmationDashboard() {
               Slack連携による安否確認システムの設定と管理
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center cursor-pointer bg-gray-800 px-4 py-2 rounded-lg">
-              <input
-                type="checkbox"
-                checked={config.isActive}
-                onChange={(e) =>
-                  setConfig((prev) => ({ ...prev, isActive: e.target.checked }))
-                }
-                className="mr-2 w-4 h-4"
-              />
-              <span className="text-white text-sm font-medium">
-                {config.isActive ? "システム有効" : "システム無効"}
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {/* システムステータス */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <div className="flex items-center gap-4">
-            <div
-              className={cn(
-                "w-3 h-3 rounded-full",
-                config.isActive ? "bg-green-500" : "bg-red-500"
-              )}
-            ></div>
-            <div>
-              <h3 className="text-lg font-semibold">
-                システムステータス: {config.isActive ? "運用中" : "停止中"}
-              </h3>
-              <p className="text-gray-400 text-sm">
-                {config.isActive
-                  ? "地震情報を監視し、自動で安否確認を送信します"
-                  : "システムが無効化されています。設定後に有効化してください"}
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* タブナビゲーション */}
@@ -291,6 +256,7 @@ export function SafetyConfirmationDashboard() {
           {[
             { key: "slack", label: "Slack設定" },
             { key: "departments", label: "部署設定" },
+            { key: "conditions", label: "通知条件" },
             { key: "message", label: "メッセージ設定" },
             { key: "training", label: "訓練モード" },
             { key: "setup", label: "集計設定" },
@@ -333,6 +299,13 @@ export function SafetyConfirmationDashboard() {
             <div className="p-6">
               <h3 className="text-xl font-semibold mb-4">部署スタンプ設定</h3>
               <DepartmentSettings config={config} onUpdate={setConfig} />
+            </div>
+          )}
+
+          {activeTab === "conditions" && (
+            <div className="p-6">
+              <h3 className="text-xl font-semibold mb-4">通知条件設定</h3>
+              <NotificationConditionsSettings config={config} onUpdate={setConfig} />
             </div>
           )}
 
