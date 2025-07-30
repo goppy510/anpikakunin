@@ -1,8 +1,18 @@
 FROM node:23-slim
 
 WORKDIR /app
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+
 COPY . .
+# Set default environment variables for build
+ENV NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
+ENV NEXT_PUBLIC_BASE_URL=http://localhost:8080
+ENV NEXT_PUBLIC_GAS_INTERACTIONS_URL=https://script.google.com/macros/s/placeholder/exec
+ENV SLACK_SIGNING_SECRET=placeholder_secret
+ENV NODE_ENV=production
+RUN yarn build
 
-RUN yarn install
-
-CMD ["yarn", "dev", "--port", "8080"]
+EXPOSE 8080
+ENV PORT=8080
+CMD ["yarn", "start"]
