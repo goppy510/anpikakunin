@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // 部署ボタンがある場合は追加
     if (departments && departments.length > 0) {
-      const buttons = departments.map(dept => {
+      const buttons = departments.map((dept: any) => {
         // slackEmojiプロパティから適切な表示を決定
         const emojiDisplay = dept.slackEmoji?.url 
           ? `:${dept.slackEmoji.name}:` 

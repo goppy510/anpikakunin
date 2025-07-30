@@ -4,17 +4,12 @@
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 
-import cn from "classnames";
 import { ApiService } from "@/app/api/ApiService";
-import { oauth2 } from "@/app/api/Oauth2Service";
 import { EventItem } from "./types/EventItem";
+import { TsunamiWarning } from "./types/TsunamiTypes";
 import { LatestEventCard } from "./ui/LatestEventCard";
 import { RegularEventCard } from "./ui/RegularEventCard";
-import { runProgressiveSimulation } from "./utils/progressiveSimulationService";
-import { WebSocketManager } from "./utils/websocketProcessor";
 import { EventDatabase } from "./utils/eventDatabase";
-import { CurrentTime } from "./components/CurrentTime";
-import { IntensityScale } from "./components/IntensityScale";
 import { MonitorHeader } from "./components/MonitorHeader";
 import { SafetyConfirmationSettings } from "../safety-confirmation/pages/SafetyConfirmationSettings";
 import { useWebSocket } from "../providers/WebSocketProvider";
@@ -39,9 +34,6 @@ const MapComponent = dynamic(() => import("./map/MapCompnent"), {
 });
 
 
-const dummyEvents: EventItem[] = [
-  // 実際のWebSocketデータを使用するため、ダミーデータは空にする
-];
 
 export default function Monitor() {
   // WebSocketProviderから状態を取得
@@ -61,13 +53,10 @@ export default function Monitor() {
   } = useWebSocket();
 
   const [soundPlay, setSoundPlay] = useState(false);
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [tsunamiWarnings, setTsunamiWarnings] = useState<TsunamiWarning[]>([]);
   const [viewEventId, setViewEventId] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
   const [runMapSimulation, setRunMapSimulation] = useState(false);
   const [notificationThreshold, setNotificationThreshold] = useState(1); // デフォルト震度1
-  const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
   const [showSafetySettings, setShowSafetySettings] = useState<boolean>(false);
   const audioManager = useRef<AudioManager>(AudioManager.getInstance());
 
@@ -80,13 +69,13 @@ export default function Monitor() {
     audioManager.current.setEnabled(settings.soundEnabled);
   }, []);
 
-  // グローバルイベントをローカル状態に同期と音声通知
+  // 音声通知用の前回のイベント数を記録
+  const [previousEventCount, setPreviousEventCount] = useState(0);
+  
+  // 新しいイベントが追加された時の音声通知
   useEffect(() => {
-    const previousLength = events.length;
-    setEvents(globalEvents);
-    
     // 新しいイベントが追加された時の音声通知（増加した場合のみ）
-    if (globalEvents.length > previousLength && globalEvents.length > 0 && soundPlay) {
+    if (globalEvents.length > previousEventCount && globalEvents.length > 0 && soundPlay) {
       const latestEvent = globalEvents[0];
       if (latestEvent && !latestEvent.isTest) {
         const intensity = getIntensityValue(latestEvent.maxInt || "0");
@@ -99,19 +88,13 @@ export default function Monitor() {
         }
       }
     }
-  }, [globalEvents, soundPlay, notificationThreshold]);
+    setPreviousEventCount(globalEvents.length);
+  }, [globalEvents.length, soundPlay, notificationThreshold, previousEventCount, globalEvents]);
   
-  // 津波警報の同期
-  useEffect(() => {
-    setTsunamiWarnings(globalTsunamiWarnings);
-  }, [globalTsunamiWarnings]);
-  
-  // テストモードの変更を監視して、オフ時に津波警報をクリア
+  // テストモードの変更を監視（津波警報はWebSocketProviderで管理）
   useEffect(() => {
     if (!testMode) {
-      // テストモードがオフになったら津波警報をクリア
-      setTsunamiWarnings([]);
-      console.log('テストモードオフ: 津波警報をクリアしました');
+      console.log('テストモードオフ');
     }
   }, [testMode]);
   
@@ -129,37 +112,17 @@ export default function Monitor() {
       if (hasLoadedFromDB) return; // 重複実行を防止
       
       try {
-        console.log("Starting to load events from DB...");
         const storedEvents = await EventDatabase.getLatestEvents(30);
-        console.log("Loaded", storedEvents.length, "events from DB");
-        console.log("Current globalEvents length:", globalEvents.length);
         
         if (storedEvents.length > 0) {
-          // DBからのイベントを重複チェックして追加
-          console.log("Adding", storedEvents.length, "events to state");
-          console.log("Sample event to add:", storedEvents[0]);
-          console.log("Current globalEvents before adding from DB:", globalEvents.map(e => e.eventId));
-          
-          storedEvents.forEach((event, index) => {
-            // 既に同じeventIdが存在しない場合のみ追加
-            const exists = globalEvents.some(e => e.eventId === event.eventId);
-            if (!exists) {
-              console.log(`Adding event ${index + 1}/${storedEvents.length}:`, event.eventId, "isConfirmed:", event.isConfirmed);
-              addEvent(event);
-            } else {
-              console.log(`Skipping duplicate event:`, event.eventId);
-            }
-          });
-          console.log("Finished adding all events from DB");
+          // DBからのイベントをWebSocketProviderの状態に設定
+          storedEvents.forEach(event => addEvent(event));
         }
         
         setHasLoadedFromDB(true);
       } catch (error) {
         console.error("IndexedDBからのイベント読み込みに失敗:", error);
-        setHasLoadedFromDB(true); // エラー時もフラグを設定して無限ループを防止
-      } finally {
-        console.log("DB loading completed, setting isLoadingFromDB to false");
-        setIsLoadingFromDB(false);
+        setHasLoadedFromDB(true);
       }
     };
 
@@ -167,7 +130,7 @@ export default function Monitor() {
     if (!hasLoadedFromDB) {
       loadEventsFromDB();
     }
-  }, [hasLoadedFromDB]); // hasLoadedFromDBのみ監視
+  }, [hasLoadedFromDB, addEvent]);
 
 
   // 震度を数値に変換するヘルパー関数
@@ -180,9 +143,6 @@ export default function Monitor() {
   };
 
   /* ---------- UIハンドラ例 ---------- */
-  const reconnectWs = () => {
-    reconnect();
-  };
   
   const toggleSound = async (v: boolean) => {
     setSoundPlay(v);
@@ -261,73 +221,35 @@ export default function Monitor() {
 
 
   
-  // イベント確定処理
-  const confirmEvent = (eventId: string) => {
-    setEvents(prevEvents => {
-      return prevEvents.map(event => {
-        if (event.eventId === eventId && !event.isConfirmed) {
-          const confirmedEvent = {
-            ...event,
-            isConfirmed: true,
-            maxInt: event.currentMaxInt || event.maxInt // 現在の震度を確定
-          };
-          
-          // IndexedDBに保存
-          EventDatabase.saveEvent(confirmedEvent).catch(error => {
-            console.error("確定イベントのIndexedDB保存に失敗:", error);
-          });
-          
-          return confirmedEvent;
-        }
-        return event;
-      });
-    });
-  };
 
   const runTestSimulation = () => {
     // 既存の未確定イベントを探す
-    const unconfirmedEvent = events.find(event => !event.isConfirmed);
+    const unconfirmedEvent = globalEvents.find(event => !event.isConfirmed);
     
     if (unconfirmedEvent) {
-      const targetEventId = unconfirmedEvent.eventId;
       
       // ステップ1: 3秒後に震度を段階的に更新（確認中のまま）
       setTimeout(() => {
-        setEvents(prevEvents => 
-          prevEvents.map(event => 
-            event.eventId === targetEventId 
-              ? { ...event, currentMaxInt: "3" }
-              : event
-          )
-        );
+        const updatedEvent = { ...unconfirmedEvent, currentMaxInt: "3" };
+        addEvent(updatedEvent);
       }, 3000);
       
       // ステップ2: 6秒後にさらに震度更新
       setTimeout(() => {
-        setEvents(prevEvents => 
-          prevEvents.map(event => 
-            event.eventId === targetEventId 
-              ? { ...event, currentMaxInt: "4" }
-              : event
-          )
-        );
+        const updatedEvent = { ...unconfirmedEvent, currentMaxInt: "4" };
+        addEvent(updatedEvent);
       }, 6000);
       
       // ステップ3: 9秒後に最終確定
       setTimeout(() => {
-        setEvents(prevEvents => 
-          prevEvents.map(event => 
-            event.eventId === targetEventId 
-              ? { 
-                  ...event, 
-                  maxInt: "4", // 確定震度
-                  hypocenter: { name: "千葉県東方沖", depth: { value: 30 } },
-                  magnitude: { value: 5.2 },
-                  isConfirmed: true 
-                }
-              : event
-          )
-        );
+        const finalEvent = { 
+          ...unconfirmedEvent, 
+          maxInt: "4", // 確定震度
+          hypocenter: { name: "千葉県東方沖", depth: { value: 30 } },
+          magnitude: { value: 5.2 },
+          isConfirmed: true 
+        };
+        addEvent(finalEvent);
       }, 9000);
     } else {
       // 未確定イベントがない場合は新規作成してシミュレート
@@ -345,45 +267,29 @@ export default function Monitor() {
         isTest: true
       };
       
-      
       // 初期イベントを追加
-      setEvents(prevEvents => [initialEvent, ...prevEvents.slice(0, 9)]);
+      addEvent(initialEvent);
       
       // 以下は上記と同じシミュレーション処理
       setTimeout(() => {
-        setEvents(prevEvents => 
-          prevEvents.map(event => 
-            event.eventId === testEventId 
-              ? { ...event, currentMaxInt: "3" }
-              : event
-          )
-        );
+        const updatedEvent = { ...initialEvent, currentMaxInt: "3" };
+        addEvent(updatedEvent);
       }, 3000);
       
       setTimeout(() => {
-        setEvents(prevEvents => 
-          prevEvents.map(event => 
-            event.eventId === testEventId 
-              ? { ...event, currentMaxInt: "4" }
-              : event
-          )
-        );
+        const updatedEvent = { ...initialEvent, currentMaxInt: "4" };
+        addEvent(updatedEvent);
       }, 6000);
       
       setTimeout(() => {
-        setEvents(prevEvents => 
-          prevEvents.map(event => 
-            event.eventId === testEventId 
-              ? { 
-                  ...event, 
-                  maxInt: "4", // 確定震度
-                  hypocenter: { name: "テスト震源（確定）", depth: { value: 30 } },
-                  magnitude: { value: 5.2 },
-                  isConfirmed: true 
-                }
-              : event
-          )
-        );
+        const finalEvent = { 
+          ...initialEvent, 
+          maxInt: "4", // 確定震度
+          hypocenter: { name: "テスト震源（確定）", depth: { value: 30 } },
+          magnitude: { value: 5.2 },
+          isConfirmed: true 
+        };
+        addEvent(finalEvent);
       }, 9000);
     }
     
@@ -417,7 +323,7 @@ export default function Monitor() {
         {/* ---- event list ---- */}
         <aside className="flex flex-col w-[380px] max-w-[380px]">
           <ul className="flex-1 overflow-y-auto m-0 p-2 bg-black max-h-full">
-            {events.slice(0, 50).map((ev, index) => {
+            {globalEvents.slice(0, 50).map((ev, index) => {
               const isLatest = index === 0;
               const isSelected = viewEventId === ev.eventId;
               
@@ -445,30 +351,18 @@ export default function Monitor() {
           <MapComponent
             onEarthquakeUpdate={(newEvent) => {
               // MapComponentからのイベントは確定済みとして処理
-              setEvents((prevEvents) => {
-                const existingIndex = prevEvents.findIndex(e => e.eventId === newEvent.eventId);
-                if (existingIndex >= 0) {
-                  // 既存イベントを更新
-                  const updatedEvents = [...prevEvents];
-                  updatedEvents[existingIndex] = {
-                    ...updatedEvents[existingIndex],
-                    ...newEvent,
-                    eventId: newEvent.eventId,
-                    isConfirmed: true // MapComponentからは確定済み
-                  };
-                  return updatedEvents;
-                } else {
-                  // 新規イベントを追加
-                  return [{ ...newEvent, isConfirmed: true }, ...prevEvents];
-                }
-              });
+              const eventWithConfirmed = {
+                ...newEvent,
+                isConfirmed: true // MapComponentからは確定済み
+              };
+              addEvent(eventWithConfirmed);
             }}
             onTsunamiSimulation={handleTsunamiSimulation}
             runSimulation={runMapSimulation}
             onSimulationComplete={() => setRunMapSimulation(false)}
             testMode={testMode}
-            earthquakeEvents={events} // 地図用に現在のイベントを渡す
-            tsunamiWarnings={tsunamiWarnings} // 津波警報データを渡す
+            earthquakeEvents={globalEvents} // 地図用にグローバルイベントを渡す
+            tsunamiWarnings={globalTsunamiWarnings} // 津波警報データを渡す
             connectionStatus={status}
             serverTime={serverTime}
             lastMessageType={lastMessageType}

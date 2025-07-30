@@ -14,6 +14,7 @@ import { TsunamiWarning } from "@/app/components/monitor/types/TsunamiTypes";
 import { oauth2 } from "@/app/api/Oauth2Service";
 import { ApiService } from "@/app/api/ApiService";
 import { EventDatabase } from "@/app/components/monitor/utils/eventDatabase";
+// EarthquakeNotificationService は動的インポートで読み込み
 
 interface WebSocketContextType {
   status: "open" | "connecting" | "closed" | "error";
@@ -23,6 +24,7 @@ interface WebSocketContextType {
   lastMessageType: string;
   authStatus: "checking" | "authenticated" | "not_authenticated";
   isInitialized: boolean;
+  responseCount: number;
   addEvent: (event: EventItem) => void;
   addTsunamiWarning: (warning: TsunamiWarning) => void;
   reconnect: () => void;
@@ -59,6 +61,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   >("checking");
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [notificationThreshold] = useState(1); // デフォルト震度1
+  const [responseCount, setResponseCount] = useState(0);
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
   // ページ離脱時とフォーカス管理
   useEffect(() => {
@@ -107,6 +111,26 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return parseFloat(intensity) || 0;
   };
 
+  // 初期データ読み込み
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (hasLoadedInitialData) return;
+      
+      try {
+        const storedEvents = await EventDatabase.getLatestEvents(30);
+        if (storedEvents.length > 0) {
+          setEvents(storedEvents);
+        }
+        setHasLoadedInitialData(true);
+      } catch (error) {
+        console.error("初期データの読み込みに失敗:", error);
+        setHasLoadedInitialData(true);
+      }
+    };
+
+    loadInitialData();
+  }, [hasLoadedInitialData]);
+
   // 認証状態確認とWebSocket接続クリーンアップ
   useEffect(() => {
     const checkAuth = async () => {
@@ -150,9 +174,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     try {
       console.log("=== WebSocket Connection Cleanup ===");
 
-      // より徹底的なクリーンアップ: 3回試行
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`🧹 Cleanup attempt ${attempt}/3`);
+      // より徹底的なクリーンアップ: 5回試行
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        console.log(`🧹 Cleanup attempt ${attempt}/5`);
 
         const socketList = await apiService.socketList();
         const connectionCount = socketList.items?.length || 0;
@@ -163,22 +187,23 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           break;
         }
 
-        // 全接続を並列でクローズ
-        const closePromises = socketList.items!.map(async (socket) => {
+        // 全接続を順次クローズ（並列処理をやめて安全に）
+        for (const socket of socketList.items!) {
           try {
             await apiService.socketClose(socket.id);
             console.log(`✅ Closed socket ${socket.id}`);
+            // 各クローズ後に少し待機
+            await new Promise((resolve) => setTimeout(resolve, 200));
           } catch (error) {
             console.warn(`⚠️ Failed to close ${socket.id}:`, error.message);
           }
-        });
+        }
 
-        await Promise.all(closePromises);
-
-        // より長い待機時間でサーバー側の処理完了を確実に待つ
-        if (attempt < 3) {
-          console.log(`⏳ Waiting 2 seconds for server cleanup...`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+        // サーバー側の処理完了を確実に待つ
+        if (attempt < 5) {
+          const waitTime = attempt * 1000; // 段階的に待機時間を増加
+          console.log(`⏳ Waiting ${waitTime}ms for server cleanup...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
         }
       }
 
@@ -186,7 +211,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
       // 最終確認用の待機時間
       console.log("⏳ Final wait for server processing...");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       // データベースのクリーンアップ（30件保持のみ）
       EventDatabase.cleanupOldEvents(30).catch((error) => {
@@ -209,6 +234,20 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       const handleNewEvent = (event: EventItem) => {
         console.log("=== WebSocketProvider: Received earthquake event ===");
         console.log("Event details:", JSON.stringify(event, null, 2));
+
+        // 地震通知サービスに処理を委託（本番用通知）
+        // 動的インポートで循環参照を回避
+        setTimeout(async () => {
+          try {
+            const { EarthquakeNotificationService } = await import("../safety-confirmation/utils/earthquakeNotificationService");
+            const notificationService = EarthquakeNotificationService.getInstance();
+            notificationService.processEarthquakeEvent(event).catch(error => {
+              console.error("地震通知サービス処理エラー:", error);
+            });
+          } catch (error) {
+            console.error("地震通知サービスの動的読み込みエラー:", error);
+          }
+        }, 100);
 
         // すべての地震データを表示（フィルタリングしない）
         const maxIntensity = getIntensityValue(event.maxInt);
@@ -317,6 +356,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       const handleTimeUpdate = (newServerTime: string, messageType: string) => {
         setServerTime(newServerTime);
         setLastMessageType(messageType);
+        
+        // レスポンスカウントを増加（点滅トリガー）
+        setResponseCount(prev => prev + 1);
       };
 
       const handleTsunamiWarning = (warning: TsunamiWarning) => {
@@ -490,6 +532,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     lastMessageType,
     authStatus,
     isInitialized,
+    responseCount,
     addEvent,
     addTsunamiWarning,
     reconnect,

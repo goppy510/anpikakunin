@@ -553,7 +553,7 @@ export default function MapComponent({
       ...stationsWithDistance.map((item) => item.distance)
     );
     const maxIntensity = Math.max(
-      ...stationsWithDistance.map((item) => item.earthquakeData.intensity)
+      ...stationsWithDistance.map((item) => Number(item.earthquakeData.intensity) || 0)
     );
     const totalDuration = 500 + maxDistance * 100 + maxIntensity * 400 + 1000;
 
@@ -575,7 +575,7 @@ export default function MapComponent({
           name: '青森県太平洋沿岸',
           prefecture: '青森県',
           warning_type: 'warning',
-          coordinates: TSUNAMI_COASTAL_AREAS['201']?.coordinates || [[41.0, 141.5], [40.5, 141.8], [40.0, 141.5], [40.2, 141.0]],
+          coordinates: (TSUNAMI_COASTAL_AREAS['201']?.coordinates as unknown as [number, number][]) || [[41.0, 141.5], [40.5, 141.8], [40.0, 141.5], [40.2, 141.0]] as [number, number][],
           expectedArrival: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
           maxHeight: { value: 2, category: 'medium', text: '2m' }
         },
@@ -584,7 +584,7 @@ export default function MapComponent({
           name: '岩手県',
           prefecture: '岩手県',
           warning_type: 'advisory',
-          coordinates: TSUNAMI_COASTAL_AREAS['202']?.coordinates || [[40.2, 141.0], [39.8, 142.0], [39.0, 142.0], [38.8, 141.8]],
+          coordinates: (TSUNAMI_COASTAL_AREAS['202']?.coordinates as unknown as [number, number][]) || [[40.2, 141.0], [39.8, 142.0], [39.0, 142.0], [38.8, 141.8]] as [number, number][],
           expectedArrival: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
           maxHeight: { value: 1, category: 'low', text: '1m' }
         },
@@ -984,15 +984,17 @@ export default function MapComponent({
           attribution="Tiles &copy; Esri"
         />
 
-        {/* 都道府県境界線（津波警報時は点滅） */}
+        {/* 都道府県境界線（津波警報時は地域全体を色で塗りつぶし） */}
         {prefectureData && (
           <GeoJSON
             data={prefectureData}
             style={(feature) => {
-              // 津波警報が発令されている地域の境界線を点滅表示
+              // 津波警報が発令されている地域の色表示設定
               let borderColor = '#ffffff';
               let borderWeight = 0.3;
               let borderOpacity = 0.7;
+              let fillColor = 'transparent';
+              let fillOpacity = 0;
               
               if (activeTsunamiWarnings.size > 0) {
                 const prefName = feature?.properties?.name_ja || feature?.properties?.nam_ja || '';
@@ -1010,18 +1012,24 @@ export default function MapComponent({
                 const isCoastal = coastalPrefectures.some(pref => prefName.includes(pref.replace(/[都道府県]$/, '')));
                 
                 if (isCoastal) {
-                  // 沿岸部の場合は津波警報に応じて境界線を点滅表示
+                  // 沿岸部の場合は津波警報に応じて地域全体を色で塗りつぶし表示
                   for (const warning of activeTsunamiWarnings.values()) {
                     for (const area of warning.areas) {
                       if (area.prefecture === prefName || prefName.includes(area.prefecture.replace(/[都道府県]$/, ''))) {
+                        // 津波警報レベルに応じた色設定
+                        fillColor = TSUNAMI_COLORS[area.warning_type];
                         borderColor = TSUNAMI_BORDER_COLORS[area.warning_type];
+                        
                         // 大津波警報は特に太く表示
-                        borderWeight = area.warning_type === 'major_warning' ? 5.0 : 3.5;
-                        borderOpacity = tsunamiBlinking ? 1.0 : 0.4; // 点滅時の最小透明度を上げる
+                        borderWeight = area.warning_type === 'major_warning' ? 4.0 : 2.5;
+                        borderOpacity = tsunamiBlinking ? 1.0 : 0.6;
+                        
+                        // 地域全体の塗りつぶし透明度（点滅効果）
+                        fillOpacity = tsunamiBlinking ? 0.7 : 0.3;
                         break;
                       }
                     }
-                    if (borderWeight > 0.3) break;
+                    if (fillOpacity > 0) break;
                   }
                 }
               }
@@ -1030,7 +1038,8 @@ export default function MapComponent({
                 color: borderColor,
                 weight: borderWeight,
                 opacity: borderOpacity,
-                fillOpacity: 0, // 塗りつぶしなし
+                fillColor: fillColor,
+                fillOpacity: fillOpacity,
               };
             }}
           />
@@ -1082,32 +1091,40 @@ export default function MapComponent({
             attribution=""
           />
 
-          {/* 沖縄の都道府県境界線（津波警報時は点滅） */}
+          {/* 沖縄の都道府県境界線（津波警報時は地域全体を色で塗りつぶし） */}
           {prefectureData && (
             <GeoJSON
               data={prefectureData}
               style={(feature) => {
-                // 沖縄の津波警報時境界線点滅表示
+                // 沖縄の津波警報時色表示設定
                 let borderColor = '#ffffff';
                 let borderWeight = 0.5;
                 let borderOpacity = 0.8;
+                let fillColor = 'transparent';
+                let fillOpacity = 0;
                 
                 if (activeTsunamiWarnings.size > 0) {
                   const prefName = feature?.properties?.name_ja || feature?.properties?.nam_ja || '';
                   
-                  // 沖縄は沿岸部なので津波警報に応じて境界線を点滅表示
+                  // 沖縄は沿岸部なので津波警報に応じて地域全体を色で塗りつぶし表示
                   if (prefName.includes('沖縄')) {
                     for (const warning of activeTsunamiWarnings.values()) {
                       for (const area of warning.areas) {
                         if (area.prefecture === prefName || prefName.includes(area.prefecture.replace(/[都道府県]$/, ''))) {
+                          // 津波警報レベルに応じた色設定
+                          fillColor = TSUNAMI_COLORS[area.warning_type];
                           borderColor = TSUNAMI_BORDER_COLORS[area.warning_type];
+                          
                           // 大津波警報は特に太く表示
-                          borderWeight = area.warning_type === 'major_warning' ? 5.0 : 3.5;
-                          borderOpacity = tsunamiBlinking ? 1.0 : 0.4; // 点滅時の最小透明度を上げる
+                          borderWeight = area.warning_type === 'major_warning' ? 4.0 : 2.5;
+                          borderOpacity = tsunamiBlinking ? 1.0 : 0.6;
+                          
+                          // 地域全体の塗りつぶし透明度（点滅効果）
+                          fillOpacity = tsunamiBlinking ? 0.7 : 0.3;
                           break;
                         }
                       }
-                      if (borderWeight > 0.5) break;
+                      if (fillOpacity > 0) break;
                     }
                   }
                 }
@@ -1116,7 +1133,8 @@ export default function MapComponent({
                   color: borderColor,
                   weight: borderWeight,
                   opacity: borderOpacity,
-                  fillOpacity: 0, // 塗りつぶしなし
+                  fillColor: fillColor,
+                  fillOpacity: fillOpacity,
                 };
               }}
             />

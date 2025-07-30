@@ -607,31 +607,29 @@ export class WebSocketManager {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage;
 
-          // 受信メッセージの詳細ログ（デバッグ用）
-          console.log("=== WebSocket Message Received ===");
-          console.log("Message type:", message.type);
-          console.log("Classification:", message.classification);
-          console.log("Head:", message.head);
-          if (message.xmlReport?.head) {
-            console.log("XML Report head:", message.xmlReport.head);
+          // ping以外のメッセージの詳細ログ（デバッグ用）
+          if (message.type !== "ping" && message.type !== "pong") {
+            console.log("=== WebSocket Message Received ===");
+            console.log("Message type:", message.type);
+            console.log("Classification:", message.classification);
+            console.log("Head:", message.head);
+            if (message.xmlReport?.head) {
+              console.log("XML Report head:", message.xmlReport.head);
+            }
+            console.log("Full message:", JSON.stringify(message, null, 2));
           }
-          console.log("Full message:", JSON.stringify(message, null, 2));
 
           // サーバー時刻を抽出してコールバック実行
           this.extractAndUpdateServerTime(message);
 
           // pingメッセージにはpongで応答
           if (message.type === "ping") {
-            console.log(
-              `Received ping (${message.pingId}), sending pong response`
-            );
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
               const pongResponse = {
                 type: "pong",
                 pingId: message.pingId,
               };
               this.ws.send(JSON.stringify(pongResponse));
-              console.log(`Sent pong response:`, pongResponse);
             }
             return;
           }
@@ -810,51 +808,68 @@ export class WebSocketManager {
 
   private async handleMaxConnectionsError(): Promise<void> {
     try {
-      console.log("=== Emergency Connection Cleanup ===");
-      const socketList = await this.apiService.socketList();
-      console.log(
-        "Found connections during emergency cleanup:",
-        socketList.items?.length || 0
-      );
+      console.log("=== Emergency Connection Cleanup (Max Connections Error) ===");
+      
+      // 複数回試行でより確実にクリーンアップ
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        console.log(`🚨 Emergency cleanup attempt ${attempt}/5`);
+        
+        const socketList = await this.apiService.socketList();
+        const connectionCount = socketList.items?.length || 0;
+        console.log(`📊 Found ${connectionCount} connections during emergency cleanup`);
 
-      if (socketList.items && socketList.items.length > 0) {
-        console.log("Emergency cleanup: Closing all connections...");
-        const closePromises = socketList.items.map(async (socket) => {
-          if (socket.status === "open" || socket.status === "waiting") {
-            console.log(`Emergency cleanup: Closing socket ${socket.id}`);
+        if (connectionCount === 0) {
+          console.log("✅ No connections found, cleanup complete");
+          break;
+        }
+
+        if (socketList.items && socketList.items.length > 0) {
+          console.log("🧹 Emergency cleanup: Closing all connections...");
+          
+          // 順次処理で安全性を高める
+          for (const socket of socketList.items) {
             try {
+              console.log(`🔌 Emergency cleanup: Closing socket ${socket.id} (status: ${socket.status})`);
               await this.apiService.socketClose(socket.id);
               console.log(`✅ Emergency cleanup: Closed socket ${socket.id}`);
+              // 各クローズ後に短い待機
+              await new Promise(resolve => setTimeout(resolve, 100));
             } catch (error) {
-              console.error(
-                `❌ Emergency cleanup: Failed to close socket ${socket.id}:`,
-                error
-              );
+              console.error(`❌ Emergency cleanup: Failed to close socket ${socket.id}:`, error);
             }
           }
-        });
+        }
 
-        await Promise.all(closePromises);
-        console.log("Emergency cleanup: All close operations completed");
-
-        // 少し待ってから再接続を試行
-        setTimeout(() => {
-          console.log("Emergency cleanup: Attempting reconnection...");
-          this.connect();
-        }, 3000);
+        // 段階的に待機時間を増加
+        if (attempt < 5) {
+          const waitTime = attempt * 1000;
+          console.log(`⏳ Emergency cleanup: Waiting ${waitTime}ms before next attempt...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
       }
+
+      console.log("🎯 Emergency cleanup completed");
+
+      // より長い待機時間で確実にサーバー側処理完了を待つ
+      console.log("⏳ Emergency cleanup: Final wait for server processing...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // 再接続を試行
+      console.log("🔄 Emergency cleanup: Attempting reconnection...");
+      this.connect();
+      
     } catch (error) {
       console.warn(
-        "Emergency cleanup failed (socket management may require special permissions):",
+        "🚨 Emergency cleanup failed (socket management may require special permissions):",
         error.message
       );
 
-      // socket.list/closeが使えない場合、時間をおいて再接続を試行
-      console.log("Falling back to timed reconnection strategy...");
+      // socket.list/closeが使えない場合、より長い時間をおいて再接続を試行
+      console.log("⏳ Falling back to extended timed reconnection strategy...");
       setTimeout(() => {
-        console.log("Timed reconnection attempt...");
+        console.log("🔄 Extended timed reconnection attempt...");
         this.connect();
-      }, 10000); // 10秒後に再試行
+      }, 30000); // 30秒後に再試行
     }
   }
 

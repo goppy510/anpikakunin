@@ -20,6 +20,7 @@ import { NotificationConditionsSettings } from "../components/NotificationCondit
 import { Settings } from "../../../lib/db/settings";
 import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 import { SafetySettingsDatabase } from "../utils/settingsDatabase";
+// EarthquakeNotificationService は動的インポートで読み込み
 
 export function SafetyConfirmationDashboard() {
   const [config, setConfig] = useState<SafetyConfirmationConfig>({
@@ -64,6 +65,16 @@ export function SafetyConfirmationDashboard() {
         console.error("設定の読み込みに失敗しました:", error);
       } finally {
         setIsLoading(false);
+        
+        // 地震通知サービスの設定を更新（動的インポート）
+        import("../utils/earthquakeNotificationService").then(({ EarthquakeNotificationService }) => {
+          const notificationService = EarthquakeNotificationService.getInstance();
+          notificationService.loadConfig().catch(error => {
+            console.error("地震通知サービスの初期化に失敗:", error);
+          });
+        }).catch(error => {
+          console.error("地震通知サービスの動的読み込みに失敗:", error);
+        });
       }
     };
 
@@ -85,6 +96,16 @@ export function SafetyConfirmationDashboard() {
       try {
         await SafetySettingsDatabase.saveSettings(config);
         await Settings.set("safetyConfirmationConfig", config);
+        
+        // 地震通知サービスの設定を更新（動的インポート）
+        import("../utils/earthquakeNotificationService").then(({ EarthquakeNotificationService }) => {
+          const notificationService = EarthquakeNotificationService.getInstance();
+          notificationService.loadConfig().catch(error => {
+            console.error("地震通知サービスの設定更新に失敗:", error);
+          });
+        }).catch(error => {
+          console.error("地震通知サービスの動的読み込みに失敗:", error);
+        });
       } catch (error) {
         console.error("Slack設定の自動保存に失敗:", error);
       }

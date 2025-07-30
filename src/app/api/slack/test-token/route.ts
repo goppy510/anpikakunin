@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     };
 
     // 絵文字リストを取得
-    let emojis = [];
+    let emojis: any[] = [];
     try {
       const emojiResponse = await fetch('https://slack.com/api/emoji.list', {
         method: 'GET',

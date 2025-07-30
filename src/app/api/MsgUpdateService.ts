@@ -170,7 +170,7 @@ export class MsgUpdateService {
       }
       console.log("WebSocket connection established, attaching listeners.");
 
-      this.webSocketSubject.on("start", () => {
+      this.webSocketSubject?.on("start", () => {
         console.log("WebSocket connection open.");
         if (this.webSocketStatus !== "closed") {
           // Avoid status update if closed manually right before 'start'
@@ -183,12 +183,12 @@ export class MsgUpdateService {
         this.handleWebSocketData(data);
       });
 
-      this.webSocketSubject?.on("close", (event) => {
+      this.webSocketSubject?.on("close", (event: any) => {
         // Check if this close was initiated manually or unexpectedly
         if (this.webSocketStatus !== "closed") {
           // Avoid double logging if closed manually
           console.log(
-            `WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}`
+            `WebSocket connection closed. Code: ${event?.code || 'unknown'}, Reason: ${event?.reason || 'unknown'}`
           );
           this.webSocketStatus = "closed";
           this.webSocketSubject = undefined; // Clear reference
@@ -259,8 +259,8 @@ export class MsgUpdateService {
         });
 
         // Always update the token for the *next* iteration
-        this.nextPoolingToken = listResponse.nextPooling;
-        const currentItems = listResponse.items;
+        this.nextPoolingToken = (listResponse as any).nextPooling;
+        const currentItems = (listResponse as any).items;
 
         if (!this.isInitialPollComplete) {
           // Just completed the first poll, obtained the token.
@@ -320,7 +320,7 @@ export class MsgUpdateService {
       }
 
       // Schedule the next iteration only if the loop should continue
-      if (this.isPollingActive && this.webSocketStatus !== "open") {
+      if (this.isPollingActive && (this.webSocketStatus as any) !== "open") {
         this.pollingTimeoutId = setTimeout(loop, 2000); // Schedule next run
       } else {
         this.isPollingActive = false; // Ensure flag is reset if loop terminates
