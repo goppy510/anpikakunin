@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { loadIndexedDBData } from "@/app/lib/migration/indexedDBLoader";
 
 type MigrationStep = "workspace" | "departments" | "conditions" | "messages" | "complete";
 
@@ -27,9 +28,72 @@ export default function MigratePage() {
   });
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingIndexedDB, setLoadingIndexedDB] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [newDept, setNewDept] = useState({ name: "", slackEmoji: "", buttonColor: "#5B8FF9" });
+
+  // IndexedDBから自動読み込み
+  const handleLoadFromIndexedDB = async () => {
+    setLoadingIndexedDB(true);
+    setError(null);
+
+    try {
+      const data = await loadIndexedDBData();
+
+      // ワークスペース情報
+      if (data.workspace) {
+        setWorkspaceData({
+          workspaceId: data.workspace.workspaceId,
+          name: data.workspace.name,
+          botToken: data.workspace.botToken,
+        });
+      }
+
+      // 部署
+      if (data.departments && data.departments.length > 0) {
+        setDepartments(
+          data.departments.map((dept) => ({
+            name: dept.name,
+            slackEmoji: `:${dept.slackEmoji.name}:`,
+            buttonColor: dept.buttonColor,
+          }))
+        );
+      }
+
+      // 通知条件
+      if (data.notificationCondition) {
+        setConditions({
+          minIntensity: data.notificationCondition.minIntensity,
+          targetPrefectures: data.notificationCondition.targetPrefectures,
+          notificationChannel: data.notificationCondition.notificationChannel,
+        });
+      }
+
+      // メッセージ
+      if (data.messageTemplate) {
+        setMessages({
+          productionTitle: data.messageTemplate.production.title,
+          productionBody: data.messageTemplate.production.body,
+          trainingTitle: data.messageTemplate.training.title,
+          trainingBody: data.messageTemplate.training.body,
+        });
+      }
+
+      // スプレッドシートURL
+      if (data.spreadsheetUrl) {
+        setSpreadsheetUrl(data.spreadsheetUrl);
+      }
+
+      alert("✅ IndexedDBからデータを読み込みました！内容を確認してください。");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "IndexedDBからの読み込みに失敗しました"
+      );
+    } finally {
+      setLoadingIndexedDB(false);
+    }
+  };
 
   const addDepartment = () => {
     if (newDept.name && newDept.slackEmoji) {
@@ -84,7 +148,10 @@ export default function MigratePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(workspaceData),
       });
-      if (!workspaceRes.ok) throw new Error("ワークスペース登録失敗");
+      if (!workspaceRes.ok) {
+        const errorData = await workspaceRes.json();
+        throw new Error(errorData.error || "ワークスペース登録失敗");
+      }
       const workspace = await workspaceRes.json();
 
       // 2. 部署登録
@@ -134,7 +201,18 @@ export default function MigratePage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">IndexedDB → PostgreSQL データ移行</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">IndexedDB → PostgreSQL データ移行</h1>
+          {currentStep === "workspace" && (
+            <button
+              onClick={handleLoadFromIndexedDB}
+              disabled={loadingIndexedDB}
+              className="bg-green-600 px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              {loadingIndexedDB ? "読み込み中..." : "📥 IndexedDBから自動読み込み"}
+            </button>
+          )}
+        </div>
 
         {/* ステップインジケーター */}
         <div className="flex gap-4 mb-8">
