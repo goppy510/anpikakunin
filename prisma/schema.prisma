@@ -49,3 +49,74 @@ model SlackNotificationSetting {
 
   @@map("slack_notification_settings")
 }
+
+// 認証・認可システム
+
+enum UserRole {
+  ADMIN  // 管理者権限: すべての設定可能
+  EDITOR // 設定権限: 地震通知設定のみ
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?   @map("password_hash") // null = 未設定（招待中）
+  role          UserRole  @default(EDITOR)
+  isActive      Boolean   @default(true) @map("is_active")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // リレーション
+  sessions      Session[]
+  otpCodes      OtpCode[]
+  invitationsSent UserInvitation[] @relation("InviterRelation")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+  @@index([userId])
+  @@index([token])
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  code      String   // 6桁数字
+  expiresAt DateTime @map("expires_at") // 5分後
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("otp_codes")
+  @@index([userId])
+  @@index([code, expiresAt])
+}
+
+model UserInvitation {
+  id         String    @id @default(uuid())
+  email      String
+  invitedBy  String    @map("invited_by")
+  token      String    @unique
+  role       UserRole  @default(EDITOR)
+  expiresAt  DateTime  @map("expires_at") // 7日後
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  inviter    User      @relation("InviterRelation", fields: [invitedBy], references: [id])
+
+  @@map("user_invitations")
+  @@index([email])
+  @@index([token])
+}
