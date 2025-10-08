@@ -11,6 +11,9 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
       - DATABASE_SSL=disable
+      - SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY:-dGVzdF9lbmNyeXB0aW9uX2tleV8zMmJ5dGVzX2Jhc2U2NA==}
+      - NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
+      - NEXT_PUBLIC_BASE_URL=http://localhost:8080
     depends_on:
       postgres:
         condition: service_healthy

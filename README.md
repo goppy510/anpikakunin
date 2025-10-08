@@ -34,20 +34,30 @@ cd anpikakunin
 
 ### 2. 環境変数の設定
 
-`.env.local` ファイルを作成（`.env.example` を参考に）:
+`.env` ファイルを作成（`.env.example` を参考に）:
 
 ```bash
-# データベース（Docker Compose使用時）
-DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
-DATABASE_SSL=disable
+# .env.example をコピー
+cp .env.example .env
 
-# DMData.jp API
-DMDATA_API_KEY=your_api_key_here
-NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
-
-# Slack トークン暗号化キー（32バイト base64）
-SLACK_TOKEN_ENCRYPTION_KEY=<openssl rand -base64 32 で生成>
+# 暗号化キーを生成
+openssl rand -base64 32
 ```
+
+`.env` ファイルを編集して以下を設定:
+
+```bash
+# DMData.jp API（必須）
+DMDATA_API_KEY=your_dmdata_api_key_here
+
+# Slack トークン暗号化キー（必須）
+# openssl rand -base64 32 で生成した値を設定
+SLACK_TOKEN_ENCRYPTION_KEY=生成した32バイトキー
+
+# その他の設定は .env.example のデフォルト値でOK
+```
+
+**重要:** Docker Compose使用時は、`DATABASE_URL` などの環境変数は `docker-compose.yml` で自動設定されます。
 
 ### 3. Docker Compose で起動
 
