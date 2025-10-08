@@ -1,5 +1,10 @@
 FROM node:23-slim
 
+# Prismaに必要なOpenSSLと依存関係をインストール
+RUN apt-get update -y && \
+    apt-get install -y openssl libssl3 && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
