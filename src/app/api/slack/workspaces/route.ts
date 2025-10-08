@@ -14,7 +14,7 @@ type PostRequestBody = {
 export async function GET() {
   try {
     const workspaces = await listSlackWorkspaces();
-    return NextResponse.json({ items: workspaces });
+    return NextResponse.json({ workspaces });
   } catch (error) {
     console.error("Failed to fetch Slack workspaces:", error);
     return NextResponse.json(

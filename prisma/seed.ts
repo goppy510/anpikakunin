@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -90,6 +91,29 @@ async function main() {
     });
   }
   console.log(`✅ Created/Updated ${INTENSITY_SCALES.length} intensity scales`);
+
+  // 初期管理者アカウント作成
+  console.log("👤 Creating initial admin user...");
+  const adminEmail = process.env.ADMIN_EMAIL || "tgoto@eviry.com";
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+  const adminUser = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      passwordHash: hashedPassword,
+      role: "ADMIN",
+      isActive: true,
+      emailVerified: true,
+    },
+  });
+
+  console.log(`✅ Admin user created: ${adminEmail}`);
+  console.log(`   Password: ${adminPassword}`);
+  console.log(`   ⚠️  Please change this password after first login!`);
 
   console.log("🎉 Seeding completed!");
 }

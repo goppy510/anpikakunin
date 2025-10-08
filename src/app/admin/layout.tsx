@@ -102,8 +102,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* ナビゲーション */}
-        <nav className="p-4">
-          <ul className="space-y-2">
+        <nav className="p-4 flex flex-col h-[calc(100vh-73px)]">
+          <ul className="space-y-2 flex-1">
             {sidebarItems.map((item) => {
               const hasAccess = hasPermission(item.requiredPermissions);
               const isActive = pathname === item.href;
@@ -133,35 +133,27 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
               );
             })}
           </ul>
-        </nav>
 
-        {/* ユーザー情報 */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
-          {sidebarOpen ? (
-            <div className="space-y-2">
-              <div className="text-sm text-gray-400 truncate">{user?.email}</div>
-              <div className="flex items-center gap-2">
+          {/* ログアウトボタン */}
+          <div className="mt-auto pt-4 border-t border-gray-700">
+            {sidebarOpen ? (
+              <div className="space-y-2 mb-2">
+                <div className="text-xs text-gray-400 truncate">{user?.email}</div>
                 <span className="px-2 py-1 bg-red-600 text-white text-xs rounded">
                   {user?.role}
                 </span>
               </div>
-              <button
-                onClick={handleLogout}
-                className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-              >
-                ログアウト
-              </button>
-            </div>
-          ) : (
+            ) : null}
             <button
               onClick={handleLogout}
-              className="w-full p-2 hover:bg-gray-700 rounded text-center"
+              className="flex items-center gap-3 p-3 rounded transition-colors hover:bg-gray-700 text-gray-300 w-full"
               title="ログアウト"
             >
-              🚪
+              <span className="text-xl">🚪</span>
+              {sidebarOpen && <span>ログアウト</span>}
             </button>
-          )}
-        </div>
+          </div>
+        </nav>
       </aside>
 
       {/* メインコンテンツ */}

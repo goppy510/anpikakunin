@@ -1,16 +1,23 @@
 /**
- * メール送信サービス（Resend）
+ * メール送信サービス（お名前.com SMTP）
  */
 
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
-
-const FROM_EMAIL = process.env.SYSTEM_EMAIL_FROM || "noreply@yourdomain.com";
+const FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "noreply@anpikakunin.xyz";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8080";
 const IS_DEV = process.env.NODE_ENV === "development";
+
+// お名前.com SMTPトランスポーター
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "mail1042.onamae.ne.jp",
+  port: parseInt(process.env.SMTP_PORT || "465"),
+  secure: process.env.SMTP_PORT === "465", // 465ならtrue、587ならfalse
+  auth: {
+    user: process.env.SMTP_USER || "noreply@anpikakunin.xyz",
+    pass: process.env.SMTP_PASSWORD || "",
+  },
+});
 
 export interface SendInvitationEmailParams {
   toEmail: string;
@@ -28,17 +35,14 @@ export async function sendInvitationEmail({
 }: SendInvitationEmailParams): Promise<void> {
   const invitationLink = `${BASE_URL}/invitation/${invitationToken}`;
 
-  // 開発環境またはResend未設定の場合はコンソールに出力
-  if (IS_DEV || !resend) {
-    console.log("=== 📧 招待メール（開発環境） ===");
-    console.log(`宛先: ${toEmail}`);
-    console.log(`招待者: ${inviterName}`);
-    console.log(`招待リンク: ${invitationLink}`);
-    console.log("================================\n");
-    return;
-  }
+  // コンソールにも出力（開発環境用バックアップ）
+  console.log("=== 📧 招待メール ===");
+  console.log(`宛先: ${toEmail}`);
+  console.log(`招待者: ${inviterName}`);
+  console.log(`招待リンク: ${invitationLink}`);
+  console.log("=====================\n");
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: "【安否確認システム】招待のご案内",
@@ -96,17 +100,14 @@ export async function sendOtpEmail({
   toEmail,
   otpCode,
 }: SendOtpEmailParams): Promise<void> {
-  // 開発環境またはResend未設定の場合はコンソールに出力
-  if (IS_DEV || !resend) {
-    console.log("=== 🔐 OTPコード（開発環境） ===");
-    console.log(`宛先: ${toEmail}`);
-    console.log(`認証コード: ${otpCode}`);
-    console.log("有効期限: 5分");
-    console.log("==============================\n");
-    return;
-  }
+  // コンソールにも出力（開発環境用バックアップ）
+  console.log("=== 🔐 OTPコード ===");
+  console.log(`宛先: ${toEmail}`);
+  console.log(`認証コード: ${otpCode}`);
+  console.log(`有効期限: 5分`);
+  console.log("====================\n");
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: "【安否確認システム】ログイン認証コード",

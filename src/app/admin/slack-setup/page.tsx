@@ -22,6 +22,7 @@ export default function SlackSetupPage() {
   const [error, setError] = useState<string | null>(null);
 
   // ステップ1: 接続
+  const [workspaceName, setWorkspaceName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [workspace, setWorkspace] = useState<any>(null);
 
@@ -149,7 +150,7 @@ export default function SlackSetupPage() {
         body: JSON.stringify({
           workspace: {
             workspaceId: workspace.id,
-            name: workspace.name,
+            name: workspaceName,
             botToken,
           },
         }),
@@ -258,6 +259,19 @@ export default function SlackSetupPage() {
             <h2 className="text-xl font-bold mb-4">1. Slackワークスペースに接続</h2>
             <div className="space-y-4">
               <div>
+                <label className="block mb-2">ワークスペース名</label>
+                <input
+                  type="text"
+                  value={workspaceName}
+                  onChange={(e) => setWorkspaceName(e.target.value)}
+                  className="w-full bg-gray-700 p-2 rounded"
+                  placeholder="例: 開発チーム"
+                />
+                <p className="text-sm text-gray-400 mt-2">
+                  管理画面で表示される名前です
+                </p>
+              </div>
+              <div>
                 <label className="block mb-2">Bot Token</label>
                 <input
                   type="password"
@@ -272,7 +286,7 @@ export default function SlackSetupPage() {
               </div>
               <button
                 onClick={handleTestConnection}
-                disabled={!botToken || loading}
+                disabled={!workspaceName || !botToken || loading}
                 className="bg-blue-600 px-6 py-2 rounded disabled:opacity-50 hover:bg-blue-700"
               >
                 {loading ? "接続中..." : "接続テスト"}
@@ -285,7 +299,7 @@ export default function SlackSetupPage() {
         {currentStep === "departments" && (
           <div className="bg-gray-800 p-6 rounded-lg">
             <h2 className="text-xl font-bold mb-4">
-              2. 部署スタンプ設定 - {workspace?.name}
+              2. 部署スタンプ設定 - {workspaceName}
             </h2>
 
             {/* 絵文字検索 */}

@@ -14,6 +14,11 @@ services:
       - SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY:-EC8Nrp8eObCX6SewuLENZjxZAhLxWE/MN1Qqjcqpj/s=}
       - NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
       - NEXT_PUBLIC_BASE_URL=http://localhost:8080
+      - SMTP_HOST=mail1042.onamae.ne.jp
+      - SMTP_PORT=465
+      - SMTP_USER=noreply@anpikakunin.xyz
+      - SMTP_PASSWORD=Ms@80944757
+      - SMTP_FROM_EMAIL=noreply@anpikakunin.xyz
     depends_on:
       postgres:
         condition: service_healthy
