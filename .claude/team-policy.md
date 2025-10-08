@@ -1,5 +1,12 @@
 # チームポリシー
 
+## ローカル開発環境
+**Docker Compose 必須**
+- ローカル開発は必ず Docker Compose を使用
+- **許可されているコマンド: `docker-compose up` と `docker-compose down` のみ**
+- `yarn dev` などホストマシンで直接 Node.js を実行しない
+- PostgreSQL は Docker Compose で起動（ポート: 5433）
+
 ## ブランチ運用
 - `main`: 本番環境デプロイ用
 - `develop`: 開発統合ブランチ

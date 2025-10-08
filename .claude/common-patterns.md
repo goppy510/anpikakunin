@@ -3,13 +3,19 @@
 ## コマンド
 
 ### 開発サーバー起動
-```bash
-# ローカル開発（Turbopack使用）
-yarn dev --port 8080
+**重要: ローカル開発は必ず Docker Compose を使用**
 
-# Docker Compose で起動
+```bash
+# アプリケーション起動
 docker-compose up
+
+# アプリケーション停止・削除
+docker-compose down
 ```
+
+**禁止事項:**
+- `yarn dev` などホストマシンで直接 Node.js を実行しない
+- Docker 以外でのローカル開発は行わない
 
 ### データベース操作
 ```bash

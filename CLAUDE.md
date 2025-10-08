@@ -152,6 +152,22 @@ SLACK_TOKEN_ENCRYPTION_KEY=openssl rand -base64 32で生成
 
 ## 開発ワークフロー
 
+### ローカル開発環境
+**Docker Compose を使用**
+```bash
+# アプリケーション起動
+docker-compose up
+
+# アプリケーション停止・削除
+docker-compose down
+```
+
+**重要な制約:**
+- ローカル開発は Docker Compose のみ使用
+- **許可されているコマンド: `docker-compose up` と `docker-compose down` のみ**
+- `yarn dev` など、ホストマシンで直接 Node.js を実行しない
+- PostgreSQL は Docker Compose で起動（ポート: 5433）
+
 ### ブランチ戦略
 - `main`: 本番環境
 - `develop`: 開発統合ブランチ
