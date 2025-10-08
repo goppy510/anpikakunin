@@ -5,6 +5,10 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY . .
+
+# Prismaクライアントを生成
+RUN npx prisma generate
+
 # Set default environment variables for build
 ENV NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
 ENV NEXT_PUBLIC_BASE_URL=http://localhost:8080
