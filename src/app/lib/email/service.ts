@@ -4,10 +4,13 @@
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 const FROM_EMAIL = process.env.SYSTEM_EMAIL_FROM || "noreply@yourdomain.com";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8080";
+const IS_DEV = process.env.NODE_ENV === "development";
 
 export interface SendInvitationEmailParams {
   toEmail: string;
@@ -24,6 +27,16 @@ export async function sendInvitationEmail({
   invitationToken,
 }: SendInvitationEmailParams): Promise<void> {
   const invitationLink = `${BASE_URL}/invitation/${invitationToken}`;
+
+  // 開発環境またはResend未設定の場合はコンソールに出力
+  if (IS_DEV || !resend) {
+    console.log("=== 📧 招待メール（開発環境） ===");
+    console.log(`宛先: ${toEmail}`);
+    console.log(`招待者: ${inviterName}`);
+    console.log(`招待リンク: ${invitationLink}`);
+    console.log("================================\n");
+    return;
+  }
 
   await resend.emails.send({
     from: FROM_EMAIL,
@@ -83,6 +96,16 @@ export async function sendOtpEmail({
   toEmail,
   otpCode,
 }: SendOtpEmailParams): Promise<void> {
+  // 開発環境またはResend未設定の場合はコンソールに出力
+  if (IS_DEV || !resend) {
+    console.log("=== 🔐 OTPコード（開発環境） ===");
+    console.log(`宛先: ${toEmail}`);
+    console.log(`認証コード: ${otpCode}`);
+    console.log("有効期限: 5分");
+    console.log("==============================\n");
+    return;
+  }
+
   await resend.emails.send({
     from: FROM_EMAIL,
     to: toEmail,
