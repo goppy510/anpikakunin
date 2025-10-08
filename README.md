@@ -1,36 +1,182 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 地震監視・Slack通知システム
 
-## Getting Started
+DMData.jp の地震情報APIを利用して、設定したエリア・震度の地震発生時にSlackへ自動通知するシステムです。
 
-First, run the development server:
+## 主要機能
+
+- リアルタイム地震情報監視（WebSocket接続）
+- REST APIによる定期ポーリング（フォールバック）
+- エリア・震度による通知条件フィルタリング
+- Slackワークスペース・チャンネルへの自動通知
+- 地震イベントログの永続化（PostgreSQL）
+- 通知設定の管理UI
+
+## 技術スタック
+
+- **Frontend**: Next.js 15.3, React 19, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes, PostgreSQL, Prisma ORM
+- **Infrastructure**: Docker Compose (ローカル), Supabase (本番)
+- **External API**: DMData.jp API v2, Slack Web API
+
+## 開発環境セットアップ
+
+### 前提条件
+
+- Docker と Docker Compose がインストール済み
+- Git がインストール済み
+
+### 1. リポジトリのクローン
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd anpikakunin
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. 環境変数の設定
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`.env.local` ファイルを作成（`.env.example` を参考に）:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# データベース（Docker Compose使用時）
+DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
+DATABASE_SSL=disable
 
-## Learn More
+# DMData.jp API
+DMDATA_API_KEY=your_api_key_here
+NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
 
-To learn more about Next.js, take a look at the following resources:
+# Slack トークン暗号化キー（32バイト base64）
+SLACK_TOKEN_ENCRYPTION_KEY=<openssl rand -base64 32 で生成>
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Docker Compose で起動
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# アプリケーション起動
+docker-compose up
 
-## Deploy on Vercel
+# バックグラウンドで起動
+docker-compose up -d
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+アプリケーションは [http://localhost:8080](http://localhost:8080) で起動します。
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. データベースのセットアップ
+
+初回起動時にPrismaマイグレーションを適用:
+
+```bash
+# Prisma Clientを生成
+docker-compose exec anpikakunin npx prisma generate
+
+# マイグレーションを適用
+docker-compose exec anpikakunin npx prisma migrate deploy
+```
+
+詳細は [docs/database-setup.md](docs/database-setup.md) を参照してください。
+
+### 5. 動作確認
+
+- リアルタイムモニタリング: http://localhost:8080/monitor
+- 設定画面: http://localhost:8080/
+
+## 停止方法
+
+```bash
+# コンテナを停止・削除
+docker-compose down
+
+# ボリュームも削除（データベースも削除される）
+docker-compose down -v
+```
+
+## 開発ワークフロー
+
+### ブランチ戦略
+
+- `main`: 本番環境
+- `develop`: 開発統合ブランチ
+- `feature/*`: 機能開発ブランチ
+
+### タスク管理
+
+1. `.claude/task.md` でタスクを確認
+2. `feature/タスク名` ブランチを作成
+3. 実装完了後、`develop` へマージ
+
+## プロジェクト構成
+
+```
+/src/app
+  /api                      # Next.js APIルート
+    /earthquake-events      # 地震イベントAPI
+    /slack                  # Slack連携API
+  /components
+    /monitor                # リアルタイム監視UI
+    /safety-confirmation    # 設定画面
+    /providers              # Context Providers
+  /lib
+    /db                     # データベース操作
+    /notification           # 通知ロジック
+    /security               # 暗号化
+
+/prisma
+  schema.prisma             # データベーススキーマ
+  /migrations               # マイグレーションファイル
+
+/docs                       # ドキュメント
+/.claude                    # プロジェクト知見管理
+```
+
+## データベーススキーマ
+
+### テーブル一覧
+
+- **earthquake_event_logs**: 地震イベントログ（重複検知用）
+- **slack_workspaces**: Slackワークスペース情報（暗号化トークン保存）
+- **slack_notification_settings**: 通知条件設定
+
+詳細は [docs/database-setup.md](docs/database-setup.md) を参照してください。
+
+## ドキュメント
+
+- [CLAUDE.md](CLAUDE.md) - プロジェクト全体概要
+- [docs/database-setup.md](docs/database-setup.md) - データベースセットアップ手順
+- [docs/2025_10_08-earthquake-notification-system-design.md](docs/2025_10_08-earthquake-notification-system-design.md) - システム設計書
+- [.claude/task.md](.claude/task.md) - タスク管理
+- [.claude/](/.claude/) - プロジェクト知見管理
+
+## トラブルシューティング
+
+### Docker起動エラー
+
+```bash
+# コンテナとボリュームを削除して再起動
+docker-compose down -v
+docker-compose up
+```
+
+### データベース接続エラー
+
+```bash
+# PostgreSQLコンテナの状態確認
+docker-compose ps
+
+# ログ確認
+docker-compose logs postgres
+```
+
+### マイグレーションエラー
+
+詳細は [docs/database-setup.md](docs/database-setup.md) の「トラブルシューティング」セクションを参照してください。
+
+## ライセンス
+
+TBD
+
+## 参考資料
+
+- [DMData.jp API仕様](https://dmdata.jp/docs/reference/api/v2.html)
+- [Prisma ドキュメント](https://www.prisma.io/docs)
+- [Next.js ドキュメント](https://nextjs.org/docs)
+- [Slack API](https://api.slack.com/)
