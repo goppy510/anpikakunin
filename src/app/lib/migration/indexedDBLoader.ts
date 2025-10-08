@@ -56,66 +56,50 @@ export async function loadIndexedDBData(): Promise<IndexedDBMigrationData> {
 
     console.log("IndexedDB設定データ:", settings);
 
+    const workspace = settings.slack?.workspaces?.[0];
+    const channel = settings.slack?.channels?.[0];
+
     // Slackワークスペース情報
-    if (settings.slack?.workspaces && settings.slack.workspaces.length > 0) {
-      const workspace = settings.slack.workspaces[0];
+    if (workspace) {
       result.workspace = {
-        workspaceId: workspace.id || workspace.workspaceId || "",
+        workspaceId: workspace.id || "",
         name: workspace.name || "",
-        botToken: workspace.botToken || workspace.accessToken || "",
+        botToken: workspace.botToken || "",
       };
     }
 
-    // 部署スタンプ設定
-    if (settings.slack?.departments && Array.isArray(settings.slack.departments)) {
-      result.departments = settings.slack.departments.map((dept: any) => ({
+    // 部署スタンプ設定（workspaces[0].departments から取得）
+    if (workspace?.departments && Array.isArray(workspace.departments)) {
+      result.departments = workspace.departments.map((dept: any) => ({
         id: dept.id,
         name: dept.name,
         slackEmoji: {
-          name: dept.slackEmoji?.name || dept.emoji || "",
+          name: dept.slackEmoji?.name || "",
           url: dept.slackEmoji?.url,
         },
-        buttonColor: dept.buttonColor || dept.color || "#5B8FF9",
+        buttonColor: dept.color || "#5B8FF9",
       }));
     }
 
     // 通知チャンネル情報
-    if (settings.slack?.channels && settings.slack.channels.length > 0) {
-      const channel = settings.slack.channels[0];
+    if (channel) {
       result.notificationCondition = {
         minIntensity: channel.minIntensity || "5-",
         targetPrefectures: channel.targetPrefectures || [],
-        notificationChannel: channel.channelId || channel.id || "",
+        notificationChannel: channel.channelId || "",
       };
     }
 
-    // 地震通知条件（別の場所にある可能性）
-    if (settings.earthquake) {
-      if (!result.notificationCondition) {
-        result.notificationCondition = {
-          minIntensity: "5-",
-          targetPrefectures: [],
-          notificationChannel: "",
-        };
-      }
-      result.notificationCondition.minIntensity =
-        settings.earthquake.minIntensity || result.notificationCondition.minIntensity;
-      result.notificationCondition.targetPrefectures =
-        settings.earthquake.targetPrefectures || result.notificationCondition.targetPrefectures;
-    }
-
     // メッセージテンプレート
-    if (settings.messages || settings.messageTemplates) {
-      const messages = settings.messages || settings.messageTemplates;
+    if (channel?.productionMessage || channel?.trainingMessage) {
       result.messageTemplate = {
         production: {
-          title: messages.production?.title || messages.title || "地震発生通知",
-          body: messages.production?.body || messages.body || "",
+          title: channel.productionMessage?.title || "地震発生通知",
+          body: channel.productionMessage?.body || "",
         },
         training: {
-          title:
-            messages.training?.title || messages.trainingTitle || "【訓練】地震発生通知",
-          body: messages.training?.body || messages.trainingBody || "",
+          title: channel.trainingMessage?.title || "【訓練】地震発生通知",
+          body: channel.trainingMessage?.body || "",
         },
       };
     }
