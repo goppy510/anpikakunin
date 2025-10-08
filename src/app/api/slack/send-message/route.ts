@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSlackBotToken } from "@/app/lib/db/slackSettings";
 
 // ボタン方式を使用するため、リアクション追加関数は削除
 
 export async function POST(request: NextRequest) {
   try {
-    const { botToken, channelId, title, message, isTraining = false, departments = [] } = await request.json();
-    
+    const { botToken, workspaceId, channelId, title, message, isTraining = false, departments = [] } = await request.json();
 
-    if (!botToken || !channelId || !message) {
+    // workspaceId が指定されている場合は DB から botToken を取得
+    let resolvedBotToken = botToken;
+    if (workspaceId && !botToken) {
+      resolvedBotToken = await getSlackBotToken(workspaceId);
+      if (!resolvedBotToken) {
+        return NextResponse.json({
+          success: false,
+          error: 'ワークスペースのBotTokenが見つかりません'
+        }, { status: 404 });
+      }
+    }
+
+    if (!resolvedBotToken || !channelId || !message) {
       return NextResponse.json({
         success: false,
-        error: 'botToken、channelId、messageは必須です'
+        error: 'botTokenまたはworkspaceId、channelId、messageは必須です'
       }, { status: 400 });
     }
 
@@ -84,7 +96,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch('https://slack.com/api/chat.postMessage', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${botToken}`,
+        'Authorization': `Bearer ${resolvedBotToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)

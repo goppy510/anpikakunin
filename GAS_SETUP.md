@@ -34,7 +34,7 @@
 
 ## 5. 環境変数の更新
 
-`.env.local` ファイルの `NEXT_PUBLIC_GAS_INTERACTIONS_URL` を更新：
+`.env` ファイルの `NEXT_PUBLIC_GAS_INTERACTIONS_URL` を更新：
 
 ```env
 NEXT_PUBLIC_GAS_INTERACTIONS_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec

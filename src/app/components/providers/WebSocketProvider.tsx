@@ -14,7 +14,9 @@ import { TsunamiWarning } from "@/app/components/monitor/types/TsunamiTypes";
 import { oauth2 } from "@/app/api/Oauth2Service";
 import { ApiService } from "@/app/api/ApiService";
 import { EventDatabase } from "@/app/components/monitor/utils/eventDatabase";
-// EarthquakeNotificationService は動的インポートで読み込み
+import { logEarthquakeEvent } from "@/app/components/monitor/utils/eventLogService";
+import { EarthquakeRestPoller } from "@/app/components/monitor/utils/restEarthquakePoller";
+import { EarthquakeNotificationService } from "@/app/lib/notification/earthquakeNotificationService";
 
 interface WebSocketContextType {
   status: "open" | "connecting" | "closed" | "error";
@@ -60,7 +62,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     "checking" | "authenticated" | "not_authenticated"
   >("checking");
   const wsManagerRef = useRef<WebSocketManager | null>(null);
-  const [notificationThreshold] = useState(1); // デフォルト震度1
+  const restPollerRef = useRef<EarthquakeRestPoller | null>(null);
+  const notificationServiceRef = useRef<any>(null);
   const [responseCount, setResponseCount] = useState(0);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
@@ -228,6 +231,145 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     }
   };
 
+  const upsertEvent = useCallback(
+    (incomingEvent: EventItem) => {
+      setEvents((prevEvents) => {
+        const existingIndex = prevEvents.findIndex(
+          (e) => e.eventId === incomingEvent.eventId
+        );
+
+        let updatedEvents: EventItem[];
+        let eventToSave: EventItem;
+
+        if (existingIndex >= 0) {
+          const existingEvent = prevEvents[existingIndex];
+          eventToSave = {
+            ...existingEvent,
+            ...incomingEvent,
+            maxInt: incomingEvent.maxInt ?? existingEvent.maxInt,
+            currentMaxInt:
+              incomingEvent.currentMaxInt ??
+              incomingEvent.maxInt ??
+              existingEvent.currentMaxInt ??
+              existingEvent.maxInt,
+            magnitude: incomingEvent.magnitude ?? existingEvent.magnitude,
+            hypocenter: incomingEvent.hypocenter ?? existingEvent.hypocenter,
+            originTime: incomingEvent.originTime ?? existingEvent.originTime,
+            arrivalTime: incomingEvent.arrivalTime ?? existingEvent.arrivalTime,
+            isConfirmed:
+              incomingEvent.isConfirmed ?? existingEvent.isConfirmed ?? false,
+            isTest: existingEvent.isTest || incomingEvent.isTest,
+          };
+
+          updatedEvents = [...prevEvents];
+          updatedEvents[existingIndex] = eventToSave;
+        } else {
+          eventToSave = {
+            ...incomingEvent,
+            isConfirmed: incomingEvent.isConfirmed ?? false,
+            currentMaxInt:
+              incomingEvent.currentMaxInt ?? incomingEvent.maxInt ?? "-",
+          };
+
+          if (!eventToSave.currentMaxInt) {
+            eventToSave.currentMaxInt = eventToSave.maxInt;
+          }
+
+          updatedEvents = [eventToSave, ...prevEvents];
+        }
+
+        EventDatabase.saveEvent(eventToSave)
+          .then(async () => {
+            if (Math.random() < 0.1) {
+              try {
+                await EventDatabase.cleanupOldEvents(30);
+              } catch (cleanupError) {
+                console.warn("IndexedDB クリーンアップに失敗:", cleanupError);
+              }
+            }
+          })
+          .catch((error) => {
+            console.error("地震イベントのIndexedDB保存に失敗:", error);
+          });
+
+        const sortedEvents = updatedEvents.sort((a, b) => {
+          const timeA = new Date(a.originTime || a.arrivalTime).getTime();
+          const timeB = new Date(b.originTime || b.arrivalTime).getTime();
+          return timeB - timeA;
+        });
+
+        return sortedEvents;
+      });
+
+      setIsInitialized(true);
+    },
+    [setIsInitialized]
+  );
+
+  const notifySlack = useCallback(
+    (event: EventItem) => {
+      void (async () => {
+        try {
+          if (!notificationServiceRef.current) {
+            notificationServiceRef.current =
+              EarthquakeNotificationService.getInstance();
+          }
+          await notificationServiceRef.current.processEarthquakeEvent(event);
+        } catch (error) {
+          console.error("地震通知サービス処理エラー:", error);
+        }
+      })();
+    },
+    []
+  );
+
+  const handleRestEvents = useCallback(
+    async (events: EventItem[], context: { isInitial: boolean }) => {
+      if (!events.length) return;
+
+      for (const event of events) {
+        upsertEvent(event);
+        const isNewLog = await logEarthquakeEvent(event, "rest");
+        if (!context.isInitial && isNewLog) {
+          notifySlack(event);
+        }
+      }
+
+      setLastMessageType("rest");
+      setServerTime(new Date().toISOString());
+      setResponseCount((prev) => prev + 1);
+    },
+    [notifySlack, upsertEvent]
+  );
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      if (restPollerRef.current) {
+        restPollerRef.current.stop();
+        restPollerRef.current = null;
+      }
+      return;
+    }
+
+    const apiService = new ApiService();
+    const poller = new EarthquakeRestPoller(
+      apiService,
+      handleRestEvents,
+      (error) => {
+        console.error("RESTポーリング中にエラーが発生しました:", error);
+      },
+      { intervalMs: 60_000, limit: 10 }
+    );
+
+    restPollerRef.current = poller;
+    poller.start();
+
+    return () => {
+      poller.stop();
+      restPollerRef.current = null;
+    };
+  }, [authStatus, handleRestEvents]);
+
   // WebSocket接続を初期化（認証済みの場合のみ）
   useEffect(() => {
     if (authStatus === "authenticated") {
@@ -235,113 +377,18 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         console.log("=== WebSocketProvider: Received earthquake event ===");
         console.log("Event details:", JSON.stringify(event, null, 2));
 
-        // 地震通知サービスに処理を委託（本番用通知）
-        // 動的インポートで循環参照を回避
-        setTimeout(async () => {
-          try {
-            const { EarthquakeNotificationService } = await import("../safety-confirmation/utils/earthquakeNotificationService");
-            const notificationService = EarthquakeNotificationService.getInstance();
-            notificationService.processEarthquakeEvent(event).catch(error => {
-              console.error("地震通知サービス処理エラー:", error);
-            });
-          } catch (error) {
-            console.error("地震通知サービスの動的読み込みエラー:", error);
-          }
-        }, 100);
-
-        // すべての地震データを表示（フィルタリングしない）
         const maxIntensity = getIntensityValue(event.maxInt);
         console.log(
-          `地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity}), 通知震度設定: ${notificationThreshold}`
-        );
-        console.log(
-          `震度${event.maxInt}の地震データを追加します（全データ表示）`
+          `地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity})`
         );
 
-        setEvents((prevEvents) => {
-          console.log(
-            "Previous events in WebSocketProvider state:",
-            prevEvents.length
-          );
-          console.log("Looking for existing event with ID:", event.eventId);
+        const normalizedEvent: EventItem = {
+          ...event,
+          currentMaxInt: event.currentMaxInt ?? event.maxInt,
+        };
 
-          const existingIndex = prevEvents.findIndex(
-            (e) => e.eventId === event.eventId
-          );
-          console.log("Existing event index:", existingIndex);
-
-          let updatedEvents: EventItem[];
-          let eventToSave: EventItem;
-
-          if (existingIndex >= 0) {
-            // 既存イベントを更新
-            console.log("Updating existing event in WebSocketProvider");
-            const existingEvent = prevEvents[existingIndex];
-            updatedEvents = [...prevEvents];
-
-            eventToSave = {
-              ...existingEvent,
-              maxInt: event.maxInt || existingEvent.maxInt,
-              currentMaxInt:
-                event.maxInt ||
-                event.currentMaxInt ||
-                existingEvent.currentMaxInt,
-              magnitude: event.magnitude || existingEvent.magnitude,
-              hypocenter: event.hypocenter || existingEvent.hypocenter,
-              originTime: event.originTime || existingEvent.originTime,
-              isConfirmed: event.isConfirmed || existingEvent.isConfirmed,
-              isTest: existingEvent.isTest || event.isTest,
-            };
-
-            updatedEvents[existingIndex] = eventToSave;
-            console.log("Updated event in WebSocketProvider:", eventToSave);
-          } else {
-            // 新規イベントを追加
-            console.log("Adding new event to WebSocketProvider list");
-            eventToSave = {
-              ...event,
-              isConfirmed:
-                event.isConfirmed !== undefined ? event.isConfirmed : false,
-              currentMaxInt: event.currentMaxInt || event.maxInt,
-              maxInt: event.maxInt,
-            };
-            console.log(
-              "New event to add in WebSocketProvider:",
-              JSON.stringify(eventToSave, null, 2)
-            );
-            updatedEvents = [eventToSave, ...prevEvents];
-          }
-
-          // IndexedDBに自動保存 + 定期的なクリーンアップ
-          EventDatabase.saveEvent(eventToSave)
-            .then(async () => {
-              // 10回に1回の確率でクリーンアップを実行（30件保持のみ）
-              if (Math.random() < 0.1) {
-                console.log("🧹 定期的なIndexedDBクリーンアップを実行中...");
-                await EventDatabase.cleanupOldEvents(30);
-              }
-            })
-            .catch((error) => {
-              console.error(
-                "WebSocketイベントのIndexedDB自動保存に失敗:",
-                error
-              );
-            });
-
-          console.log(
-            "Final updated events count in WebSocketProvider:",
-            updatedEvents.length
-          );
-
-          // 発生時刻降順（新しいものが上）でソート
-          const sortedEvents = updatedEvents.sort((a, b) => {
-            const timeA = new Date(a.originTime || a.arrivalTime).getTime();
-            const timeB = new Date(b.originTime || b.arrivalTime).getTime();
-            return timeB - timeA; // 降順ソート（新しいものが上）
-          });
-
-          return sortedEvents;
-        });
+        upsertEvent(normalizedEvent);
+        void logEarthquakeEvent(normalizedEvent, "websocket");
 
         console.log("✅ WebSocketProvider: Event processing completed");
       };
@@ -410,7 +457,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         console.log("WebSocketProvider: Component cleanup on unmount");
       };
     }
-  }, [authStatus]); // notificationThresholdを依存配列から除去
+  }, [authStatus]);
 
   const addEvent = useCallback((event: EventItem) => {
     setEvents((prevEvents) => {

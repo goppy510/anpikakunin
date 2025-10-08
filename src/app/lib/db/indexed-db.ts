@@ -2,7 +2,8 @@
 import type { IDBPDatabase } from "idb";
 import { openDB, DBSchema } from "idb";
 
-const SCHEMA_VERSION = 6553; // 安否確認応答ストア追加のためバージョンアップ
+const DB_NAME = "@dmdata/app-etcm";
+const SCHEMA_VERSION = 6554; // バージョンは維持（既存利用との互換保持）
 
 /* ---------- DB スキーマ ---------- */
 export interface AppDBSchema extends DBSchema {
@@ -75,37 +76,60 @@ export interface AppDBSchema extends DBSchema {
 }
 
 /* ---------- ブラウザのみ openDB ---------- */
+function ensureStores(db: IDBPDatabase<AppDBSchema>) {
+  if (!db.objectStoreNames.contains("settings")) {
+    db.createObjectStore("settings");
+  }
+
+  if (!db.objectStoreNames.contains("earthquakeEvents")) {
+    const eventStore = db.createObjectStore("earthquakeEvents", {
+      keyPath: "eventId",
+    });
+    eventStore.createIndex("by-arrival-time", "arrivalTime");
+    eventStore.createIndex("by-created-at", "createdAt");
+  }
+
+  if (!db.objectStoreNames.contains("safetyResponses")) {
+    const responseStore = db.createObjectStore("safetyResponses", {
+      keyPath: "id",
+    });
+    responseStore.createIndex("by-timestamp", "timestamp");
+    responseStore.createIndex("by-message", ["messageTs", "channelId"]);
+  }
+
+  if (!db.objectStoreNames.contains("safetySettings")) {
+    db.createObjectStore("safetySettings", { keyPath: "id" });
+  }
+
+}
+
+async function openDatabase(
+  version?: number
+): Promise<IDBPDatabase<AppDBSchema>> {
+  return openDB<AppDBSchema>(DB_NAME, version, {
+    upgrade(db) {
+      ensureStores(db);
+    },
+  });
+}
+
 export async function getDb(): Promise<IDBPDatabase<AppDBSchema> | undefined> {
   if (typeof window === "undefined") {
-    // SSR では indexedDB が存在しない
     return undefined;
   }
 
-  return openDB<AppDBSchema>("@dmdata/app-etcm", SCHEMA_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains("settings")) {
-        db.createObjectStore("settings");
-      }
-      
-      // 地震イベントストアの作成
-      if (!db.objectStoreNames.contains("earthquakeEvents")) {
-        const eventStore = db.createObjectStore("earthquakeEvents", { keyPath: "eventId" });
-        // インデックスの作成
-        eventStore.createIndex("by-arrival-time", "arrivalTime");
-        eventStore.createIndex("by-created-at", "createdAt");
-      }
+  try {
+    return await openDatabase(SCHEMA_VERSION);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "VersionError") {
+      console.warn(
+        "IndexedDB version mismatch detected. Falling back to existing version.",
+        error
+      );
 
-      // 安否確認応答ストアの作成
-      if (!db.objectStoreNames.contains("safetyResponses")) {
-        const responseStore = db.createObjectStore("safetyResponses", { keyPath: "id" });
-        responseStore.createIndex("by-timestamp", "timestamp");
-        responseStore.createIndex("by-message", ["messageTs", "channelId"]);
-      }
-
-      // 安否確認設定ストアの作成
-      if (!db.objectStoreNames.contains("safetySettings")) {
-        db.createObjectStore("safetySettings", { keyPath: "id" });
-      }
-    },
-  });
+      const existingDb = await openDatabase();
+      return existingDb;
+    }
+    throw error;
+  }
 }

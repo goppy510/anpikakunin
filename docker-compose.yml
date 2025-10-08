@@ -8,3 +8,30 @@ services:
       - /app/node_modules # ホストの node_modules を無効化
     working_dir: /app
     command: yarn dev --port 8080
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
+      - DATABASE_SSL=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15
+    container_name: anpikakunin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: anpikakunin
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anpikakunin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:

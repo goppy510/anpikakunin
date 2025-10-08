@@ -15,10 +15,15 @@ export default function AppLayout() {
 
   if (currentRoute.startsWith("/oauth")) {
     PageComponent = <OauthPage />;
-  } else if (currentRoute.startsWith("/safety-confirmation")) {
+  } else if (
+    currentRoute === "/" ||
+    currentRoute.startsWith("/safety-confirmation")
+  ) {
     PageComponent = <SafetyConfirmationDashboard />;
-  } else {
+  } else if (currentRoute.startsWith("/monitor")) {
     PageComponent = <MainPage />;
+  } else {
+    PageComponent = <SafetyConfirmationDashboard />;
   }
 
   return (

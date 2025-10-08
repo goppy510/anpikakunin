@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const body = await request.text();
     
     // Slack署名検証（本番環境では必須）
-    // SLACK_SIGNING_SECRETを.env.localに設定してください
+    // SLACK_SIGNING_SECRETを.envに設定してください
     const slackSignature = request.headers.get('x-slack-signature');
     const timestamp = request.headers.get('x-slack-request-timestamp');
     const signingSecret = process.env.SLACK_SIGNING_SECRET;
