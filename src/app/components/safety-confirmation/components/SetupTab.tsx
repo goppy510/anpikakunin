@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import cn from "classnames";
+import { MigrateSettingsButton } from "./MigrateSettingsButton";
 
 export function SetupTab() {
   const [activeStep, setActiveStep] = useState<number>(1);
@@ -807,6 +808,16 @@ function testGASSetup() {
           Google スプレッドシートと連携して、Slack応答を自動集計します。<br />
           訓練用と本番用でシートが自動分割され、部署別・ユーザー別の詳細分析が可能です。
         </p>
+      </div>
+
+      {/* 既存設定の移行ツール */}
+      <div className="bg-yellow-900 bg-opacity-30 border border-yellow-600 p-4 rounded">
+        <h3 className="text-yellow-300 font-medium mb-3">🔄 既存設定の移行</h3>
+        <p className="text-yellow-200 text-sm mb-4">
+          IndexedDBに保存されている既存のSlack設定をPostgreSQLデータベースに移行できます。<br />
+          移行時にBot Tokenは自動的に暗号化されます。
+        </p>
+        <MigrateSettingsButton />
       </div>
 
       {/* 進捗表示 */}
