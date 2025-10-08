@@ -5,9 +5,9 @@ const KEY_LENGTH = 32; // AES-256
 const IV_LENGTH = 12; // AES-GCM recommended IV length
 
 export type EncryptionPayload = {
-  ciphertext: Buffer;
-  iv: Buffer;
-  authTag: Buffer;
+  ciphertext: string; // base64 encoded
+  iv: string;         // base64 encoded
+  authTag: string;    // base64 encoded
 };
 
 const getKey = (): Buffer => {
@@ -35,6 +35,9 @@ const getKey = (): Buffer => {
   return keyBuffer;
 };
 
+/**
+ * テキストを暗号化してbase64エンコードされたペイロードを返す
+ */
 export const encrypt = (plainText: string): EncryptionPayload => {
   const key = getKey();
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -42,15 +45,26 @@ export const encrypt = (plainText: string): EncryptionPayload => {
   const ciphertext = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
-  return { ciphertext, iv, authTag };
+  return {
+    ciphertext: ciphertext.toString("base64"),
+    iv: iv.toString("base64"),
+    authTag: authTag.toString("base64"),
+  };
 };
 
+/**
+ * base64エンコードされたペイロードを復号化
+ */
 export const decrypt = (payload: EncryptionPayload): string => {
   const key = getKey();
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, payload.iv);
-  decipher.setAuthTag(payload.authTag);
+  const ciphertext = Buffer.from(payload.ciphertext, "base64");
+  const iv = Buffer.from(payload.iv, "base64");
+  const authTag = Buffer.from(payload.authTag, "base64");
+
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
   const decrypted = Buffer.concat([
-    decipher.update(payload.ciphertext),
+    decipher.update(ciphertext),
     decipher.final(),
   ]);
   return decrypted.toString("utf8");

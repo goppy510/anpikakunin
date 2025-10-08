@@ -24,9 +24,9 @@ model SlackWorkspace {
   id                 String                     @id @default(uuid())
   workspaceId        String                     @unique @map("workspace_id")
   name               String
-  botTokenCiphertext Bytes                      @map("bot_token_ciphertext")
-  botTokenIv         Bytes                      @map("bot_token_iv")
-  botTokenTag        Bytes                      @map("bot_token_tag")
+  botTokenCiphertext String                     @map("bot_token_ciphertext") // base64 encoded
+  botTokenIv         String                     @map("bot_token_iv")         // base64 encoded
+  botTokenTag        String                     @map("bot_token_tag")        // base64 encoded
   isEnabled          Boolean                    @default(true) @map("is_enabled")
   createdAt          DateTime                   @default(now()) @map("created_at")
   updatedAt          DateTime                   @updatedAt @map("updated_at")
