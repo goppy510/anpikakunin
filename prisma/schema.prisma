@@ -30,7 +30,13 @@ model SlackWorkspace {
   isEnabled          Boolean                    @default(true) @map("is_enabled")
   createdAt          DateTime                   @default(now()) @map("created_at")
   updatedAt          DateTime                   @updatedAt @map("updated_at")
+
+  // リレーション
   notificationSettings SlackNotificationSetting?
+  departments        Department[]
+  notificationCondition EarthquakeNotificationCondition?
+  messageTemplates   MessageTemplate[]
+  spreadsheetConfig  SpreadsheetConfig?
 
   @@map("slack_workspaces")
   @@index([workspaceId], map: "idx_slack_workspaces_workspace_id")
@@ -48,6 +54,110 @@ model SlackNotificationSetting {
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
   @@map("slack_notification_settings")
+}
+
+// 部署スタンプ設定
+model Department {
+  id           String         @id @default(uuid())
+  workspaceRef String         @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  name         String         // 部署名（例: "開発", "マーケ"）
+  slackEmoji   String         @map("slack_emoji") // Slack絵文字形式（例: ":dev:"）
+  buttonColor  String         @map("button_color") // ボタンの色（例: "#5B8FF9"）
+  displayOrder Int            @default(0) @map("display_order") // 表示順序
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@map("departments")
+  @@index([workspaceRef])
+  @@index([workspaceRef, displayOrder])
+}
+
+// 地震通知条件設定
+model EarthquakeNotificationCondition {
+  id                 String         @id @default(uuid())
+  workspaceRef       String         @unique @map("workspace_ref")
+  workspace          SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  minIntensity       String         @map("min_intensity") // 最小震度（例: "5-"）
+  targetPrefectures  String[]       @map("target_prefectures") // 対象都道府県リスト
+  notificationChannel String        @map("notification_channel") // 通知先チャンネルID
+  isEnabled          Boolean        @default(true) @map("is_enabled")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  @@map("earthquake_notification_conditions")
+  @@index([workspaceRef])
+}
+
+// メッセージテンプレート
+enum MessageTemplateType {
+  PRODUCTION // 本番用
+  TRAINING   // 訓練用
+}
+
+model MessageTemplate {
+  id           String              @id @default(uuid())
+  workspaceRef String              @map("workspace_ref")
+  workspace    SlackWorkspace      @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  type         MessageTemplateType // 本番 or 訓練
+  title        String              // メッセージタイトル
+  body         String              @db.Text // メッセージ本文
+  isActive     Boolean             @default(true) @map("is_active")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@map("message_templates")
+  @@index([workspaceRef, type])
+  @@unique([workspaceRef, type], name: "unique_workspace_type")
+}
+
+// スプレッドシートURL管理
+model SpreadsheetConfig {
+  id           String         @id @default(uuid())
+  workspaceRef String         @unique @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  spreadsheetUrl String       @map("spreadsheet_url") // Google SpreadsheetのURL
+  isEnabled    Boolean        @default(true) @map("is_enabled")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@map("spreadsheet_configs")
+  @@index([workspaceRef])
+}
+
+// ===== マスターテーブル =====
+
+// 都道府県マスター
+model Prefecture {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // JIS都道府県コード（例: "13" = 東京都）
+  name        String   @unique // 都道府県名（例: "東京都"）
+  nameKana    String   @map("name_kana") // ふりがな（例: "とうきょうと"）
+  region      String   // 地域区分（例: "関東"）
+  displayOrder Int     @default(0) @map("display_order") // 表示順序
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("prefectures")
+  @@index([code])
+  @@index([region])
+}
+
+// 震度マスター
+model IntensityScale {
+  id          Int      @id @default(autoincrement())
+  value       String   @unique // API値（例: "5-", "5+", "6-", "6+", "7"）
+  displayName String   @map("display_name") // 表示名（例: "震度5弱以上"）
+  shortName   String   @map("short_name") // 短縮名（例: "5弱"）
+  numericValue Decimal @map("numeric_value") @db.Decimal(3, 1) // 数値化した値（比較用: 5.0, 5.5, 6.0, 6.5, 7.0）
+  displayOrder Int     @default(0) @map("display_order") // 表示順序
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("intensity_scales")
+  @@index([value])
+  @@index([numericValue])
 }
 
 // 認証・認可システム
