@@ -281,20 +281,33 @@ export function SafetyConfirmationDashboard() {
             { key: "message", label: "メッセージ設定" },
             { key: "training", label: "訓練モード" },
             { key: "setup", label: "集計設定" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={cn(
-                "px-6 py-3 text-sm font-medium transition-colors border-b-2",
-                activeTab === tab.key
-                  ? "text-blue-400 border-blue-400"
-                  : "text-gray-400 border-transparent hover:text-white hover:border-gray-600"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+          ].map((tab) => {
+            // Slack設定が完了しているかチェック
+            const hasSlackConfig =
+              config?.slack?.workspaces &&
+              config.slack.workspaces.length > 0 &&
+              config.slack.workspaces[0]?.botToken;
+            const isDisabled = tab.key !== "slack" && !hasSlackConfig;
+
+            return (
+              <button
+                key={tab.key}
+                onClick={() => !isDisabled && setActiveTab(tab.key as typeof activeTab)}
+                disabled={isDisabled}
+                className={cn(
+                  "px-6 py-3 text-sm font-medium transition-colors border-b-2",
+                  activeTab === tab.key
+                    ? "text-blue-400 border-blue-400"
+                    : isDisabled
+                    ? "text-gray-600 border-transparent cursor-not-allowed"
+                    : "text-gray-400 border-transparent hover:text-white hover:border-gray-600"
+                )}
+                title={isDisabled ? "まずSlack設定を完了してください" : undefined}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* タブコンテンツ */}
