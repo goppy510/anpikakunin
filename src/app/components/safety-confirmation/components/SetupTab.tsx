@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import cn from "classnames";
 import { MigrateSettingsButton } from "./MigrateSettingsButton";
+import { AutoMigrationPrompt } from "./AutoMigrationPrompt";
 
 export function SetupTab() {
   const [activeStep, setActiveStep] = useState<number>(1);
@@ -802,6 +803,9 @@ function testGASSetup() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* 自動移行プロンプト */}
+      <AutoMigrationPrompt />
+
       <div className="mb-6">
         <h2 className="text-xl font-bold text-white mb-2">📊 応答集計システム設定</h2>
         <p className="text-gray-300 text-sm">
