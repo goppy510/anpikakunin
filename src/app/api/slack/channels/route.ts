@@ -28,28 +28,53 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Slack conversations.list API
-    const response = await fetch(
-      "https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_archived=true",
-      {
+    // Slack conversations.list API - ページネーション対応
+    // Note: private_channelを含めるにはgroups:readスコープが必要
+    let allChannels: any[] = [];
+    let cursor: string | undefined = undefined;
+    let hasMore = true;
+
+    while (hasMore) {
+      const url = new URL("https://slack.com/api/conversations.list");
+      url.searchParams.set("types", "public_channel");
+      url.searchParams.set("exclude_archived", "true");
+      url.searchParams.set("limit", "200");
+      if (cursor) {
+        url.searchParams.set("cursor", cursor);
+      }
+
+      const response = await fetch(url.toString(), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
+      });
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        let errorMessage = `チャンネル取得エラー: ${data.error}`;
+        if (data.error === "missing_scope") {
+          errorMessage = "Bot Tokenに必要な権限がありません。Slack Appの設定で「channels:read」と「groups:read」スコープを追加してください。";
+        }
+        return NextResponse.json(
+          { error: errorMessage },
+          { status: 400 }
+        );
       }
-    );
 
-    const data = await response.json();
+      allChannels = allChannels.concat(data.channels || []);
 
-    if (!data.ok) {
-      return NextResponse.json(
-        { error: `チャンネル取得エラー: ${data.error}` },
-        { status: 400 }
-      );
+      // ページネーションの確認
+      if (data.response_metadata?.next_cursor) {
+        cursor = data.response_metadata.next_cursor;
+      } else {
+        hasMore = false;
+      }
     }
 
     // チャンネル情報を整形
-    const channels = (data.channels || []).map((channel: any) => ({
+    const channels = allChannels.map((channel: any) => ({
       id: channel.id,
       name: channel.name,
       isPrivate: channel.is_private,

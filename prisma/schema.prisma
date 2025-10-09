@@ -32,9 +32,9 @@ model SlackWorkspace {
   updatedAt          DateTime                   @updatedAt @map("updated_at")
 
   // リレーション
-  notificationSettings SlackNotificationSetting?
   departments        Department[]
   notificationCondition EarthquakeNotificationCondition?
+  notificationChannels NotificationChannel[]
   messageTemplates   MessageTemplate[]
   spreadsheetConfig  SpreadsheetConfig?
 
@@ -42,18 +42,21 @@ model SlackWorkspace {
   @@index([workspaceId], map: "idx_slack_workspaces_workspace_id")
 }
 
-model SlackNotificationSetting {
-  id                  String          @id @default(uuid())
-  workspaceRef        String          @unique @map("workspace_ref")
-  workspace           SlackWorkspace  @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
-  minIntensity        String?         @map("min_intensity")
-  targetPrefectures   String[]        @map("target_prefectures")
-  notificationChannels Json?          @map("notification_channels")
-  extraSettings       Json?           @map("extra_settings")
-  createdAt           DateTime        @default(now()) @map("created_at")
-  updatedAt           DateTime        @updatedAt @map("updated_at")
+// 通知チャンネル設定（新設計）
+model NotificationChannel {
+  id           String         @id @default(uuid())
+  workspaceRef String         @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  channelId    String         @map("channel_id") // SlackチャンネルID
+  channelName  String         @map("channel_name") // チャンネル名（表示用）
+  purpose      String         // "earthquake" | "safety_confirmation" | "general"
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  @@map("slack_notification_settings")
+  @@map("notification_channels")
+  @@index([workspaceRef, purpose])
+  @@unique([workspaceRef, channelId, purpose])
 }
 
 // 部署スタンプ設定
@@ -81,7 +84,7 @@ model EarthquakeNotificationCondition {
   workspace          SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
   minIntensity       String         @map("min_intensity") // 最小震度（例: "5-"）
   targetPrefectures  String[]       @map("target_prefectures") // 対象都道府県リスト
-  notificationChannel String        @map("notification_channel") // 通知先チャンネルID
+  channelId          String         @map("channel_id") // Slackチャンネル�ID
   isEnabled          Boolean        @default(true) @map("is_enabled")
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")

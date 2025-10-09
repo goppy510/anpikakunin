@@ -24,13 +24,6 @@ export type SlackWorkspaceSummary = {
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
-  notificationSettings?: {
-    minIntensity: string | null;
-    targetPrefectures: string[];
-    notificationChannels: unknown;
-    extraSettings: unknown;
-    updatedAt: string;
-  };
 };
 
 export const upsertSlackWorkspaceWithSettings = async (
@@ -58,46 +51,7 @@ export const upsertSlackWorkspaceWithSettings = async (
     },
   });
 
-  let settingsRecord:
-    | Prisma.SlackNotificationSettingGetPayload<{
-        select: {
-          minIntensity: true;
-          targetPrefectures: true;
-          notificationChannels: true;
-          extraSettings: true;
-          updatedAt: true;
-        };
-      }>
-    | null
-    | undefined = null;
-
-  if (settings) {
-    settingsRecord = await prisma.slackNotificationSetting.upsert({
-      where: { workspaceRef: savedWorkspace.id },
-      create: {
-        workspaceRef: savedWorkspace.id,
-        minIntensity: settings.minIntensity ?? null,
-        targetPrefectures: settings.targetPrefectures ?? undefined,
-        notificationChannels: settings.notificationChannels as Prisma.JsonValue,
-        extraSettings: settings.extraSettings as Prisma.JsonValue,
-      },
-      update: {
-        minIntensity: settings.minIntensity ?? null,
-        targetPrefectures: settings.targetPrefectures ?? undefined,
-        notificationChannels:
-          (settings.notificationChannels as Prisma.JsonValue) ?? undefined,
-        extraSettings:
-          (settings.extraSettings as Prisma.JsonValue) ?? undefined,
-      },
-      select: {
-        minIntensity: true,
-        targetPrefectures: true,
-        notificationChannels: true,
-        extraSettings: true,
-        updatedAt: true,
-      },
-    });
-  }
+  // Note: settings parameter is deprecated - use EarthquakeNotificationCondition API instead
 
   return {
     id: savedWorkspace.id,
@@ -106,21 +60,11 @@ export const upsertSlackWorkspaceWithSettings = async (
     isEnabled: savedWorkspace.isEnabled,
     createdAt: savedWorkspace.createdAt.toISOString(),
     updatedAt: savedWorkspace.updatedAt.toISOString(),
-    notificationSettings: settingsRecord
-      ? {
-          minIntensity: settingsRecord.minIntensity ?? null,
-          targetPrefectures: settingsRecord.targetPrefectures ?? [],
-          notificationChannels: settingsRecord.notificationChannels ?? null,
-          extraSettings: settingsRecord.extraSettings ?? null,
-          updatedAt: settingsRecord.updatedAt.toISOString(),
-        }
-      : undefined,
   };
 };
 
 export const listSlackWorkspaces = async (): Promise<SlackWorkspaceSummary[]> => {
   const rows = await prisma.slackWorkspace.findMany({
-    include: { notificationSettings: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -131,35 +75,36 @@ export const listSlackWorkspaces = async (): Promise<SlackWorkspaceSummary[]> =>
     isEnabled: row.isEnabled,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    notificationSettings: row.notificationSettings
-      ? {
-          minIntensity: row.notificationSettings.minIntensity ?? null,
-          targetPrefectures: row.notificationSettings.targetPrefectures ?? [],
-          notificationChannels: row.notificationSettings.notificationChannels,
-          extraSettings: row.notificationSettings.extraSettings,
-          updatedAt: row.notificationSettings.updatedAt.toISOString(),
-        }
-      : undefined,
   }));
 };
 
 export const getSlackBotToken = async (
   workspaceId: string
 ): Promise<string | null> => {
-  const workspace = await prisma.slackWorkspace.findUnique({
-    where: { workspaceId },
-    select: {
-      botTokenCiphertext: true,
-      botTokenIv: true,
-      botTokenTag: true,
-    },
-  });
+  try {
+    const workspace = await prisma.slackWorkspace.findUnique({
+      where: { workspaceId },
+      select: {
+        botTokenCiphertext: true,
+        botTokenIv: true,
+        botTokenTag: true,
+      },
+    });
 
-  if (!workspace) return null;
+    if (!workspace) {
+      console.error(`Workspace not found: ${workspaceId}`);
+      return null;
+    }
 
-  return decrypt({
-    ciphertext: workspace.botTokenCiphertext,
-    iv: workspace.botTokenIv,
-    authTag: workspace.botTokenTag,
-  });
+    const decrypted = decrypt({
+      ciphertext: workspace.botTokenCiphertext,
+      iv: workspace.botTokenIv,
+      authTag: workspace.botTokenTag,
+    });
+
+    return decrypted;
+  } catch (error) {
+    console.error(`Failed to decrypt bot token for workspace ${workspaceId}:`, error);
+    return null;
+  }
 };
