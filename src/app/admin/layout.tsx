@@ -18,7 +18,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { hasAnyPermission, loading: permissionsLoading } = usePermissions();
+  const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
+  const { hasAnyPermission, groups, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
     async function loadUser() {
@@ -31,54 +32,34 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     void loadUser();
   }, []);
 
+  useEffect(() => {
+    async function loadMenus() {
+      try {
+        const response = await fetch("/api/menus");
+        if (response.ok) {
+          const data = await response.json();
+          setSidebarItems(
+            data.menus.map((menu: any) => ({
+              href: menu.path,
+              label: menu.name,
+              icon: menu.icon,
+              requiredPermissions: menu.requiredPermission
+                ? [menu.requiredPermission]
+                : [],
+            }))
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load menus:", error);
+      }
+    }
+    void loadMenus();
+  }, []);
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   };
-
-  const sidebarItems: SidebarItem[] = [
-    {
-      href: "/admin",
-      label: "ダッシュボード",
-      icon: "🏠",
-    },
-    {
-      href: "/admin/workspaces",
-      label: "ワークスペース",
-      icon: "🔗",
-      requiredPermissions: ["workspace:read"],
-    },
-    {
-      href: "/admin/departments",
-      label: "部署設定",
-      icon: "👥",
-      requiredPermissions: ["department:read"],
-    },
-    {
-      href: "/admin/conditions",
-      label: "通知条件",
-      icon: "⚙️",
-      requiredPermissions: ["condition:read"],
-    },
-    {
-      href: "/admin/messages",
-      label: "メッセージ設定",
-      icon: "💬",
-      requiredPermissions: ["message:read"],
-    },
-    {
-      href: "/admin/members",
-      label: "メンバー管理",
-      icon: "👤",
-      requiredPermissions: ["member:read"],
-    },
-    {
-      href: "/admin/groups",
-      label: "グループ管理",
-      icon: "🔐",
-      requiredPermissions: ["group:read"],
-    },
-  ];
 
   const checkPermission = (requiredPermissions?: string[]) => {
     if (!requiredPermissions || requiredPermissions.length === 0) return true;
@@ -145,9 +126,22 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             {sidebarOpen ? (
               <div className="space-y-2 mb-2">
                 <div className="text-xs text-gray-400 truncate">{user?.email}</div>
-                <span className="px-2 py-1 bg-red-600 text-white text-xs rounded">
-                  {user?.role}
-                </span>
+                <div className="flex flex-wrap gap-1">
+                  {groups.length > 0 ? (
+                    groups.map((groupName) => (
+                      <span
+                        key={groupName}
+                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
+                      >
+                        {groupName}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="px-2 py-1 bg-gray-600 text-white text-xs rounded">
+                      グループなし
+                    </span>
+                  )}
+                </div>
               </div>
             ) : null}
             <button

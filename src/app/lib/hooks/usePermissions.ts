@@ -3,11 +3,13 @@ import axios from "axios";
 
 type PermissionsData = {
   permissions: string[];
+  groups: string[];
   isAdmin: boolean;
 };
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [groups, setGroups] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -19,10 +21,12 @@ export function usePermissions() {
     try {
       const res = await axios.get<PermissionsData>("/api/auth/permissions");
       setPermissions(res.data.permissions);
+      setGroups(res.data.groups || []);
       setIsAdmin(res.data.isAdmin);
     } catch (error) {
       console.error("権限取得エラー:", error);
       setPermissions([]);
+      setGroups([]);
       setIsAdmin(false);
     } finally {
       setLoading(false);
@@ -46,6 +50,7 @@ export function usePermissions() {
 
   return {
     permissions,
+    groups,
     isAdmin,
     loading,
     hasPermission,

@@ -273,6 +273,23 @@ model UserPermissionAttachment {
   @@index([permissionId])
 }
 
+// メニューマスター
+model Menu {
+  id                 String   @id @default(uuid())
+  name               String   // メニュー名（例: "ワークスペース"）
+  path               String   @unique // パス（例: "/admin/workspaces"）
+  icon               String   // アイコン（例: "🔗"）
+  displayOrder       Int      @map("display_order") // 表示順序
+  isActive           Boolean  @default(true) @map("is_active")
+  categoryPermission String   @map("category_permission") // このメニュー閲覧に必要な権限（例: "workspace:read"）
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("menus")
+  @@index([displayOrder])
+  @@index([isActive])
+}
+
 // ユーザーとワークスペースの中間テーブル
 model UserWorkspace {
   id           String         @id @default(uuid())

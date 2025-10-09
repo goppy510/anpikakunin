@@ -14,6 +14,21 @@ export async function GET(request: NextRequest) {
   const userId = authCheck.user.id;
 
   try {
+    // ユーザーの所属グループ取得
+    const userGroups = await prisma.userGroupMembership.findMany({
+      where: { userId },
+      include: {
+        group: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const groupNames = userGroups.map((ug) => ug.group.name);
+
     // 管理者は全権限を持つ
     if (authCheck.user.role === "ADMIN") {
       const allPermissions = await prisma.permission.findMany({
@@ -22,6 +37,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         permissions: allPermissions.map((p) => p.name),
+        groups: groupNames,
         isAdmin: true,
       });
     }
@@ -31,6 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       permissions: permissions.map((p) => p.name),
+      groups: groupNames,
       isAdmin: false,
     });
   } catch (error) {
