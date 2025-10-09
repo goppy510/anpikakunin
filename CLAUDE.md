@@ -168,6 +168,21 @@ docker-compose down
 - `yarn dev` など、ホストマシンで直接 Node.js を実行しない
 - PostgreSQL は Docker Compose で起動（ポート: 5433）
 
+### Git操作のルール
+**絶対厳守:**
+- **`git push` はユーザーが明示的に指示した場合のみ実行する**
+- `git commit` は実装完了時に行うが、pushはしない
+- ユーザーから「プッシュして」「pushして」などの明示的な指示があるまで待機
+
+### データベース操作のルール
+**絶対禁止:**
+- **データベースのデータが消える操作は絶対に実行しない**
+- `prisma migrate reset` は絶対禁止
+- `prisma db push --force-reset` は絶対禁止
+- `docker-compose down -v` （ボリューム削除）は絶対禁止
+- データ削除を伴う操作を提案しない
+- マイグレーション実行は `prisma migrate dev` のみ使用（データ保持）
+
 ### ブランチ戦略
 - `main`: 本番環境
 - `develop`: 開発統合ブランチ

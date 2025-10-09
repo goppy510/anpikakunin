@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
-import toast from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import {
   validatePasswordStrength,
   getPasswordStrengthLevel,
@@ -45,7 +45,10 @@ function AcceptInvitationContent() {
       const res = await axios.get(`/api/invitations/verify?token=${token}`);
       setInvitation(res.data);
     } catch (error: any) {
-      console.error("招待確認エラー:", error);
+      // 404や410などは想定内のエラーなのでログ出力しない
+      if (error.response?.status !== 404 && error.response?.status !== 410 && error.response?.status !== 400) {
+        console.error("招待確認エラー:", error);
+      }
       const errorMsg = error.response?.data?.error || "招待の確認に失敗しました";
       toast.error(errorMsg);
       router.push("/login");
@@ -77,7 +80,10 @@ function AcceptInvitationContent() {
       toast.success("アカウントを作成しました");
       router.push("/login");
     } catch (error: any) {
-      console.error("招待受諾エラー:", error);
+      // 400 (バリデーションエラー) や 409 (重複) は想定内のエラーなのでログ出力しない
+      if (error.response?.status !== 400 && error.response?.status !== 409 && error.response?.status !== 404 && error.response?.status !== 410) {
+        console.error("招待受諾エラー:", error);
+      }
       const errorMsg = error.response?.data?.error || "アカウント作成に失敗しました";
       toast.error(errorMsg);
     } finally {
@@ -99,6 +105,7 @@ function AcceptInvitationContent() {
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+      <Toaster position="top-right" />
       <div className="bg-gray-800 rounded-lg p-8 w-full max-w-md">
         <h1 className="text-3xl font-bold text-white mb-6">招待を受諾</h1>
 

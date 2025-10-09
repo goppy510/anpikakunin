@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import toast from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 type User = {
@@ -89,7 +89,10 @@ export default function MembersPage() {
       setEmail("");
       fetchData();
     } catch (error: any) {
-      console.error("招待エラー:", error);
+      // 409 (既に登録済み) や 400 (バリデーションエラー) は想定内なのでログ出力しない
+      if (error.response?.status !== 409 && error.response?.status !== 400) {
+        console.error("招待エラー:", error);
+      }
       const errorMsg = error.response?.data?.error || "招待の送信に失敗しました";
       toast.error(errorMsg);
     } finally {
@@ -103,7 +106,7 @@ export default function MembersPage() {
     }
 
     try {
-      await axios.delete(`/api/invitations/${id}`);
+      await axios.delete(`/api/invitations?id=${id}`);
       toast.success("招待をキャンセルしました");
       fetchData();
     } catch (error: any) {
@@ -135,6 +138,7 @@ export default function MembersPage() {
 
   return (
     <div className="p-8 space-y-6">
+      <Toaster position="top-right" />
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div>

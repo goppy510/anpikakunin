@@ -42,7 +42,7 @@ export async function sendInvitationEmail({
   console.log(`招待リンク: ${invitationLink}`);
   console.log("=====================\n");
 
-  await transporter.sendMail({
+  const result = await transporter.sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: "【安否確認システム】招待のご案内",
@@ -86,6 +86,13 @@ ${invitationLink}
 </html>
     `.trim(),
   });
+
+  console.log("📬 SMTP送信結果:", {
+    messageId: result.messageId,
+    accepted: result.accepted,
+    rejected: result.rejected,
+    response: result.response,
+  });
 }
 
 export interface SendOtpEmailParams {
@@ -107,7 +114,7 @@ export async function sendOtpEmail({
   console.log(`有効期限: 5分`);
   console.log("====================\n");
 
-  await transporter.sendMail({
+  const result = await transporter.sendMail({
     from: FROM_EMAIL,
     to: toEmail,
     subject: "【安否確認システム】ログイン認証コード",
@@ -147,5 +154,12 @@ ${otpCode}
 </body>
 </html>
     `.trim(),
+  });
+
+  console.log("📬 OTP SMTP送信結果:", {
+    messageId: result.messageId,
+    accepted: result.accepted,
+    rejected: result.rejected,
+    response: result.response,
   });
 }

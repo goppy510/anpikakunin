@@ -7,6 +7,9 @@ import crypto from "crypto";
 /**
  * GET /api/invitations
  * 招待一覧取得
+ *
+ * GET /api/invitations?id=xxx
+ * 招待キャンセル（DELETEメソッド）
  */
 export async function GET(request: NextRequest) {
   const authCheck = await requireAdmin(request);
@@ -125,13 +128,16 @@ export async function POST(request: NextRequest) {
 
     // 招待メール送信
     try {
+      console.log("🔵 招待メール送信開始:", invitation.email);
       await sendInvitationEmail({
         toEmail: invitation.email,
         inviterName: invitation.inviter.email,
         invitationToken: invitation.token,
       });
+      console.log("✅ 招待メール送信成功:", invitation.email);
     } catch (emailError) {
-      console.error("Failed to send invitation email:", emailError);
+      console.error("❌ Failed to send invitation email:", emailError);
+      console.error("エラー詳細:", JSON.stringify(emailError, null, 2));
       // メール送信失敗してもエラーにしない（招待レコードは作成済み）
     }
 
@@ -150,6 +156,47 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Failed to create invitation:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/invitations?id=xxx
+ * 招待キャンセル
+ */
+export async function DELETE(request: NextRequest) {
+  const authCheck = await requireAdmin(request);
+  if (authCheck instanceof NextResponse) return authCheck;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "IDが指定されていません" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.userInvitation.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Failed to delete invitation:", error);
+
+    if (error.code === "P2025") {
+      return NextResponse.json(
+        { error: "招待が見つかりません" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
