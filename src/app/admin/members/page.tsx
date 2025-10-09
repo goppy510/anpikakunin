@@ -34,7 +34,6 @@ export default function MembersPage() {
   const [inviting, setInviting] = useState(false);
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"ADMIN" | "EDITOR">("EDITOR");
 
   const { hasPermission } = usePermissions();
 
@@ -75,7 +74,6 @@ export default function MembersPage() {
 
       const res = await axios.post("/api/invitations", {
         email,
-        role,
       });
 
       toast.success("招待を送信しました");
@@ -89,7 +87,6 @@ export default function MembersPage() {
 
       setShowInviteModal(false);
       setEmail("");
-      setRole("EDITOR");
       fetchData();
     } catch (error: any) {
       console.error("招待エラー:", error);
@@ -254,17 +251,12 @@ export default function MembersPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">権限</label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as "ADMIN" | "EDITOR")}
-                  className="w-full bg-gray-700 p-2 rounded"
-                  disabled={inviting}
-                >
-                  <option value="EDITOR">編集者</option>
-                  <option value="ADMIN">管理者</option>
-                </select>
+              <div className="bg-blue-900 bg-opacity-30 border border-blue-700 rounded-lg p-3">
+                <p className="text-sm text-gray-300">
+                  💡 招待されたメンバーは初期状態では権限を持ちません。
+                  <br />
+                  グループに追加することで権限を付与できます。
+                </p>
               </div>
             </div>
 
@@ -273,7 +265,6 @@ export default function MembersPage() {
                 onClick={() => {
                   setShowInviteModal(false);
                   setEmail("");
-                  setRole("EDITOR");
                 }}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
                 disabled={inviting}
