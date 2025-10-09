@@ -1,26 +1,18 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import dynamic from "next/dynamic";
-import { JSX, Suspense } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-const MainPage = dynamic(() => import("@/app/components/main/page"));
-const OauthPage = dynamic(() => import("@/app/components/oauth/page"));
+export default function HomePage() {
+  const router = useRouter();
 
-export default function AppLayout() {
-  const pathname = usePathname();
-
-  let PageComponent: JSX.Element | null = null;
-
-  if (pathname.startsWith("/oauth")) {
-    PageComponent = <OauthPage />;
-  } else {
-    PageComponent = <MainPage />;
-  }
+  useEffect(() => {
+    router.push("/admin");
+  }, [router]);
 
   return (
-    <div>
-      <Suspense fallback={<div>Loading...</div>}>{PageComponent}</Suspense>
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="text-white text-lg">リダイレクト中...</div>
     </div>
   );
 }

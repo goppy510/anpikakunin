@@ -8,3 +8,38 @@ services:
       - /app/node_modules # ホストの node_modules を無効化
     working_dir: /app
     command: yarn dev --port 8080
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
+      - DATABASE_SSL=disable
+      - SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY:-EC8Nrp8eObCX6SewuLENZjxZAhLxWE/MN1Qqjcqpj/s=}
+      - NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
+      - NEXT_PUBLIC_BASE_URL=http://localhost:8080
+      - SMTP_HOST=mail1042.onamae.ne.jp
+      - SMTP_PORT=465
+      - SMTP_USER=noreply@anpikakunin.xyz
+      - SMTP_PASSWORD=Ms@80944757
+      - SMTP_FROM_EMAIL=noreply@anpikakunin.xyz
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15
+    container_name: anpikakunin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: anpikakunin
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anpikakunin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:

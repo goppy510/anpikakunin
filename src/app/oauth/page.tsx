@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { oauth2 } from "@/app/api/Oauth2Service";
 
-export default function OauthPage() {
+function OauthPageContent() {
   const [status, setStatus] = useState<string>("Processing...");
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -49,5 +49,13 @@ export default function OauthPage() {
       <h1>OAuth Callback</h1>
       <p>{status}</p>
     </div>
+  );
+}
+
+export default function OauthPage() {
+  return (
+    <Suspense fallback={<div>Loading OAuth callback...</div>}>
+      <OauthPageContent />
+    </Suspense>
   );
 }

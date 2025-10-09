@@ -2,6 +2,10 @@
 
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
+import { WebSocketProvider } from "@/app/components/providers/WebSocketProvider";
+import { RouterProvider } from "@/app/components/providers/RouterProvider";
+import { WebSocketResponseMarker } from "@/app/components/monitor/WebSocketResponseMarker";
+import { ApiHealthMonitor } from "@/app/components/monitor/ApiHealthMonitor";
 import React from "react";
 
 export default function RootLayout({
@@ -14,7 +18,15 @@ export default function RootLayout({
       <head></head>
       <body className="antialiased" suppressHydrationWarning={true}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <RouterProvider>
+            {/* WebSocket接続を一時的に無効化（開発中） */}
+            {/* <WebSocketProvider>
+              <WebSocketResponseMarker />
+              {children}
+            </WebSocketProvider> */}
+            <ApiHealthMonitor />
+            {children}
+          </RouterProvider>
         </ThemeProvider>
       </body>
     </html>
