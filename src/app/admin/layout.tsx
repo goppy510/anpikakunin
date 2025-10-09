@@ -70,6 +70,12 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       icon: "👤",
       requiredPermissions: ["ADMIN", "INVITER"],
     },
+    {
+      href: "/admin/groups",
+      label: "グループ管理",
+      icon: "🔐",
+      requiredPermissions: ["ADMIN"],
+    },
   ];
 
   // 権限チェック（仮実装 - 後でバックエンドから取得）

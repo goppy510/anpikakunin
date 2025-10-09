@@ -186,8 +186,91 @@ model User {
   otpCodes      OtpCode[]
   invitationsSent UserInvitation[] @relation("InviterRelation")
   workspaces    UserWorkspace[]
+  groupMemberships UserGroupMembership[]
+  permissionAttachments UserPermissionAttachment[]
 
   @@map("users")
+}
+
+// グループ（AWS IAMスタイル）
+model Group {
+  id          String   @id @default(uuid())
+  name        String   @unique // グループ名（例: "管理者グループ", "閲覧者グループ"）
+  description String?  @db.Text // グループの説明
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  members     UserGroupMembership[]
+  permissions GroupPermissionAttachment[]
+
+  @@map("groups")
+  @@index([name])
+}
+
+// ユーザー・グループの中間テーブル
+model UserGroupMembership {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId   String   @map("group_id")
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("user_group_memberships")
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+// 権限マスター
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique // 権限名（例: "slack:workspace:write", "earthquake:condition:read"）
+  displayName String   @map("display_name") // 表示名（例: "Slackワークスペース編集"）
+  description String?  @db.Text // 権限の説明
+  category    String   // カテゴリ（例: "slack", "earthquake", "user"）
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  groupAttachments GroupPermissionAttachment[]
+  userAttachments  UserPermissionAttachment[]
+
+  @@map("permissions")
+  @@index([category])
+  @@index([name])
+}
+
+// グループ・権限のアタッチメント
+model GroupPermissionAttachment {
+  id           String     @id @default(uuid())
+  groupId      String     @map("group_id")
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@map("group_permission_attachments")
+  @@unique([groupId, permissionId])
+  @@index([groupId])
+  @@index([permissionId])
+}
+
+// ユーザー・権限の直接アタッチメント
+model UserPermissionAttachment {
+  id           String     @id @default(uuid())
+  userId       String     @map("user_id")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@map("user_permission_attachments")
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
 }
 
 // ユーザーとワークスペースの中間テーブル
