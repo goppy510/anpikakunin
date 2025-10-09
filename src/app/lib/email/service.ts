@@ -33,7 +33,7 @@ export async function sendInvitationEmail({
   inviterName,
   invitationToken,
 }: SendInvitationEmailParams): Promise<void> {
-  const invitationLink = `${BASE_URL}/invitation/${invitationToken}`;
+  const invitationLink = `${BASE_URL}/accept-invitation?token=${invitationToken}`;
 
   // コンソールにも出力（開発環境用バックアップ）
   console.log("=== 📧 招待メール ===");

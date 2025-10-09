@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import toast from "react-hot-toast";
+import {
+  validatePasswordStrength,
+  getPasswordStrengthLevel,
+} from "@/app/lib/validation/password";
 
 function AcceptInvitationContent() {
   const router = useRouter();
@@ -15,6 +19,16 @@ function AcceptInvitationContent() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [accepting, setAccepting] = useState(false);
+
+  // パスワード強度計算
+  const passwordStrength = useMemo(
+    () => validatePasswordStrength(password),
+    [password]
+  );
+  const strengthLevel = useMemo(
+    () => getPasswordStrengthLevel(passwordStrength.score),
+    [passwordStrength.score]
+  );
 
   useEffect(() => {
     if (!token) {
@@ -41,8 +55,9 @@ function AcceptInvitationContent() {
   };
 
   const handleAccept = async () => {
-    if (!password || password.length < 8) {
-      toast.error("パスワードは8文字以上で入力してください");
+    // パスワード強度チェック
+    if (!passwordStrength.isValid) {
+      toast.error("パスワードが要件を満たしていません");
       return;
     }
 
@@ -121,6 +136,106 @@ function AcceptInvitationContent() {
               className="w-full bg-gray-700 text-white p-3 rounded"
               disabled={accepting}
             />
+
+            {/* パスワード強度インジケーター */}
+            {password && (
+              <div className="mt-3 space-y-2">
+                {/* 強度バー */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-600 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        strengthLevel.color === "red"
+                          ? "bg-red-500"
+                          : strengthLevel.color === "yellow"
+                            ? "bg-yellow-500"
+                            : strengthLevel.color === "blue"
+                              ? "bg-blue-500"
+                              : "bg-green-500"
+                      }`}
+                      style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`text-sm font-medium ${
+                      strengthLevel.color === "red"
+                        ? "text-red-400"
+                        : strengthLevel.color === "yellow"
+                          ? "text-yellow-400"
+                          : strengthLevel.color === "blue"
+                            ? "text-blue-400"
+                            : "text-green-400"
+                    }`}
+                  >
+                    {strengthLevel.label}
+                  </span>
+                </div>
+
+                {/* 要件チェックリスト */}
+                <div className="bg-gray-700 rounded-lg p-3 space-y-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        passwordStrength.requirements.minLength
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }
+                    >
+                      {passwordStrength.requirements.minLength ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-300">8文字以上</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        passwordStrength.requirements.hasUppercase
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }
+                    >
+                      {passwordStrength.requirements.hasUppercase ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-300">大文字を含む (A-Z)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        passwordStrength.requirements.hasLowercase
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }
+                    >
+                      {passwordStrength.requirements.hasLowercase ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-300">小文字を含む (a-z)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        passwordStrength.requirements.hasNumber
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }
+                    >
+                      {passwordStrength.requirements.hasNumber ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-300">数字を含む (0-9)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        passwordStrength.requirements.hasSymbol
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }
+                    >
+                      {passwordStrength.requirements.hasSymbol ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-300">記号を含む (!@#$%...)</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -140,7 +255,12 @@ function AcceptInvitationContent() {
 
         <button
           onClick={handleAccept}
-          disabled={accepting || !password || !passwordConfirm}
+          disabled={
+            accepting ||
+            !password ||
+            !passwordConfirm ||
+            !passwordStrength.isValid
+          }
           className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {accepting ? "作成中..." : "アカウントを作成"}

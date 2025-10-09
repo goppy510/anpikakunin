@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/lib/auth/middleware";
 import { prisma } from "@/app/lib/db/prisma";
+import { sendInvitationEmail } from "@/app/lib/email/service";
 import crypto from "crypto";
 
 /**
@@ -122,8 +123,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // TODO: メール送信処理
-    // 招待URL: http://localhost:3000/accept-invitation?token=xxx
+    // 招待メール送信
+    try {
+      await sendInvitationEmail({
+        toEmail: invitation.email,
+        inviterName: invitation.inviter.email,
+        invitationToken: invitation.token,
+      });
+    } catch (emailError) {
+      console.error("Failed to send invitation email:", emailError);
+      // メール送信失敗してもエラーにしない（招待レコードは作成済み）
+    }
 
     return NextResponse.json(
       {

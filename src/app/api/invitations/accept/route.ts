@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
+import { validatePasswordStrength } from "@/app/lib/validation/password";
 import bcrypt from "bcryptjs";
 
 /**
@@ -21,9 +22,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!body.password || body.password.length < 8) {
+    // パスワード強度チェック
+    const passwordStrength = validatePasswordStrength(body.password);
+    if (!passwordStrength.isValid) {
       return NextResponse.json(
-        { error: "パスワードは8文字以上で入力してください" },
+        {
+          error: "パスワードが要件を満たしていません",
+          feedback: passwordStrength.feedback,
+        },
         { status: 400 }
       );
     }
