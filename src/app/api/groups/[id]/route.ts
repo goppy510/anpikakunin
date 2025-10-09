@@ -93,6 +93,24 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    // システムグループは削除不可
+    const group = await getGroupById(id);
+    if (!group) {
+      return NextResponse.json(
+        { error: "グループが見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    // isSystemチェック（型エラー回避のため any キャスト）
+    const groupWithSystem = group as any;
+    if (groupWithSystem.isSystem) {
+      return NextResponse.json(
+        { error: "システムグループは削除できません" },
+        { status: 403 }
+      );
+    }
+
     await deleteGroup(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {

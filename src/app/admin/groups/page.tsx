@@ -11,6 +11,7 @@ type Group = {
   name: string;
   description: string | null;
   isActive: boolean;
+  isSystem: boolean;
   memberCount: number;
   permissionCount: number;
   createdAt: string;
@@ -178,8 +179,9 @@ export default function GroupsPage() {
                   </Link>
                   <button
                     onClick={() => handleDelete(group.id, group.name)}
-                    disabled={!hasPermission("group:delete")}
+                    disabled={!hasPermission("group:delete") || group.isSystem}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={group.isSystem ? "システムグループは削除できません" : ""}
                   >
                     削除
                   </button>

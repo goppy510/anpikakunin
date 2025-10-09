@@ -198,6 +198,7 @@ model Group {
   name        String   @unique // グループ名（例: "管理者グループ", "閲覧者グループ"）
   description String?  @db.Text // グループの説明
   isActive    Boolean  @default(true) @map("is_active")
+  isSystem    Boolean  @default(false) @map("is_system") // システムグループ（管理者グループなど）は削除不可
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -207,6 +208,7 @@ model Group {
 
   @@map("groups")
   @@index([name])
+  @@index([isSystem])
 }
 
 // ユーザー・グループの中間テーブル

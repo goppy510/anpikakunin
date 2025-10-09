@@ -13,6 +13,7 @@ export type GroupSummary = {
   name: string;
   description: string | null;
   isActive: boolean;
+  isSystem: boolean;
   memberCount: number;
   permissionCount: number;
   createdAt: string;
@@ -56,6 +57,7 @@ export const listGroups = async (): Promise<GroupSummary[]> => {
     name: g.name,
     description: g.description,
     isActive: g.isActive,
+    isSystem: g.isSystem,
     memberCount: g._count.members,
     permissionCount: g._count.permissions,
     createdAt: g.createdAt.toISOString(),
@@ -109,6 +111,7 @@ export const getGroupById = async (id: string): Promise<GroupDetail | null> => {
     name: group.name,
     description: group.description,
     isActive: group.isActive,
+    isSystem: group.isSystem,
     memberCount: group._count.members,
     permissionCount: group._count.permissions,
     createdAt: group.createdAt.toISOString(),
@@ -152,6 +155,7 @@ export const createGroup = async (input: GroupInput): Promise<GroupSummary> => {
     name: group.name,
     description: group.description,
     isActive: group.isActive,
+    isSystem: group.isSystem,
     memberCount: group._count.members,
     permissionCount: group._count.permissions,
     createdAt: group.createdAt.toISOString(),
@@ -188,6 +192,7 @@ export const updateGroup = async (
     name: group.name,
     description: group.description,
     isActive: group.isActive,
+    isSystem: group.isSystem,
     memberCount: group._count.members,
     permissionCount: group._count.permissions,
     createdAt: group.createdAt.toISOString(),
