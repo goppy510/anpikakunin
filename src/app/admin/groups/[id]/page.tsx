@@ -55,7 +55,7 @@ export default function GroupDetailPage({
   // 権限追加モーダル
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
-  const [selectedPermissionId, setSelectedPermissionId] = useState("");
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>([]);
   const [addingPermission, setAddingPermission] = useState(false);
 
   // メンバー追加モーダル
@@ -102,20 +102,24 @@ export default function GroupDetailPage({
   };
 
   const handleAttachPermission = async () => {
-    if (!selectedPermissionId) {
+    if (selectedPermissionIds.length === 0) {
       toast.error("権限を選択してください");
       return;
     }
 
     try {
       setAddingPermission(true);
-      await axios.post(`/api/groups/${id}/permissions`, {
-        permissionId: selectedPermissionId,
-      });
 
-      toast.success("権限をアタッチしました");
+      // 複数権限を順次アタッチ
+      for (const permissionId of selectedPermissionIds) {
+        await axios.post(`/api/groups/${id}/permissions`, {
+          permissionId,
+        });
+      }
+
+      toast.success(`${selectedPermissionIds.length}件の権限をアタッチしました`);
       setShowPermissionModal(false);
-      setSelectedPermissionId("");
+      setSelectedPermissionIds([]);
       fetchGroup();
     } catch (error: any) {
       console.error("権限アタッチエラー:", error);
@@ -125,6 +129,14 @@ export default function GroupDetailPage({
     } finally {
       setAddingPermission(false);
     }
+  };
+
+  const togglePermissionSelection = (permissionId: string) => {
+    setSelectedPermissionIds((prev) =>
+      prev.includes(permissionId)
+        ? prev.filter((id) => id !== permissionId)
+        : [...prev, permissionId]
+    );
   };
 
   const handleDetachPermission = async (permissionId: string, name: string) => {
@@ -338,33 +350,60 @@ export default function GroupDetailPage({
       {/* 権限追加モーダル */}
       {showPermissionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">権限をアタッチ</h2>
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+            <h2 className="text-2xl font-bold mb-4">
+              権限をアタッチ
+              {selectedPermissionIds.length > 0 && (
+                <span className="text-sm text-gray-400 ml-2">
+                  ({selectedPermissionIds.length}件選択中)
+                </span>
+              )}
+            </h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">権限</label>
-                <select
-                  value={selectedPermissionId}
-                  onChange={(e) => setSelectedPermissionId(e.target.value)}
-                  className="w-full bg-gray-700 p-2 rounded"
-                  disabled={addingPermission}
-                >
-                  <option value="">選択してください</option>
-                  {attachablePermissions.map((perm) => (
-                    <option key={perm.id} value={perm.id}>
-                      [{perm.category}] {perm.displayName} ({perm.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-2 mb-6">
+              {/* カテゴリごとにグルーピング */}
+              {Object.entries(
+                attachablePermissions.reduce((acc, perm) => {
+                  if (!acc[perm.category]) acc[perm.category] = [];
+                  acc[perm.category].push(perm);
+                  return acc;
+                }, {} as Record<string, typeof attachablePermissions>)
+              ).map(([category, perms]) => (
+                <div key={category} className="bg-gray-700 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-2">
+                    {category}
+                  </h3>
+                  <div className="space-y-2">
+                    {perms.map((perm) => (
+                      <label
+                        key={perm.id}
+                        className="flex items-center space-x-3 p-2 hover:bg-gray-600 rounded cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissionIds.includes(perm.id)}
+                          onChange={() => togglePermissionSelection(perm.id)}
+                          disabled={addingPermission}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium">{perm.displayName}</div>
+                          <div className="text-xs text-gray-400">
+                            {perm.name}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="flex justify-end space-x-2 mt-6">
+            <div className="flex justify-end space-x-2">
               <button
                 onClick={() => {
                   setShowPermissionModal(false);
-                  setSelectedPermissionId("");
+                  setSelectedPermissionIds([]);
                 }}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
                 disabled={addingPermission}
@@ -373,10 +412,12 @@ export default function GroupDetailPage({
               </button>
               <button
                 onClick={handleAttachPermission}
-                disabled={addingPermission || !selectedPermissionId}
+                disabled={addingPermission || selectedPermissionIds.length === 0}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50"
               >
-                {addingPermission ? "追加中..." : "アタッチ"}
+                {addingPermission
+                  ? "追加中..."
+                  : `アタッチ (${selectedPermissionIds.length})`}
               </button>
             </div>
           </div>
