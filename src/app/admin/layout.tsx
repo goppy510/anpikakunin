@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import axios from "axios";
+import toast, { Toaster } from "react-hot-toast";
 import { AuthGuard } from "../components/auth/AuthGuard";
 import { usePermissions } from "../lib/hooks/usePermissions";
+import {
+  validatePasswordStrength,
+  getPasswordStrengthLevel,
+} from "@/app/lib/validation/password";
 
 type SidebarItem = {
   href: string;
@@ -19,7 +25,26 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
   const { hasAnyPermission, groups, loading: permissionsLoading } = usePermissions();
+
+  const passwordsMatch = newPassword && newPasswordConfirm && newPassword === newPasswordConfirm;
+
+  const passwordStrength = useMemo(
+    () => validatePasswordStrength(newPassword),
+    [newPassword]
+  );
+  const strengthLevel = useMemo(
+    () => getPasswordStrengthLevel(passwordStrength.score),
+    [passwordStrength.score]
+  );
 
   useEffect(() => {
     async function loadUser() {
@@ -59,6 +84,41 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
+  };
+
+  const handlePasswordChange = async () => {
+    if (!passwordStrength.isValid) {
+      toast.error("新しいパスワードが要件を満たしていません");
+      return;
+    }
+
+    if (newPassword !== newPasswordConfirm) {
+      toast.error("新しいパスワードが一致しません");
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+
+      await axios.post("/api/auth/change-password", {
+        currentPassword,
+        newPassword,
+      });
+
+      toast.success("パスワードを変更しました");
+      setShowPasswordModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setNewPasswordConfirm("");
+    } catch (error: any) {
+      if (error.response?.status !== 400 && error.response?.status !== 401) {
+        console.error("パスワード変更エラー:", error);
+      }
+      const errorMsg = error.response?.data?.error || "パスワード変更に失敗しました";
+      toast.error(errorMsg);
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const checkPermission = (requiredPermissions?: string[]) => {
@@ -126,21 +186,30 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             {sidebarOpen ? (
               <div className="space-y-2 mb-2">
                 <div className="text-xs text-gray-400 truncate">{user?.email}</div>
-                <div className="flex flex-wrap gap-1">
-                  {groups.length > 0 ? (
-                    groups.map((groupName) => (
-                      <span
-                        key={groupName}
-                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
-                      >
-                        {groupName}
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap gap-1 flex-1">
+                    {groups.length > 0 ? (
+                      groups.map((groupName) => (
+                        <span
+                          key={groupName}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
+                        >
+                          {groupName}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-600 text-white text-xs rounded">
+                        グループなし
                       </span>
-                    ))
-                  ) : (
-                    <span className="px-2 py-1 bg-gray-600 text-white text-xs rounded">
-                      グループなし
-                    </span>
-                  )}
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowPasswordModal(true)}
+                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
+                    title="パスワード変更"
+                  >
+                    🔑
+                  </button>
                 </div>
               </div>
             ) : null}
@@ -181,6 +250,185 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         {/* ページコンテンツ */}
         <div className="p-6">{children}</div>
       </main>
+
+      {/* パスワード変更モーダル */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Toaster position="top-right" />
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-white mb-4">パスワード変更</h2>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  現在のパスワード
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full bg-gray-700 text-white p-3 pr-10 rounded"
+                    disabled={changingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                  >
+                    {showCurrentPassword ? "👁️" : "👁️‍🗨️"}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  新しいパスワード
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-gray-700 text-white p-3 pr-10 rounded"
+                    disabled={changingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                  >
+                    {showNewPassword ? "👁️" : "👁️‍🗨️"}
+                  </button>
+                </div>
+
+                {/* パスワード強度インジケーター */}
+                {newPassword && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-gray-600 rounded-full h-2 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            strengthLevel.color === "red"
+                              ? "bg-red-500"
+                              : strengthLevel.color === "yellow"
+                                ? "bg-yellow-500"
+                                : strengthLevel.color === "blue"
+                                  ? "bg-blue-500"
+                                  : "bg-green-500"
+                          }`}
+                          style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                        />
+                      </div>
+                      <span
+                        className={`text-sm font-medium ${
+                          strengthLevel.color === "red"
+                            ? "text-red-400"
+                            : strengthLevel.color === "yellow"
+                              ? "text-yellow-400"
+                              : strengthLevel.color === "blue"
+                                ? "text-blue-400"
+                                : "text-green-400"
+                        }`}
+                      >
+                        {strengthLevel.label}
+                      </span>
+                    </div>
+
+                    <div className="bg-gray-700 rounded-lg p-3 space-y-1 text-sm">
+                      {[
+                        { key: "minLength", label: "8文字以上" },
+                        { key: "hasUppercase", label: "大文字を含む (A-Z)" },
+                        { key: "hasLowercase", label: "小文字を含む (a-z)" },
+                        { key: "hasNumber", label: "数字を含む (0-9)" },
+                        { key: "hasSymbol", label: "記号を含む (!@#$%...)" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span
+                            className={
+                              passwordStrength.requirements[
+                                key as keyof typeof passwordStrength.requirements
+                              ]
+                                ? "text-green-400"
+                                : "text-gray-400"
+                            }
+                          >
+                            {passwordStrength.requirements[
+                              key as keyof typeof passwordStrength.requirements
+                            ]
+                              ? "✓"
+                              : "○"}
+                          </span>
+                          <span className="text-gray-300">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  新しいパスワード（確認）
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPasswordConfirm ? "text" : "password"}
+                    value={newPasswordConfirm}
+                    onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                    className="w-full bg-gray-700 text-white p-3 pr-10 rounded"
+                    disabled={changingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPasswordConfirm(!showNewPasswordConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                  >
+                    {showNewPasswordConfirm ? "👁️" : "👁️‍🗨️"}
+                  </button>
+                </div>
+                {/* パスワード一致確認 */}
+                {newPasswordConfirm && (
+                  <div className={`mt-2 text-sm flex items-center gap-1 ${
+                    passwordsMatch ? "text-green-400" : "text-red-400"
+                  }`}>
+                    {passwordsMatch ? "✓" : "✗"}
+                    {passwordsMatch ? "パスワードが一致しています" : "パスワードが一致しません"}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setCurrentPassword("");
+                  setNewPassword("");
+                  setNewPasswordConfirm("");
+                }}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white"
+                disabled={changingPassword}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handlePasswordChange}
+                disabled={
+                  changingPassword ||
+                  !currentPassword ||
+                  !newPassword ||
+                  !newPasswordConfirm ||
+                  !passwordStrength.isValid
+                }
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {changingPassword ? "変更中..." : "変更"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
