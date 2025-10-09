@@ -14,6 +14,9 @@ COPY . .
 # Prismaクライアントを生成
 RUN npx prisma generate
 
+# バッチスクリプトをビルド
+RUN yarn build:batch
+
 # Set default environment variables for build
 ENV NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
 ENV NEXT_PUBLIC_BASE_URL=http://localhost:8080

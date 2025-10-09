@@ -12,14 +12,27 @@ export default function AdminDashboard() {
   });
 
   useEffect(() => {
-    // TODO: 実際の統計データを取得
-    setStats({
-      workspaces: 1,
-      departments: 8,
-      members: 5,
-      activeNotifications: 1,
-    });
+    const fetchStats = async () => {
+      try {
+        const response = await fetch("/api/admin/stats");
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      }
+    };
+    fetchStats();
   }, []);
+
+
+
+
+
+
+
+
 
   const cards = [
     {
