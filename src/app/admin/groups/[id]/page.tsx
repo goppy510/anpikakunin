@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 type GroupDetail = {
   id: string;
@@ -49,6 +50,7 @@ export default function GroupDetailPage({
   const { id } = use(params);
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const { hasPermission } = usePermissions();
 
   // 権限追加モーダル
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -245,7 +247,8 @@ export default function GroupDetailPage({
           <h2 className="text-xl font-semibold">メンバー</h2>
           <button
             onClick={() => setShowMemberModal(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+            disabled={!hasPermission("group:write")}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             + メンバー追加
           </button>
@@ -273,7 +276,8 @@ export default function GroupDetailPage({
                 </div>
                 <button
                   onClick={() => handleRemoveMember(member.id, member.email)}
-                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"
+                  disabled={!hasPermission("group:write")}
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   削除
                 </button>
@@ -289,7 +293,8 @@ export default function GroupDetailPage({
           <h2 className="text-xl font-semibold">アタッチされた権限</h2>
           <button
             onClick={() => setShowPermissionModal(true)}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm"
+            disabled={!hasPermission("group:attach_permission")}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             + 権限アタッチ
           </button>
@@ -319,7 +324,8 @@ export default function GroupDetailPage({
                   onClick={() =>
                     handleDetachPermission(perm.id, perm.displayName)
                   }
-                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"
+                  disabled={!hasPermission("group:attach_permission")}
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   デタッチ
                 </button>

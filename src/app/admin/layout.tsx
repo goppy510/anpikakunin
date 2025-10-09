@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { AuthGuard } from "../components/auth/AuthGuard";
+import { usePermissions } from "../lib/hooks/usePermissions";
 
 type SidebarItem = {
   href: string;
@@ -17,6 +18,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { hasAnyPermission, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
     async function loadUser() {
@@ -44,46 +46,44 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       href: "/admin/workspaces",
       label: "ワークスペース",
       icon: "🔗",
-      requiredPermissions: ["ADMIN"],
+      requiredPermissions: ["workspace:read"],
     },
     {
       href: "/admin/departments",
       label: "部署設定",
       icon: "👥",
-      requiredPermissions: ["ADMIN", "EDITOR"],
+      requiredPermissions: ["department:read"],
     },
     {
       href: "/admin/conditions",
       label: "通知条件",
       icon: "⚙️",
-      requiredPermissions: ["ADMIN", "EDITOR"],
+      requiredPermissions: ["condition:read"],
     },
     {
       href: "/admin/messages",
       label: "メッセージ設定",
       icon: "💬",
-      requiredPermissions: ["ADMIN", "EDITOR"],
+      requiredPermissions: ["message:read"],
     },
     {
       href: "/admin/members",
       label: "メンバー管理",
       icon: "👤",
-      requiredPermissions: ["ADMIN", "INVITER"],
+      requiredPermissions: ["member:read"],
     },
     {
       href: "/admin/groups",
       label: "グループ管理",
       icon: "🔐",
-      requiredPermissions: ["ADMIN"],
+      requiredPermissions: ["group:read"],
     },
   ];
 
-  // 権限チェック（仮実装 - 後でバックエンドから取得）
-  const hasPermission = (requiredPermissions?: string[]) => {
+  const checkPermission = (requiredPermissions?: string[]) => {
     if (!requiredPermissions || requiredPermissions.length === 0) return true;
-    if (user?.role === "ADMIN") return true;
-    // TODO: 複数権限対応
-    return false;
+    if (permissionsLoading) return true; // ロード中は表示
+    return hasAnyPermission(requiredPermissions);
   };
 
   return (
@@ -111,7 +111,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         <nav className="p-4 flex flex-col h-[calc(100vh-73px)] overflow-y-auto">
           <ul className="space-y-2 flex-1">
             {sidebarItems.map((item) => {
-              const hasAccess = hasPermission(item.requiredPermissions);
+              const hasAccess = checkPermission(item.requiredPermissions);
               const isActive = pathname === item.href;
 
               return (

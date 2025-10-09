@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 type Group = {
   id: string;
@@ -21,6 +22,7 @@ export default function GroupsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const { hasPermission } = usePermissions();
 
   // フォーム
   const [name, setName] = useState("");
@@ -108,7 +110,8 @@ export default function GroupsPage() {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+          disabled={!hasPermission("group:write")}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + グループ作成
         </button>
@@ -120,7 +123,8 @@ export default function GroupsPage() {
           <p>グループが登録されていません</p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+            disabled={!hasPermission("group:write")}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
           >
             最初のグループを作成
           </button>
@@ -174,7 +178,8 @@ export default function GroupsPage() {
                   </Link>
                   <button
                     onClick={() => handleDelete(group.id, group.name)}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded"
+                    disabled={!hasPermission("group:delete")}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     削除
                   </button>
