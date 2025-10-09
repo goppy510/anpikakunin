@@ -81,10 +81,10 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex">
+    <div className="h-screen bg-gray-900 text-white flex overflow-hidden">
       {/* サイドバー */}
       <aside
-        className={`bg-gray-800 border-r border-gray-700 transition-all duration-300 ${
+        className={`bg-gray-800 border-r border-gray-700 transition-all duration-300 flex-shrink-0 ${
           sidebarOpen ? "w-64" : "w-20"
         }`}
       >
@@ -102,7 +102,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* ナビゲーション */}
-        <nav className="p-4 flex flex-col h-[calc(100vh-73px)]">
+        <nav className="p-4 flex flex-col h-[calc(100vh-73px)] overflow-y-auto">
           <ul className="space-y-2 flex-1">
             {sidebarItems.map((item) => {
               const hasAccess = hasPermission(item.requiredPermissions);
