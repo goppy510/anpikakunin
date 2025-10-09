@@ -19,6 +19,7 @@ function AcceptInvitationContent() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [accepting, setAccepting] = useState(false);
+  const [fetched, setFetched] = useState(false); // 重複実行防止フラグ
 
   // パスワード強度計算
   const passwordStrength = useMemo(
@@ -37,8 +38,10 @@ function AcceptInvitationContent() {
       return;
     }
 
+    if (fetched) return; // 既に実行済みなら何もしない
+    setFetched(true);
     fetchInvitation();
-  }, [token]);
+  }, [token, fetched]);
 
   const fetchInvitation = async () => {
     try {
