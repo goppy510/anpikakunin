@@ -28,6 +28,7 @@ export type SlackWorkspaceSummary = {
 
 export const upsertSlackWorkspaceWithSettings = async (
   workspace: SlackWorkspaceInput,
+  userId: string,
   settings?: SlackNotificationSettingsInput
 ): Promise<SlackWorkspaceSummary> => {
   const encrypted = encrypt(workspace.botToken);
@@ -51,6 +52,21 @@ export const upsertSlackWorkspaceWithSettings = async (
     },
   });
 
+  // ユーザーとワークスペースの紐付けを作成
+  await prisma.userWorkspace.upsert({
+    where: {
+      userId_workspaceRef: {
+        userId: userId,
+        workspaceRef: savedWorkspace.id,
+      },
+    },
+    create: {
+      userId: userId,
+      workspaceRef: savedWorkspace.id,
+    },
+    update: {},
+  });
+
   // Note: settings parameter is deprecated - use EarthquakeNotificationCondition API instead
 
   return {
@@ -63,18 +79,22 @@ export const upsertSlackWorkspaceWithSettings = async (
   };
 };
 
-export const listSlackWorkspaces = async (): Promise<SlackWorkspaceSummary[]> => {
-  const rows = await prisma.slackWorkspace.findMany({
+export const listSlackWorkspaces = async (userId: string): Promise<SlackWorkspaceSummary[]> => {
+  const userWorkspaces = await prisma.userWorkspace.findMany({
+    where: { userId },
+    include: {
+      workspace: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 
-  return rows.map((row) => ({
-    id: row.id,
-    workspaceId: row.workspaceId,
-    name: row.name,
-    isEnabled: row.isEnabled,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+  return userWorkspaces.map((uw) => ({
+    id: uw.workspace.id,
+    workspaceId: uw.workspace.workspaceId,
+    name: uw.workspace.name,
+    isEnabled: uw.workspace.isEnabled,
+    createdAt: uw.workspace.createdAt.toISOString(),
+    updatedAt: uw.workspace.updatedAt.toISOString(),
   }));
 };
 

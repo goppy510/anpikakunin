@@ -37,6 +37,7 @@ model SlackWorkspace {
   notificationChannels NotificationChannel[]
   messageTemplates   MessageTemplate[]
   spreadsheetConfig  SpreadsheetConfig?
+  users              UserWorkspace[]
 
   @@map("slack_workspaces")
   @@index([workspaceId], map: "idx_slack_workspaces_workspace_id")
@@ -184,8 +185,24 @@ model User {
   sessions      Session[]
   otpCodes      OtpCode[]
   invitationsSent UserInvitation[] @relation("InviterRelation")
+  workspaces    UserWorkspace[]
 
   @@map("users")
+}
+
+// ユーザーとワークスペースの中間テーブル
+model UserWorkspace {
+  id           String         @id @default(uuid())
+  userId       String         @map("user_id")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceRef String         @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@map("user_workspaces")
+  @@unique([userId, workspaceRef])
+  @@index([userId])
+  @@index([workspaceRef])
 }
 
 model Session {

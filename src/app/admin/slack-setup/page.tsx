@@ -71,31 +71,47 @@ export default function SlackSetupPage() {
     { value: "7", label: "震度7" },
   ];
 
-  // ステップ1: Slack接続テスト
+  // ステップ1: Slack接続テストとワークスペース保存
   const handleTestConnection = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/slack/test-connection", {
+      // 接続テスト
+      const testRes = await fetch("/api/slack/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ botToken }),
       });
 
-      const data = await res.json();
+      const testData = await testRes.json();
 
-      if (!data.success) {
-        setError(data.error || "接続に失敗しました");
+      if (!testData.success) {
+        setError(testData.error || "接続に失敗しました");
         return;
       }
 
-      setWorkspace(data.workspace);
+      // ワークスペース保存
+      const workspaceRes = await fetch("/api/slack/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspace: {
+            workspaceId: testData.workspace.id,
+            name: workspaceName,
+            botToken,
+          },
+        }),
+      });
 
-      // 絵文字とチャンネルを取得
-      await Promise.all([fetchEmojis(), fetchChannels()]);
+      if (!workspaceRes.ok) {
+        const errorData = await workspaceRes.json();
+        setError(errorData.error || "ワークスペース登録失敗");
+        return;
+      }
 
-      setCurrentStep("departments");
+      // 完了画面へ
+      setCurrentStep("complete");
     } catch (err) {
       setError(err instanceof Error ? err.message : "接続エラー");
     } finally {
@@ -235,17 +251,6 @@ export default function SlackSetupPage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Slackワークスペース設定</h1>
 
-        {/* ステップインジケーター */}
-        <div className="flex gap-4 mb-8">
-          {["connect", "departments", "notification", "messages", "complete"].map((step) => (
-            <div
-              key={step}
-              className={`flex-1 h-2 rounded ${
-                currentStep === step ? "bg-blue-500" : "bg-gray-700"
-              }`}
-            />
-          ))}
-        </div>
 
         {error && (
           <div className="bg-red-900 border border-red-700 text-red-100 p-4 rounded mb-6">
@@ -289,7 +294,7 @@ export default function SlackSetupPage() {
                 disabled={!workspaceName || !botToken || loading}
                 className="bg-blue-600 px-6 py-2 rounded disabled:opacity-50 hover:bg-blue-700"
               >
-                {loading ? "接続中..." : "接続テスト"}
+                {loading ? "接続テストして登録中..." : "接続テストして登録"}
               </button>
             </div>
           </div>
@@ -553,10 +558,13 @@ export default function SlackSetupPage() {
         {/* 完了 */}
         {currentStep === "complete" && (
           <div className="bg-gray-800 p-6 rounded-lg text-center">
-            <h2 className="text-2xl font-bold mb-4">✅ 設定完了</h2>
-            <p className="mb-6">Slackワークスペースの設定が完了しました。</p>
-            <a href="/admin" className="bg-blue-600 px-6 py-2 rounded inline-block hover:bg-blue-700">
-              管理画面に戻る
+            <h2 className="text-2xl font-bold mb-4">✅ ワークスペース登録完了</h2>
+            <p className="mb-6">Slackワークスペースが登録されました。</p>
+            <p className="mb-6 text-gray-400">
+              部署設定、通知条件、メッセージ設定は、サイドメニューから各設定ページで行ってください。
+            </p>
+            <a href="/admin/workspaces" className="bg-blue-600 px-6 py-2 rounded inline-block hover:bg-blue-700">
+              ワークスペース一覧に戻る
             </a>
           </div>
         )}

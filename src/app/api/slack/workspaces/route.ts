@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/app/lib/auth/middleware";
 import {
   listSlackWorkspaces,
   upsertSlackWorkspaceWithSettings,
@@ -11,9 +12,14 @@ type PostRequestBody = {
   settings?: SlackNotificationSettingsInput;
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authCheck = await requireAdmin(request);
+  if (authCheck instanceof NextResponse) return authCheck;
+
+  const userId = authCheck.user.id;
+
   try {
-    const workspaces = await listSlackWorkspaces();
+    const workspaces = await listSlackWorkspaces(userId);
     return NextResponse.json({ workspaces });
   } catch (error) {
     console.error("Failed to fetch Slack workspaces:", error);
@@ -24,7 +30,12 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authCheck = await requireAdmin(request);
+  if (authCheck instanceof NextResponse) return authCheck;
+
+  const userId = authCheck.user.id;
+
   try {
     const body = (await request.json()) as PostRequestBody;
 
@@ -58,7 +69,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const saved = await upsertSlackWorkspaceWithSettings(workspace, settings);
+    const saved = await upsertSlackWorkspaceWithSettings(workspace, userId, settings);
     return NextResponse.json(saved, { status: 201 });
   } catch (error) {
     console.error("Failed to upsert Slack workspace:", error);
