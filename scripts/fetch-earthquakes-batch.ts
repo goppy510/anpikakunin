@@ -9,6 +9,7 @@ import cron from "node-cron";
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
+import { parseStringPromise } from "xml2js";
 import {
   extractEarthquakeInfo,
   normalizeIntensity,
@@ -76,9 +77,40 @@ function calculatePayloadHash(payload: any): string {
 }
 
 /**
- * DMData.jp API から地震情報を取得（VXSE51とVXSE53の両方）
+ * XMLからTelegramItemに変換
  */
-async function fetchEarthquakes(): Promise<TelegramItem[]> {
+async function parseXmlToTelegramItem(xmlData: string, meta: any): Promise<TelegramItem | null> {
+  try {
+    const parsed = await parseStringPromise(xmlData, {
+      explicitArray: false,
+      mergeAttrs: true,
+      tagNameProcessors: [
+        (name) => {
+          // 先頭が小文字でない場合、そのまま返す（例: Body, Head）
+          return name;
+        },
+      ],
+    });
+
+    const report = parsed?.Report;
+    if (!report) {
+      return null;
+    }
+
+    return {
+      ...meta,
+      xmlReport: report,
+    };
+  } catch (error) {
+    console.error("❌ XMLパースエラー:", error);
+    return null;
+  }
+}
+
+/**
+ * DMData.jp API から地震情報を取得（VXSE51とVXSE53をペアリング）
+ */
+async function fetchEarthquakes(): Promise<EarthquakeInfo[]> {
   const DMDATA_API_KEY = await getDmdataApiKey();
 
   if (!DMDATA_API_KEY) {
@@ -111,10 +143,82 @@ async function fetchEarthquakes(): Promise<TelegramItem[]> {
 
     const vxse51Events = vxse51Response.data.items || [];
     const vxse53Events = vxse53Response.data.items || [];
-    const allEvents = [...vxse51Events, ...vxse53Events];
 
-    console.log(`✅ VXSE51: ${vxse51Events.length}件, VXSE53: ${vxse53Events.length}件 (合計: ${allEvents.length}件)`);
-    return allEvents;
+    console.log(`📊 取得結果: VXSE51=${vxse51Events.length}件, VXSE53=${vxse53Events.length}件`);
+
+    // VXSE51を優先的に処理し、VXSE53とペアリング
+    const earthquakes: EarthquakeInfo[] = [];
+    const processedEventIds = new Set<string>();
+
+    // VXSE51（震度速報）を処理
+    for (const meta of vxse51Events) {
+      // XML詳細を取得
+      const xmlResponse = await axios.get(meta.url, {
+        params: { key: DMDATA_API_KEY },
+        timeout: 10000,
+        responseType: "text",
+      });
+
+      const telegramItem = await parseXmlToTelegramItem(xmlResponse.data, meta);
+      if (!telegramItem) {
+        continue;
+      }
+
+      const info = extractEarthquakeInfo(telegramItem);
+      if (!info || !info.maxIntensity) {
+        continue;
+      }
+
+      // 震度3以上のみ処理
+      const intensityNum = intensityToNumeric(info.maxIntensity);
+      if (intensityNum < 3.0) {
+        console.log(`⏭️  スキップ（震度3未満）: ${info.title} 震度${info.maxIntensity}`);
+        continue;
+      }
+
+      console.log(`✅ VXSE51: ${info.title} 震度${info.maxIntensity}`);
+
+      // 対応するVXSE53を時刻で検索（5分以内）
+      const matchingVxse53 = vxse53Events.find((v53) => {
+        const timeDiff = Math.abs(
+          new Date(v53.head.time).getTime() - new Date(meta.head.time).getTime()
+        );
+        return timeDiff < 5 * 60 * 1000;
+      });
+
+      if (matchingVxse53) {
+        console.log(`  🔗 対応するVXSE53を発見: ${matchingVxse53.id}`);
+        // VXSE53の詳細を取得
+        const vxse53XmlResponse = await axios.get(matchingVxse53.url, {
+          params: { key: DMDATA_API_KEY },
+          timeout: 10000,
+          responseType: "text",
+        });
+
+        const vxse53Item = await parseXmlToTelegramItem(
+          vxse53XmlResponse.data,
+          matchingVxse53
+        );
+
+        if (vxse53Item) {
+          const vxse53Info = extractEarthquakeInfo(vxse53Item);
+          if (vxse53Info) {
+            // VXSE53の詳細情報をマージ
+            info.epicenter = vxse53Info.epicenter;
+            info.magnitude = vxse53Info.magnitude;
+            info.depth = vxse53Info.depth;
+            info.prefectureObservations = vxse53Info.prefectureObservations;
+            console.log(`  ✅ 詳細情報マージ: 震源=${info.epicenter}, M=${info.magnitude}`);
+          }
+        }
+      }
+
+      processedEventIds.add(info.eventId);
+      earthquakes.push(info);
+    }
+
+    console.log(`\n📋 抽出された地震情報: ${earthquakes.length}件`);
+    return earthquakes;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
       console.error("❌ DMData.jp API エラー:", {
@@ -151,49 +255,18 @@ function intensityToNumeric(intensity: string): number {
  * イベントをデータベースに保存（重複チェック付き）
  * 震度3以上の地震を earthquake_records テーブルに保存
  */
-async function saveEvent(item: TelegramItem): Promise<boolean> {
-  const payloadHash = calculatePayloadHash(item);
-  const eventId = item.head.eventID || item.id;
-
+async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null> {
   try {
-    // 旧形式のログテーブルへの保存（重複チェック用）
-    const existing = await prisma.earthquakeEventLog.findUnique({
+    // 既存レコードチェック（eventIdで重複確認）
+    const existing = await prisma.earthquakeRecord.findFirst({
       where: {
-        eventId_payloadHash: {
-          eventId: eventId,
-          payloadHash: payloadHash,
-        },
+        eventId: info.eventId,
       },
     });
 
     if (existing) {
-      console.log(`⏭️  スキップ（既存）: ${eventId}`);
-      return false;
-    }
-
-    // 旧形式のログ保存
-    await prisma.earthquakeEventLog.create({
-      data: {
-        eventId: eventId,
-        payloadHash: payloadHash,
-        source: "rest",
-        payload: item as any,
-        fetchedAt: new Date(),
-      },
-    });
-
-    // 地震情報を抽出
-    const info = extractEarthquakeInfo(item);
-    if (!info || !info.maxIntensity) {
-      console.log(`⏭️  スキップ（震度情報なし）: ${eventId}`);
-      return true;
-    }
-
-    // 震度3以上のみ earthquake_records に保存
-    const intensityNumeric = intensityToNumeric(info.maxIntensity);
-    if (intensityNumeric < 3.0) {
-      console.log(`⏭️  スキップ（震度3未満）: ${eventId} - 震度${info.maxIntensity}`);
-      return true;
+      console.log(`⏭️  スキップ（既存）: ${info.eventId}`);
+      return null;
     }
 
     // earthquake_records に保存（震度3以上）
@@ -208,21 +281,21 @@ async function saveEvent(item: TelegramItem): Promise<boolean> {
         maxIntensity: info.maxIntensity,
         occurrenceTime: info.occurrenceTime ? new Date(info.occurrenceTime) : null,
         arrivalTime: info.arrivalTime ? new Date(info.arrivalTime) : null,
-        rawData: item as any,
+        rawData: info as any,
       },
     });
 
-    console.log(`💾 地震記録保存: ${eventId} - ${info.title} (震度${info.maxIntensity})`);
+    console.log(`💾 地震記録保存: ${info.eventId} - ${info.title} (震度${info.maxIntensity})`);
 
     // 都道府県別震度を保存
     if (info.prefectureObservations && info.prefectureObservations.length > 0) {
       await savePrefectureObservations(record.id, info.prefectureObservations);
     }
 
-    return true;
+    return record.id;
   } catch (error: any) {
-    console.error(`❌ DB保存エラー (${eventId}):`, error.message);
-    return false;
+    console.error(`❌ DB保存エラー (${info.eventId}):`, error.message);
+    return null;
   }
 }
 
@@ -333,6 +406,102 @@ async function findMatchingNotificationConditions(
     }
   } catch (error: any) {
     console.error(`❌ 通知条件マッチングエラー:`, error.message);
+  }
+}
+
+/**
+ * バッチヘルスチェックを更新
+ * @param status - "running" | "healthy" | "warning" | "error"
+ * @param errorMessage - エラーメッセージ（オプション）
+ */
+async function updateBatchHealthCheck(
+  status: "running" | "healthy" | "warning" | "error",
+  errorMessage?: string
+): Promise<void> {
+  try {
+    // システム設定テーブルまたは専用テーブルに保存
+    // 今回は activity_logs を流用
+    await prisma.activityLog.create({
+      data: {
+        userId: null,
+        userEmail: "system@batch",
+        action: "batch_health_check",
+        resourceType: "earthquake_batch",
+        resourceId: "fetch-earthquakes-batch",
+        resourceName: "地震情報取得バッチ",
+        details: JSON.stringify({
+          status,
+          timestamp: new Date().toISOString(),
+          errorMessage,
+        }),
+      },
+    });
+  } catch (error) {
+    console.error("❌ ヘルスチェック更新エラー:", error);
+  }
+}
+
+/**
+ * 最新のヘルスチェック状態を判定
+ * 1分ごとに実行されるべきバッチが:
+ * - 1分以内に成功 → healthy (緑)
+ * - 3分以内に成功 → warning (黄)
+ * - 3分以上経過 → error (赤)
+ */
+async function getBatchHealthStatus(): Promise<{
+  status: "healthy" | "warning" | "error";
+  lastRunAt: Date | null;
+  message: string;
+}> {
+  try {
+    const latestLog = await prisma.activityLog.findFirst({
+      where: {
+        action: "batch_health_check",
+        resourceType: "earthquake_batch",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (!latestLog) {
+      return {
+        status: "error",
+        lastRunAt: null,
+        message: "バッチが一度も実行されていません",
+      };
+    }
+
+    const now = new Date();
+    const lastRunAt = latestLog.createdAt;
+    const elapsedMinutes = (now.getTime() - lastRunAt.getTime()) / 1000 / 60;
+
+    if (elapsedMinutes <= 1.5) {
+      return {
+        status: "healthy",
+        lastRunAt,
+        message: "正常稼働中",
+      };
+    } else if (elapsedMinutes <= 3) {
+      return {
+        status: "warning",
+        lastRunAt,
+        message: `前回実行から${Math.floor(elapsedMinutes)}分経過`,
+      };
+    } else {
+      return {
+        status: "error",
+        lastRunAt,
+        message: `前回実行から${Math.floor(elapsedMinutes)}分経過（異常）`,
+      };
+    }
+  } catch (error) {
+    console.error("❌ ヘルスチェック取得エラー:", error);
+    return {
+      status: "error",
+      lastRunAt: null,
+      message: "ヘルスチェックの取得に失敗しました",
+    };
   }
 }
 
@@ -458,47 +627,33 @@ async function processEarthquakes() {
   console.log("=".repeat(60));
 
   try {
-    // 地震情報を取得
-    const events = await fetchEarthquakes();
+    // ヘルスチェック更新（処理開始）
+    await updateBatchHealthCheck("running");
 
-    if (events.length === 0) {
+    // 地震情報を取得
+    const earthquakes = await fetchEarthquakes();
+
+    if (earthquakes.length === 0) {
       console.log("ℹ️  新しい地震情報はありません");
+
+      // ヘルスチェック更新（正常終了）
+      await updateBatchHealthCheck("healthy");
 
       // 保留中の通知を処理
       await processPendingNotifications();
       return;
     }
 
-    // 各イベントを処理
+    // 各地震情報を保存
     let savedCount = 0;
     const savedRecords: Array<{ id: string; info: EarthquakeInfo }> = [];
 
-    for (const event of events) {
-      const saved = await saveEvent(event);
+    for (const info of earthquakes) {
+      const recordId = await saveEarthquakeRecord(info);
 
-      if (saved) {
+      if (recordId) {
         savedCount++;
-
-        // 地震情報を抽出して保存したレコードIDを取得
-        const info = extractEarthquakeInfo(event);
-        if (info && info.maxIntensity) {
-          const intensityNumeric = intensityToNumeric(info.maxIntensity);
-          if (intensityNumeric >= 3.0) {
-            // 保存した earthquake_record のIDを取得
-            const record = await prisma.earthquakeRecord.findFirst({
-              where: {
-                eventId: info.eventId,
-              },
-              orderBy: {
-                createdAt: "desc",
-              },
-            });
-
-            if (record) {
-              savedRecords.push({ id: record.id, info });
-            }
-          }
-        }
+        savedRecords.push({ id: recordId, info });
       }
     }
 
@@ -509,10 +664,15 @@ async function processEarthquakes() {
       await findMatchingNotificationConditions(id, info);
     }
 
+    // ヘルスチェック更新（正常終了）
+    await updateBatchHealthCheck("healthy");
+
     // 保留中の通知を処理
     await processPendingNotifications();
   } catch (error) {
     console.error("❌ 処理中にエラーが発生:", error);
+    // ヘルスチェック更新（エラー）
+    await updateBatchHealthCheck("error", error instanceof Error ? error.message : String(error));
   }
 }
 
