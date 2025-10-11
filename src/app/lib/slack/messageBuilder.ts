@@ -3,7 +3,7 @@
  * 地震情報から部署ボタン付きメッセージを生成
  */
 
-import { EarthquakeInfo } from "@/app/lib/notification/dmdataExtractor";
+import type { EarthquakeInfo } from "../notification/dmdataExtractor";
 
 export interface Department {
   id: string;
@@ -186,4 +186,72 @@ export function buildUpdatedMessageWithStats(
   });
 
   return { blocks };
+}
+
+/**
+ * 訓練用メッセージを作成
+ * @param departments 部署リスト
+ * @param template メッセージテンプレート（訓練用）
+ * @returns Slack Block Kit形式のメッセージ
+ */
+export function buildTrainingNotificationMessage(
+  departments: Department[],
+  template: MessageTemplate
+) {
+  // 部署ボタンを生成（本番と同じaction_idプレフィックスを使用）
+  const departmentButtons = departments.map((dept) => ({
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: `${dept.slackEmoji} ${dept.name}`,
+      emoji: true,
+    },
+    style: getButtonStyle(dept.buttonColor),
+    value: dept.id,
+    action_id: `training_confirm_${dept.id}`,
+  }));
+
+  // Block Kit形式のメッセージ
+  return {
+    blocks: [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: `🎓 ${template.title}`,
+          emoji: true,
+        },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: template.body,
+        },
+      },
+      {
+        type: "divider",
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "*👇 安否確認（該当部署のボタンを押してください）*",
+        },
+      },
+      {
+        type: "actions",
+        elements: departmentButtons,
+      },
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "⚠️ 一人一回のみ回答可能です｜🎓 これは訓練です",
+          },
+        ],
+      },
+    ],
+  };
 }
