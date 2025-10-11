@@ -548,6 +548,34 @@ async function main() {
       description: "DMData認証設定の編集",
       category: "dmdata",
     },
+
+    // 訓練モード
+    {
+      name: "training:read",
+      displayName: "訓練モード閲覧",
+      description: "訓練モードの閲覧",
+      category: "training",
+    },
+    {
+      name: "training:write",
+      displayName: "訓練モード実行",
+      description: "訓練通知の送信・スケジュール設定",
+      category: "training",
+    },
+
+    // 応答履歴
+    {
+      name: "response:read",
+      displayName: "本番応答履歴閲覧",
+      description: "本番環境での安否確認応答履歴の閲覧",
+      category: "response",
+    },
+    {
+      name: "training:response:read",
+      displayName: "訓練応答履歴閲覧",
+      description: "訓練環境での安否確認応答履歴の閲覧",
+      category: "training",
+    },
   ];
 
   for (const perm of permissions) {
@@ -738,6 +766,30 @@ async function main() {
       displayOrder: 9,
       isActive: true,
       categoryPermission: "dmdata:settings:read",
+    },
+    {
+      name: "訓練モード",
+      path: "/admin/training",
+      icon: "fa-solid fa-graduation-cap",
+      displayOrder: 10,
+      isActive: true,
+      categoryPermission: "training:read",
+    },
+    {
+      name: "本番応答履歴",
+      path: "/admin/responses",
+      icon: "fa-solid fa-list-check",
+      displayOrder: 11,
+      isActive: true,
+      categoryPermission: "response:read",
+    },
+    {
+      name: "訓練応答履歴",
+      path: "/admin/training-responses",
+      icon: "fa-solid fa-clipboard-list",
+      displayOrder: 12,
+      isActive: true,
+      categoryPermission: "training:response:read",
     },
   ];
 
