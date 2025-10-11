@@ -5,21 +5,14 @@ services:
       - "8080:8080"
     volumes:
       - ./:/app
-      - /app/node_modules # ホストの node_modules を無効化
+      - /app/node_modules
     working_dir: /app
     command: yarn dev --port 8080
+    env_file:
+      - .env.local
     environment:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
       - DATABASE_SSL=disable
-      - SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY:-EC8Nrp8eObCX6SewuLENZjxZAhLxWE/MN1Qqjcqpj/s=}
-      - NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:8080/oauth
-      - NEXT_PUBLIC_BASE_URL=http://localhost:8080
-      - SMTP_HOST=mail1042.onamae.ne.jp
-      - SMTP_PORT=465
-      - SMTP_USER=noreply@anpikakunin.xyz
-      - SMTP_PASSWORD=Ms@80944757
-      - SMTP_FROM_EMAIL=noreply@anpikakunin.xyz
-      - DMDATA_API_KEY=${DMDATA_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,11 +24,11 @@ services:
       - /app/node_modules
     working_dir: /app
     command: node dist/scripts/fetch-earthquakes-batch.js
+    env_file:
+      - .env.local
     environment:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
       - DATABASE_SSL=disable
-      - DMDATA_API_KEY=${DMDATA_API_KEY}
-      - SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY:-EC8Nrp8eObCX6SewuLENZjxZAhLxWE/MN1Qqjcqpj/s=}
       - NODE_ENV=production
     depends_on:
       postgres:
