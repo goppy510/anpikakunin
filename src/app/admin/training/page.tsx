@@ -213,7 +213,7 @@ export default function TrainingModePage() {
             </div>
 
             {/* チャンネル選択 */}
-            {selectedWorkspace && (
+            {selectedWorkspaceId && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   送信先チャンネル
