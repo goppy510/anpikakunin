@@ -173,7 +173,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                       !hasAccess ? "この機能へのアクセス権限がありません" : undefined
                     }
                   >
-                    <span className="text-xl">{item.icon}</span>
+                    <i className={`${item.icon} text-xl`}></i>
                     {sidebarOpen && <span>{item.label}</span>}
                   </Link>
                 </li>
@@ -208,7 +208,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
                     title="パスワード変更"
                   >
-                    🔑
+                    <i className="fa-solid fa-key"></i>
                   </button>
                 </div>
               </div>
@@ -218,7 +218,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
               className="flex items-center gap-3 p-3 rounded transition-colors hover:bg-gray-700 text-gray-300 w-full"
               title="ログアウト"
             >
-              <span className="text-xl">🚪</span>
+              <i className="fa-solid fa-right-from-bracket text-xl"></i>
               {sidebarOpen && <span>ログアウト</span>}
             </button>
           </div>
@@ -276,7 +276,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
                   >
-                    {showCurrentPassword ? "👁️" : "👁️‍🗨️"}
+                    <i className={showCurrentPassword ? "fa-solid fa-eye" : "fa-solid fa-eye-slash"}></i>
                   </button>
                 </div>
               </div>
@@ -298,7 +298,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
                   >
-                    {showNewPassword ? "👁️" : "👁️‍🗨️"}
+                    <i className={showNewPassword ? "fa-solid fa-eye" : "fa-solid fa-eye-slash"}></i>
                   </button>
                 </div>
 
@@ -384,7 +384,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     onClick={() => setShowNewPasswordConfirm(!showNewPasswordConfirm)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
                   >
-                    {showNewPasswordConfirm ? "👁️" : "👁️‍🗨️"}
+                    <i className={showNewPasswordConfirm ? "fa-solid fa-eye" : "fa-solid fa-eye-slash"}></i>
                   </button>
                 </div>
                 {/* パスワード一致確認 */}

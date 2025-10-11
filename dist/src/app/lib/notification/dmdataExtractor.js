@@ -24,9 +24,11 @@ function normalizeIntensity(intensity) {
 function extractEarthquakeInfo(item) {
     try {
         const info = {
-            eventId: item.head.eventID || item.id,
-            type: item.head.type,
-            title: item.xmlReport?.control?.title || item.xmlReport?.head?.title || "",
+            eventId: item.head?.eventID || item.xmlReport?.head?.eventID || item.id,
+            type: item.head?.type || "",
+            title: item.xmlReport?.head?.headline?.text || item.xmlReport?.control?.title || item.xmlReport?.head?.title || "",
+            occurrenceTime: item.xmlReport?.head?.targetDateTime || undefined,
+            arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
         };
         // VXSE51: 震度速報（震源情報なし）
         // VXSE53: 震源・震度に関する情報
@@ -74,6 +76,49 @@ function extractEarthquakeInfo(item) {
                 prefecture: pref.name,
                 maxIntensity: normalizeIntensity(pref.maxInt || ""),
             }));
+        }
+        // VXSE51(震度速報)の場合、headlineから震度を抽出
+        if (item.head?.type === "VXSE51") {
+            const headline = item.xmlReport?.head?.headline;
+            if (headline && typeof headline === 'object') {
+                // information配列から震度情報を抽出
+                const information = Array.isArray(headline.information) ? headline.information : [headline.information];
+                const intensityInfos = [];
+                let maxIntensity = "";
+                for (const info of information) {
+                    if (!info || info.type !== "震度速報")
+                        continue;
+                    const items = Array.isArray(info.Item) ? info.Item : [info.Item];
+                    for (const infoItem of items) {
+                        if (!infoItem?.Kind?.Name)
+                            continue;
+                        const intensity = infoItem.Kind.Name; // e.g. "震度３"
+                        const normalizedIntensity = normalizeIntensity(intensity.replace("震度", ""));
+                        if (!maxIntensity || normalizedIntensity > maxIntensity) {
+                            maxIntensity = normalizedIntensity;
+                        }
+                        // 地域情報
+                        const areas = Array.isArray(infoItem.Areas) ? infoItem.Areas : [infoItem.Areas];
+                        for (const areaGroup of areas) {
+                            if (!areaGroup)
+                                continue;
+                            const areaList = Array.isArray(areaGroup.Area) ? areaGroup.Area : [areaGroup.Area];
+                            for (const area of areaList) {
+                                if (area?.Name) {
+                                    intensityInfos.push({
+                                        prefecture: area.Name,
+                                        maxIntensity: normalizedIntensity,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                if (maxIntensity) {
+                    info.maxIntensity = maxIntensity;
+                    info.prefectureObservations = intensityInfos;
+                }
+            }
         }
         return info;
     }

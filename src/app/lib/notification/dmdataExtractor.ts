@@ -112,11 +112,11 @@ export function normalizeIntensity(intensity: string): string {
 export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null {
   try {
     const info: EarthquakeInfo = {
-      eventId: item.head?.eventID || item.xmlReport?.head?.eventID || item.xmlReport?.head?.EventID || item.id,
+      eventId: item.head?.eventID || item.xmlReport?.head?.eventID || item.id,
       type: item.head?.type || "",
-      title: item.xmlReport?.head?.Headline?.Text || item.xmlReport?.control?.Title || item.xmlReport?.head?.Title || "",
-      occurrenceTime: item.xmlReport?.head?.TargetDateTime || undefined,
-      arrivalTime: item.xmlReport?.head?.ReportDateTime || undefined,
+      title: item.xmlReport?.head?.headline?.text || item.xmlReport?.control?.title || item.xmlReport?.head?.title || "",
+      occurrenceTime: item.xmlReport?.head?.targetDateTime || undefined,
+      arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
     };
 
     // VXSE51: 震度速報（震源情報なし）
@@ -177,13 +177,13 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
         }));
     }
 
-    // VXSE51(震度速報)の場合、Headlineから震度を抽出
+    // VXSE51(震度速報)の場合、headlineから震度を抽出
     if (item.head?.type === "VXSE51") {
-      const headline = item.xmlReport?.head?.Headline;
+      const headline = item.xmlReport?.head?.headline;
 
       if (headline && typeof headline === 'object') {
-        // Information配列から震度情報を抽出
-        const information = Array.isArray(headline.Information) ? headline.Information : [headline.Information];
+        // information配列から震度情報を抽出
+        const information = Array.isArray(headline.information) ? headline.information : [headline.information];
         const intensityInfos: Array<{ prefecture: string; maxIntensity: string }> = [];
         let maxIntensity = "";
 

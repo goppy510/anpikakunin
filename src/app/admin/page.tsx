@@ -63,6 +63,13 @@ function getResourceTypeText(resourceType: string): string {
   return map[resourceType] || resourceType;
 }
 
+interface BatchHealth {
+  status: "healthy" | "warning" | "error";
+  lastRunAt: string | null;
+  elapsedMinutes: number | null;
+  message: string;
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
     workspaces: 0,
@@ -74,6 +81,7 @@ export default function AdminDashboard() {
   const [earthquakes, setEarthquakes] = useState<EarthquakeRecord[]>([]);
   const [fetchedEarthquakes, setFetchedEarthquakes] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [batchHealth, setBatchHealth] = useState<BatchHealth | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<{
     fetched: number;
@@ -106,6 +114,18 @@ export default function AdminDashboard() {
       }
     };
 
+    const fetchBatchHealth = async () => {
+      try {
+        const response = await fetch("/api/admin/batch-health");
+        if (response.ok) {
+          const data = await response.json();
+          setBatchHealth(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch batch health:", error);
+      }
+    };
+
     const fetchActivityLogs = async () => {
       try {
         const response = await fetch("/api/admin/activity-logs?limit=10");
@@ -121,6 +141,11 @@ export default function AdminDashboard() {
     fetchStats();
     fetchEarthquakes();
     fetchActivityLogs();
+    fetchBatchHealth();
+
+    // 30秒ごとにヘルスチェックを更新
+    const interval = setInterval(fetchBatchHealth, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleFetchNow = async () => {
@@ -134,12 +159,6 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("=== DMData API 取得結果 ===");
-        console.log("取得件数:", data.fetched);
-        console.log("VXSE51:", data.vxse51);
-        console.log("VXSE53:", data.vxse53);
-        console.log("地震情報:", data.earthquakes);
-
         setFetchResult({
           fetched: data.fetched,
           vxse51: data.vxse51,
@@ -171,28 +190,28 @@ export default function AdminDashboard() {
     {
       title: "ワークスペース",
       value: stats.workspaces,
-      icon: "🔗",
+      icon: "fa-brands fa-slack",
       color: "blue",
       href: "/admin/workspaces",
     },
     {
       title: "部署",
       value: stats.departments,
-      icon: "👥",
+      icon: "fa-solid fa-users",
       color: "green",
       href: "/admin/departments",
     },
     {
       title: "メンバー",
       value: stats.members,
-      icon: "👤",
+      icon: "fa-solid fa-user",
       color: "purple",
       href: "/admin/members",
     },
     {
       title: "有効な通知",
       value: stats.activeNotifications,
-      icon: "🔔",
+      icon: "fa-solid fa-bell",
       color: "yellow",
       href: "/admin/conditions",
     },
@@ -207,6 +226,45 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* バッチヘルスチェック */}
+      {batchHealth && (
+        <div
+          className={`p-4 rounded-lg border ${
+            batchHealth.status === "healthy"
+              ? "bg-green-900/30 border-green-700"
+              : batchHealth.status === "warning"
+              ? "bg-yellow-900/30 border-yellow-700"
+              : "bg-red-900/30 border-red-700"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  batchHealth.status === "healthy"
+                    ? "bg-green-500"
+                    : batchHealth.status === "warning"
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
+                }`}
+              />
+              <div>
+                <h3 className="font-semibold">地震情報取得バッチ</h3>
+                <p className="text-sm text-gray-400">{batchHealth.message}</p>
+              </div>
+            </div>
+            {batchHealth.lastRunAt && (
+              <div className="text-sm text-gray-400">
+                最終実行: {new Date(batchHealth.lastRunAt).toLocaleString("ja-JP")}
+                {batchHealth.elapsedMinutes !== null && (
+                  <span className="ml-2">({batchHealth.elapsedMinutes}分前)</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 統計カード */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card) => (
@@ -216,7 +274,7 @@ export default function AdminDashboard() {
             className="bg-gray-800 p-6 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors"
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-3xl">{card.icon}</span>
+              <i className={`${card.icon} text-3xl`}></i>
               <span className="text-3xl font-bold">{card.value}</span>
             </div>
             <h3 className="text-gray-400 text-sm">{card.title}</h3>
@@ -232,7 +290,10 @@ export default function AdminDashboard() {
             href="/admin/workspaces"
             className="p-4 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
           >
-            <div className="text-lg font-bold mb-2">🔗 ワークスペース追加</div>
+            <div className="text-lg font-bold mb-2 flex items-center gap-2">
+              <i className="fa-brands fa-slack"></i>
+              <span>ワークスペース追加</span>
+            </div>
             <p className="text-sm text-blue-100">新しいSlackワークスペースを接続</p>
           </Link>
 
@@ -240,7 +301,10 @@ export default function AdminDashboard() {
             href="/admin/members"
             className="p-4 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
           >
-            <div className="text-lg font-bold mb-2">👤 メンバー招待</div>
+            <div className="text-lg font-bold mb-2 flex items-center gap-2">
+              <i className="fa-solid fa-user"></i>
+              <span>メンバー招待</span>
+            </div>
             <p className="text-sm text-green-100">新しいメンバーを招待する</p>
           </Link>
 
@@ -248,7 +312,10 @@ export default function AdminDashboard() {
             href="/admin/conditions"
             className="p-4 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
           >
-            <div className="text-lg font-bold mb-2">⚙️ 通知設定</div>
+            <div className="text-lg font-bold mb-2 flex items-center gap-2">
+              <i className="fa-solid fa-gear"></i>
+              <span>通知設定</span>
+            </div>
             <p className="text-sm text-purple-100">地震通知条件を設定する</p>
           </Link>
         </div>
@@ -256,7 +323,10 @@ export default function AdminDashboard() {
 
       {/* 保存済み地震情報（震度3以上、最新3件） */}
       <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-        <h2 className="text-xl font-bold mb-4">💾 保存済みの地震情報（震度3以上、最新3件）</h2>
+        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <i className="fa-solid fa-database"></i>
+          <span>保存済みの地震情報（震度3以上、最新3件）</span>
+        </h2>
 
         {earthquakes.length === 0 ? (
           <div className="text-gray-400 text-sm">地震情報はありません</div>

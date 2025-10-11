@@ -670,7 +670,7 @@ async function main() {
     {
       name: "ダッシュボード",
       path: "/admin",
-      icon: "📊",
+      icon: "fa-solid fa-chart-line",
       displayOrder: 1,
       isActive: true,
       categoryPermission: "dashboard:read",
@@ -678,7 +678,7 @@ async function main() {
     {
       name: "Slack初期設定",
       path: "/admin/slack-setup",
-      icon: "🔗",
+      icon: "fa-solid fa-link",
       displayOrder: 2,
       isActive: true,
       categoryPermission: "slack:setup:read",
@@ -686,7 +686,7 @@ async function main() {
     {
       name: "ワークスペース",
       path: "/admin/workspaces",
-      icon: "🏢",
+      icon: "fa-brands fa-slack",
       displayOrder: 3,
       isActive: true,
       categoryPermission: "slack:workspace:read",
@@ -694,7 +694,7 @@ async function main() {
     {
       name: "部署管理",
       path: "/admin/departments",
-      icon: "🏷️",
+      icon: "fa-solid fa-tag",
       displayOrder: 4,
       isActive: true,
       categoryPermission: "department:read",
@@ -702,7 +702,7 @@ async function main() {
     {
       name: "通知条件",
       path: "/admin/conditions",
-      icon: "⚙️",
+      icon: "fa-solid fa-gear",
       displayOrder: 5,
       isActive: true,
       categoryPermission: "earthquake:condition:read",
@@ -710,7 +710,7 @@ async function main() {
     {
       name: "メッセージ",
       path: "/admin/messages",
-      icon: "💬",
+      icon: "fa-solid fa-message",
       displayOrder: 6,
       isActive: true,
       categoryPermission: "message:template:read",
@@ -718,7 +718,7 @@ async function main() {
     {
       name: "メンバー",
       path: "/admin/members",
-      icon: "👥",
+      icon: "fa-solid fa-users",
       displayOrder: 7,
       isActive: true,
       categoryPermission: "member:read",
@@ -726,7 +726,7 @@ async function main() {
     {
       name: "グループ",
       path: "/admin/groups",
-      icon: "👥",
+      icon: "fa-solid fa-user-group",
       displayOrder: 8,
       isActive: true,
       categoryPermission: "group:read",
@@ -734,7 +734,7 @@ async function main() {
     {
       name: "DMData設定",
       path: "/admin/dmdata-settings",
-      icon: "🔑",
+      icon: "fa-solid fa-key",
       displayOrder: 9,
       isActive: true,
       categoryPermission: "dmdata:settings:read",
