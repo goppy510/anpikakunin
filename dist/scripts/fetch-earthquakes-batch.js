@@ -4,6 +4,39 @@
  * DMData.jp API から1分間隔で地震情報を取得するバッチ処理
  * Docker Composeで実行される常駐プロセス
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -510,19 +543,100 @@ async function processPendingNotifications() {
  * Slack通知を送信
  */
 async function sendSlackNotification(notification) {
-    // TODO: Slackワークスペース情報を取得
-    // TODO: Bot Tokenを復号化
-    // TODO: メッセージテンプレートを取得
-    // TODO: Slack APIでメッセージ送信
-    console.log(`  📢 Slack通知（未実装）: ${notification.workspace.name} -> ${notification.channelId}`);
-    // とりあえず送信済みに更新
-    await prisma.earthquakeNotification.update({
-        where: { id: notification.id },
-        data: {
-            notificationStatus: "sent",
-            notifiedAt: new Date(),
-        },
-    });
+    try {
+        console.log(`  📢 Slack通知送信開始: ${notification.workspace.name} -> ${notification.channelId}`);
+        // 1. Bot Tokenを復号化
+        const { decrypt } = await Promise.resolve().then(() => __importStar(require("../src/app/lib/security/encryption")));
+        const botToken = decrypt({
+            ciphertext: notification.workspace.botTokenCiphertext,
+            iv: notification.workspace.botTokenIv,
+            authTag: notification.workspace.botTokenTag,
+        });
+        if (!botToken) {
+            throw new Error("Bot Token復号化失敗");
+        }
+        // 2. 部署情報を取得
+        const departments = await prisma.department.findMany({
+            where: {
+                workspaceRef: notification.workspaceId,
+                isActive: true,
+            },
+            orderBy: {
+                displayOrder: "asc",
+            },
+        });
+        if (departments.length === 0) {
+            console.warn(`  ⚠️  部署が設定されていません: ${notification.workspace.name}`);
+            await prisma.earthquakeNotification.update({
+                where: { id: notification.id },
+                data: {
+                    notificationStatus: "failed",
+                    errorMessage: "部署が設定されていません",
+                },
+            });
+            return;
+        }
+        // 3. メッセージテンプレートを取得
+        const template = await prisma.messageTemplate.findFirst({
+            where: {
+                workspaceRef: notification.workspaceId,
+                type: "PRODUCTION",
+                isActive: true,
+            },
+        });
+        const defaultTemplate = {
+            title: `🚨 【地震情報】震度{maxIntensity}`,
+            body: `*地震が発生しました*\n\n発生時刻: {occurrenceTime}\n震源地: {epicenter}\nマグニチュード: {magnitude}\n深さ: {depth}\n\n*安否確認をお願いします*\n該当する部署のボタンを押してください。`,
+        };
+        // 4. 地震情報を取得
+        const { extractEarthquakeInfo } = await Promise.resolve().then(() => __importStar(require("../src/app/lib/notification/dmdataExtractor")));
+        const earthquakeInfo = extractEarthquakeInfo(notification.earthquakeRecord.rawData);
+        if (!earthquakeInfo) {
+            throw new Error("地震情報の抽出に失敗");
+        }
+        // 5. メッセージを生成
+        const { buildEarthquakeNotificationMessage } = await Promise.resolve().then(() => __importStar(require("../src/app/lib/slack/messageBuilder")));
+        const message = buildEarthquakeNotificationMessage(earthquakeInfo, departments.map((d) => ({
+            id: d.id,
+            name: d.name,
+            slackEmoji: d.slackEmoji,
+            buttonColor: d.buttonColor,
+        })), template || defaultTemplate);
+        // 6. Slack APIでメッセージ送信
+        const response = await axios_1.default.post("https://slack.com/api/chat.postMessage", {
+            channel: notification.channelId,
+            ...message,
+        }, {
+            headers: {
+                Authorization: `Bearer ${botToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+        if (!response.data.ok) {
+            throw new Error(`Slack API エラー: ${response.data.error}`);
+        }
+        // 7. 送信成功
+        await prisma.earthquakeNotification.update({
+            where: { id: notification.id },
+            data: {
+                notificationStatus: "sent",
+                messageTs: response.data.ts,
+                notifiedAt: new Date(),
+            },
+        });
+        console.log(`  ✅ Slack通知送信完了: message_ts=${response.data.ts}`);
+    }
+    catch (error) {
+        console.error(`  ❌ Slack通知送信エラー:`, error.message);
+        // エラー記録
+        await prisma.earthquakeNotification.update({
+            where: { id: notification.id },
+            data: {
+                notificationStatus: "failed",
+                errorMessage: error.message,
+            },
+        });
+    }
 }
 /**
  * メイン処理：地震情報を取得・保存・通知
