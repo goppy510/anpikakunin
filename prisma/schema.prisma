@@ -74,6 +74,9 @@ model Department {
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
+  // リレーション
+  safetyResponses SafetyConfirmationResponse[]
+
   @@map("departments")
   @@index([workspaceRef])
   @@index([workspaceRef, displayOrder])
@@ -437,10 +440,33 @@ model EarthquakeNotification {
   createdAt           DateTime         @default(now()) @map("created_at")
   updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at")
 
+  // リレーション
+  safetyResponses     SafetyConfirmationResponse[]
+
   @@map("earthquake_notifications")
   @@index([workspaceId])
   @@index([notificationStatus])
   @@index([createdAt(sort: Desc)])
+}
+
+// 安否確認回答
+model SafetyConfirmationResponse {
+  id                     String                 @id @default(uuid())
+  notificationId         String                 @map("notification_id")
+  notification           EarthquakeNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  slackUserId            String                 @map("slack_user_id") // Slackユーザー ID
+  slackUserName          String                 @map("slack_user_name") // Slackユーザー名（表示用）
+  departmentId           String                 @map("department_id")
+  department             Department             @relation(fields: [departmentId], references: [id])
+  respondedAt            DateTime               @default(now()) @map("responded_at")
+  createdAt              DateTime               @default(now()) @map("created_at")
+
+  @@map("safety_confirmation_responses")
+  @@unique([notificationId, slackUserId])
+  @@index([notificationId])
+  @@index([slackUserId])
+  @@index([departmentId])
+  @@index([respondedAt(sort: Desc)])
 }
 
 // アクティビティログ
