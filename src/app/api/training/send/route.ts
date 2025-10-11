@@ -11,7 +11,7 @@ import axios from "axios";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { workspaceId, channelId, scheduledAt } = body;
+    const { workspaceId, channelId, scheduledAt, earthquakeInfo } = body;
 
     if (!workspaceId || !channelId) {
       return NextResponse.json(
@@ -84,10 +84,28 @@ export async function POST(request: NextRequest) {
     try {
       // Bot Tokenを復号化
       const botToken = decrypt({
-        ciphertext: Buffer.from(workspace.botTokenCiphertext, "base64"),
-        iv: Buffer.from(workspace.botTokenIv, "base64"),
-        tag: Buffer.from(workspace.botTokenTag, "base64"),
+        ciphertext: workspace.botTokenCiphertext,
+        iv: workspace.botTokenIv,
+        authTag: workspace.botTokenTag,
       });
+
+      // テンプレート変数を置換（訓練モード用）
+      const now = new Date();
+      const replacedTitle = template.title
+        .replace(/\{\{epicenter\}\}/g, earthquakeInfo?.epicenter || "訓練")
+        .replace(/\{\{maxIntensity\}\}/g, earthquakeInfo?.maxIntensity || "訓練")
+        .replace(/\{\{occurrenceTime\}\}/g, now.toLocaleString("ja-JP"))
+        .replace(/\{\{magnitude\}\}/g, earthquakeInfo?.magnitude || "M0.0")
+        .replace(/\{\{depth\}\}/g, earthquakeInfo?.depth || "0km")
+        .replace(/\{\{infoType\}\}/g, "訓練");
+
+      const replacedBody = template.body
+        .replace(/\{\{epicenter\}\}/g, earthquakeInfo?.epicenter || "訓練")
+        .replace(/\{\{maxIntensity\}\}/g, earthquakeInfo?.maxIntensity || "訓練")
+        .replace(/\{\{occurrenceTime\}\}/g, now.toLocaleString("ja-JP"))
+        .replace(/\{\{magnitude\}\}/g, earthquakeInfo?.magnitude || "M0.0")
+        .replace(/\{\{depth\}\}/g, earthquakeInfo?.depth || "0km")
+        .replace(/\{\{infoType\}\}/g, "訓練");
 
       // メッセージを作成
       const message = buildTrainingNotificationMessage(
@@ -98,8 +116,8 @@ export async function POST(request: NextRequest) {
           buttonColor: d.buttonColor,
         })),
         {
-          title: template.title,
-          body: template.body,
+          title: replacedTitle,
+          body: replacedBody,
         }
       );
 

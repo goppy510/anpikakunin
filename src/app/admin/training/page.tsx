@@ -25,23 +25,33 @@ type Workspace = {
   workspaceId: string;
 };
 
-type NotificationChannel = {
+type SlackChannel = {
   id: string;
-  channelId: string;
-  channelName: string;
-  purpose: string;
+  name: string;
+  isPrivate: boolean;
 };
 
 export default function TrainingModePage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
-  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [channels, setChannels] = useState<SlackChannel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string>("");
+  const [channelSearch, setChannelSearch] = useState<string>("");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
   const [sendType, setSendType] = useState<"immediate" | "scheduled">("immediate");
   const [scheduledTime, setScheduledTime] = useState<string>("");
   const [sending, setSending] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(false);
+  const [templateForm, setTemplateForm] = useState({ title: "", body: "" });
+
+  // 地震情報入力フォーム
+  const [earthquakeInfo, setEarthquakeInfo] = useState({
+    epicenter: "訓練震源地",
+    maxIntensity: "震度5強",
+    magnitude: "M6.5",
+    depth: "10km",
+  });
 
   useEffect(() => {
     loadWorkspaces();
@@ -70,29 +80,23 @@ export default function TrainingModePage() {
 
   const loadChannels = async () => {
     try {
-      // 内部IDを取得
-      const workspace = workspaces.find(w => w.workspaceId === selectedWorkspaceId);
-      if (!workspace) return;
-
-      const response = await axios.get(`/api/notification-channels?workspaceId=${workspace.id}`);
+      // Slackから直接チャンネル一覧を取得
+      const response = await axios.get(`/api/slack/channels?workspaceId=${selectedWorkspaceId}`);
       setChannels(response.data.channels || []);
-      const defaultChannel = response.data.channels?.find((c: NotificationChannel) =>
-        c.purpose === "earthquake" || c.purpose === "safety_confirmation"
-      );
-      if (defaultChannel) {
-        setSelectedChannel(defaultChannel.channelId);
-      }
     } catch (error) {
       console.error("チャンネル取得エラー:", error);
+      toast.error("チャンネルの取得に失敗しました");
     }
   };
 
   const loadDepartments = async () => {
     try {
       const response = await axios.get(`/api/departments?workspaceId=${selectedWorkspaceId}`);
-      setDepartments(response.data.departments || []);
+      // APIは配列を直接返す
+      setDepartments(response.data || []);
     } catch (error) {
       console.error("部署取得エラー:", error);
+      toast.error("部署の取得に失敗しました");
     }
   };
 
@@ -102,8 +106,44 @@ export default function TrainingModePage() {
       const templates = response.data || [];
       const trainingTemplate = templates.find((t: MessageTemplate) => t.type === "TRAINING");
       setTemplate(trainingTemplate || null);
+      if (trainingTemplate) {
+        setTemplateForm({
+          title: trainingTemplate.title,
+          body: trainingTemplate.body,
+        });
+      }
     } catch (error) {
       console.error("テンプレート取得エラー:", error);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!selectedWorkspaceId) {
+      toast.error("ワークスペースを選択してください");
+      return;
+    }
+
+    if (!templateForm.title || !templateForm.body) {
+      toast.error("タイトルと本文を入力してください");
+      return;
+    }
+
+    try {
+      await axios.post("/api/message-templates", {
+        workspaceId: selectedWorkspaceId,
+        training: {
+          title: templateForm.title,
+          body: templateForm.body,
+        },
+      });
+
+      toast.success("テンプレートを保存しました");
+      setEditingTemplate(false);
+      await loadTemplate();
+    } catch (error: any) {
+      console.error("テンプレート保存エラー:", error);
+      const errorMsg = error.response?.data?.error || "テンプレート保存に失敗しました";
+      toast.error(errorMsg);
     }
   };
 
@@ -142,6 +182,7 @@ export default function TrainingModePage() {
         workspaceId: workspace.id,
         channelId: selectedChannel,
         scheduledAt: sendType === "scheduled" ? new Date(scheduledTime).toISOString() : null,
+        earthquakeInfo,
       });
 
       if (sendType === "immediate") {
@@ -218,18 +259,31 @@ export default function TrainingModePage() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   送信先チャンネル
                 </label>
+                <input
+                  type="text"
+                  value={channelSearch}
+                  onChange={(e) => setChannelSearch(e.target.value)}
+                  placeholder="チャンネル名で検索..."
+                  className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none mb-2"
+                />
                 <select
                   value={selectedChannel}
                   onChange={(e) => setSelectedChannel(e.target.value)}
-                  className="w-full bg-gray-700 text-white p-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none max-h-60 overflow-y-auto"
+                  size={10}
                 >
                   <option value="">選択してください</option>
-                  {channels.map((ch) => (
-                    <option key={ch.id} value={ch.channelId}>
-                      #{ch.channelName}
-                    </option>
-                  ))}
+                  {channels
+                    .filter((ch) => ch.name.toLowerCase().includes(channelSearch.toLowerCase()))
+                    .map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        #{ch.name} {ch.isPrivate ? "🔒" : ""}
+                      </option>
+                    ))}
                 </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  表示中: {channels.filter((ch) => ch.name.toLowerCase().includes(channelSearch.toLowerCase())).length}件 / 全{channels.length}件
+                </p>
               </div>
             )}
 
@@ -277,11 +331,154 @@ export default function TrainingModePage() {
                 />
               </div>
             )}
+
+            {/* 地震情報入力 */}
+            <div className="border-t border-gray-700 pt-4">
+              <h3 className="text-md font-semibold text-gray-200 mb-3">訓練地震情報設定</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    震源地
+                  </label>
+                  <input
+                    type="text"
+                    value={earthquakeInfo.epicenter}
+                    onChange={(e) => setEarthquakeInfo({ ...earthquakeInfo, epicenter: e.target.value })}
+                    className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                    placeholder="例: 東京都23区"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    最大震度
+                  </label>
+                  <select
+                    value={earthquakeInfo.maxIntensity}
+                    onChange={(e) => setEarthquakeInfo({ ...earthquakeInfo, maxIntensity: e.target.value })}
+                    className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="震度1">震度1</option>
+                    <option value="震度2">震度2</option>
+                    <option value="震度3">震度3</option>
+                    <option value="震度4">震度4</option>
+                    <option value="震度5弱">震度5弱</option>
+                    <option value="震度5強">震度5強</option>
+                    <option value="震度6弱">震度6弱</option>
+                    <option value="震度6強">震度6強</option>
+                    <option value="震度7">震度7</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    マグニチュード
+                  </label>
+                  <input
+                    type="text"
+                    value={earthquakeInfo.magnitude}
+                    onChange={(e) => setEarthquakeInfo({ ...earthquakeInfo, magnitude: e.target.value })}
+                    className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                    placeholder="例: M6.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    震源の深さ
+                  </label>
+                  <input
+                    type="text"
+                    value={earthquakeInfo.depth}
+                    onChange={(e) => setEarthquakeInfo({ ...earthquakeInfo, depth: e.target.value })}
+                    className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                    placeholder="例: 10km"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* テンプレート編集カード */}
+        {selectedWorkspaceId && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">訓練用メッセージテンプレート</h2>
+              {!editingTemplate && template && (
+                <button
+                  onClick={() => setEditingTemplate(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                >
+                  編集
+                </button>
+              )}
+            </div>
+
+            {editingTemplate ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    タイトル
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.title}
+                    onChange={(e) => setTemplateForm({ ...templateForm, title: e.target.value })}
+                    className="w-full bg-gray-700 text-white p-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                    placeholder="例: 【訓練】安否確認"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    本文
+                  </label>
+                  <textarea
+                    value={templateForm.body}
+                    onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
+                    className="w-full bg-gray-700 text-white p-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                    rows={6}
+                    placeholder="例: これは訓練です。&#10;&#10;発生時刻: {{occurrenceTime}}&#10;震源地: {{epicenter}}&#10;最大震度: {{maxIntensity}}&#10;マグニチュード: {{magnitude}}&#10;深さ: {{depth}}"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    利用可能な変数: {"{"}{"{"} epicenter {"}"}{"}"}, {"{"}{"{"} maxIntensity {"}"}{"}"}, {"{"}{"{"} occurrenceTime {"}"}{"}"}, {"{"}{"{"} magnitude {"}"}{"}"}, {"{"}{"{"} depth {"}"}{"}"}
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveTemplate}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingTemplate(false);
+                      if (template) {
+                        setTemplateForm({
+                          title: template.title,
+                          body: template.body,
+                        });
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : (
+              template && (
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <h3 className="text-white font-bold mb-2">{template.title}</h3>
+                  <p className="text-gray-300 whitespace-pre-wrap">{template.body}</p>
+                </div>
+              )
+            )}
+          </div>
+        )}
+
         {/* プレビューカード */}
-        {selectedWorkspaceId && template && (
+        {selectedWorkspaceId && template && !editingTemplate && (
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
             <h2 className="text-lg font-bold text-white mb-4">送信内容プレビュー</h2>
 
@@ -297,7 +494,7 @@ export default function TrainingModePage() {
                     style={{ backgroundColor: dept.buttonColor }}
                     disabled
                   >
-                    {dept.slackEmoji} {dept.name}
+                    {dept.slackEmoji}
                   </button>
                 ))}
               </div>

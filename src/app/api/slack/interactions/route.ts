@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import axios from 'axios';
+import { prisma } from '@/app/lib/db/prisma';
 
 // Slack署名検証用の関数
 function verifySlackSignature(body: string, signature: string, timestamp: string, signingSecret: string): boolean {
   const time = Math.floor(new Date().getTime() / 1000);
   if (Math.abs(time - parseInt(timestamp)) > 300) {
+    console.log('⏰ Timestamp too old:', { time, timestamp, diff: Math.abs(time - parseInt(timestamp)) });
     return false; // リクエストが5分以上古い場合は無効
   }
 
@@ -13,6 +16,14 @@ function verifySlackSignature(body: string, signature: string, timestamp: string
     .createHmac('sha256', signingSecret)
     .update(sigBasestring, 'utf8')
     .digest('hex');
+
+  console.log('🔑 Signature comparison:', {
+    received: signature,
+    computed: mySignature,
+    match: signature === mySignature,
+    bodyLength: body.length,
+    signingSecretLength: signingSecret.length,
+  });
 
   return crypto.timingSafeEqual(
     Buffer.from(mySignature, 'utf8'),
@@ -30,10 +41,22 @@ export async function POST(request: NextRequest) {
     const timestamp = request.headers.get('x-slack-request-timestamp');
     const signingSecret = process.env.SLACK_SIGNING_SECRET;
 
-    if (signingSecret && slackSignature && timestamp) {
-      if (!verifySlackSignature(body, slackSignature, timestamp, signingSecret)) {
+    // 開発環境では署名検証をスキップ可能（環境変数で制御）
+    const skipSignatureVerification = process.env.SLACK_SKIP_SIGNATURE_VERIFICATION === 'true';
+
+    if (!skipSignatureVerification && signingSecret && slackSignature && timestamp) {
+      const isValid = verifySlackSignature(body, slackSignature, timestamp, signingSecret);
+      console.log('🔐 Slack signature validation:', {
+        isValid,
+        timestamp,
+        hasSigningSecret: !!signingSecret,
+        hasSlackSignature: !!slackSignature,
+      });
+      if (!isValid) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
+    } else if (skipSignatureVerification) {
+      console.log('⚠️ Slack signature verification SKIPPED (development mode)');
     }
 
     // URLエンコードされたペイロードをパース
@@ -52,10 +75,213 @@ export async function POST(request: NextRequest) {
       const channel = payload.channel;
       const message = payload.message;
 
-      // 安否確認ボタンかチェック
-      if (action.action_id?.startsWith('safety_')) {
-        const departmentId = action.action_id.replace('safety_', '');
-        
+      // 訓練用安否確認ボタンかチェック
+      if (action.action_id?.startsWith('training_confirm_')) {
+        const departmentId = action.action_id.replace('training_confirm_', '');
+
+        // message_tsから訓練通知を特定
+        const trainingNotification = await prisma.trainingNotification.findFirst({
+          where: {
+            messageTs: message.ts,
+            notificationStatus: 'sent',
+          },
+        });
+
+        if (!trainingNotification) {
+          return NextResponse.json({
+            response_type: 'ephemeral',
+            text: '⚠️ 訓練通知が見つかりません',
+          });
+        }
+
+        // 既に回答済みかチェック
+        const existingResponse = await prisma.trainingConfirmationResponse.findUnique({
+          where: {
+            trainingNotificationId_slackUserId: {
+              trainingNotificationId: trainingNotification.id,
+              slackUserId: user.id,
+            },
+          },
+          include: {
+            department: true,
+          },
+        });
+
+        if (existingResponse) {
+          return NextResponse.json({
+            response_type: 'ephemeral',
+            text: `⚠️ これはあなただけに表示されたメッセージです\n\n✅ あなたは既に回答済みです\n\n*部署:* ${existingResponse.department.name}\n*ユーザー名:* ${user.profile?.real_name || user.name}\n*回答時刻:* ${new Date(existingResponse.respondedAt).toLocaleString('ja-JP')}`,
+          });
+        }
+
+        // 部署情報を取得
+        const department = await prisma.department.findUnique({
+          where: { id: departmentId },
+        });
+
+        if (!department) {
+          return NextResponse.json({
+            response_type: 'ephemeral',
+            text: '⚠️ 部署が見つかりません',
+          });
+        }
+
+        // 新規回答を記録
+        await prisma.trainingConfirmationResponse.create({
+          data: {
+            trainingNotificationId: trainingNotification.id,
+            slackUserId: user.id,
+            slackUserName: user.profile?.real_name || user.name,
+            departmentId: departmentId,
+          },
+        });
+
+        // 各部署の回答数を取得
+        const responseCounts = await prisma.trainingConfirmationResponse.groupBy({
+          by: ['departmentId'],
+          where: {
+            trainingNotificationId: trainingNotification.id,
+          },
+          _count: {
+            departmentId: true,
+          },
+        });
+
+        // 部署一覧と回答数を取得
+        const departments = await prisma.department.findMany({
+          where: {
+            workspaceRef: trainingNotification.workspaceId,
+            isActive: true,
+          },
+          orderBy: { displayOrder: 'asc' },
+        });
+
+        // メッセージテンプレートを取得
+        const template = await prisma.messageTemplate.findFirst({
+          where: {
+            workspaceRef: trainingNotification.workspaceId,
+            type: 'TRAINING',
+            isActive: true,
+          },
+        });
+
+        if (template && trainingNotification.messageTs) {
+          // カウントマップを作成
+          const countMap = new Map(
+            responseCounts.map((r) => [r.departmentId, r._count.departmentId])
+          );
+
+          // テンプレート変数を置換
+          const now = new Date();
+          const replacedTitle = template.title
+            .replace(/\{\{epicenter\}\}/g, '訓練')
+            .replace(/\{\{maxIntensity\}\}/g, '訓練')
+            .replace(/\{\{occurrenceTime\}\}/g, now.toLocaleString('ja-JP'))
+            .replace(/\{\{magnitude\}\}/g, '0.0')
+            .replace(/\{\{depth\}\}/g, '0km')
+            .replace(/\{\{infoType\}\}/g, '訓練');
+
+          const replacedBody = template.body
+            .replace(/\{\{epicenter\}\}/g, '訓練')
+            .replace(/\{\{maxIntensity\}\}/g, '訓練')
+            .replace(/\{\{occurrenceTime\}\}/g, now.toLocaleString('ja-JP'))
+            .replace(/\{\{magnitude\}\}/g, '0.0')
+            .replace(/\{\{depth\}\}/g, '0km')
+            .replace(/\{\{infoType\}\}/g, '訓練');
+
+          // ボタンを更新（絵文字と回答数のみ表示）
+          const departmentButtons = departments.map((dept) => {
+            const count = countMap.get(dept.id) || 0;
+            return {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: count > 0 ? `${dept.slackEmoji} (${count})` : dept.slackEmoji,
+                emoji: true,
+              },
+              style: dept.buttonColor === '#FF6B6B' ? 'danger' : dept.buttonColor === '#51CF66' ? 'primary' : undefined,
+              value: dept.id,
+              action_id: `training_confirm_${dept.id}`,
+            };
+          });
+
+          // Slackメッセージを更新
+          const workspace = await prisma.slackWorkspace.findUnique({
+            where: { id: trainingNotification.workspaceId },
+          });
+
+          if (workspace) {
+            const { decrypt } = await import('@/app/lib/security/encryption');
+            const botToken = decrypt({
+              ciphertext: workspace.botTokenCiphertext,
+              iv: workspace.botTokenIv,
+              authTag: workspace.botTokenTag,
+            });
+
+            await axios.post(
+              'https://slack.com/api/chat.update',
+              {
+                channel: trainingNotification.channelId,
+                ts: trainingNotification.messageTs,
+                blocks: [
+                  {
+                    type: 'header',
+                    text: {
+                      type: 'plain_text',
+                      text: `🎓 ${replacedTitle}`,
+                      emoji: true,
+                    },
+                  },
+                  {
+                    type: 'section',
+                    text: { type: 'mrkdwn', text: replacedBody },
+                  },
+                  {
+                    type: 'divider',
+                  },
+                  {
+                    type: 'section',
+                    text: {
+                      type: 'mrkdwn',
+                      text: '*👇 安否確認（該当部署のボタンを押してください）*',
+                    },
+                  },
+                  {
+                    type: 'actions',
+                    elements: departmentButtons,
+                  },
+                  {
+                    type: 'context',
+                    elements: [
+                      {
+                        type: 'mrkdwn',
+                        text: '⚠️ 一人一回のみ回答可能です｜🎓 これは訓練です',
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${botToken}`,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+          }
+        }
+
+        // 成功メッセージを返す（エフェメラル）
+        return NextResponse.json({
+          response_type: 'ephemeral',
+          text: `⚠️ これはあなただけに表示されたメッセージです\n\n✅ 訓練の安否確認を受け付けました\n\n*部署:* ${department.name}\n*ユーザー名:* ${user.profile?.real_name || user.name}\n*回答時刻:* ${new Date().toLocaleString('ja-JP')}\n\n🎓 これは訓練です`,
+        });
+      }
+
+      // 本番用安否確認ボタンかチェック
+      if (action.action_id?.startsWith('safety_confirm_')) {
+        const departmentId = action.action_id.replace('safety_confirm_', '');
+
         // ユーザー情報を記録
         const responseData = {
           userId: user.id,

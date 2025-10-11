@@ -69,12 +69,12 @@ export function buildEarthquakeNotificationMessage(
           .join("\n")
       : "情報なし";
 
-  // 部署ボタンを生成
+  // 部署ボタンを生成（絵文字のみ）
   const departmentButtons = departments.map((dept) => ({
     type: "button",
     text: {
       type: "plain_text",
-      text: `${dept.slackEmoji} ${dept.name}`,
+      text: dept.slackEmoji,
       emoji: true,
     },
     style: getButtonStyle(dept.buttonColor),
@@ -198,12 +198,12 @@ export function buildTrainingNotificationMessage(
   departments: Department[],
   template: MessageTemplate
 ) {
-  // 部署ボタンを生成（本番と同じaction_idプレフィックスを使用）
+  // 部署ボタンを生成（絵文字のみ）
   const departmentButtons = departments.map((dept) => ({
     type: "button",
     text: {
       type: "plain_text",
-      text: `${dept.slackEmoji} ${dept.name}`,
+      text: dept.slackEmoji,
       emoji: true,
     },
     style: getButtonStyle(dept.buttonColor),
