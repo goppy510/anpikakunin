@@ -47,7 +47,6 @@ export default function SlackSetupPage() {
     trainingTitle: "【訓練です】🚨 地震発生通知【訓練です】",
     trainingBody: "",
   });
-  const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
 
   const PREFECTURES = [
     "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
@@ -221,18 +220,6 @@ export default function SlackSetupPage() {
           },
         }),
       });
-
-      // 5. スプレッドシートURL登録
-      if (spreadsheetUrl) {
-        await fetch("/api/spreadsheet-config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId: savedWorkspace.workspaceId,
-            spreadsheetUrl,
-          }),
-        });
-      }
 
       setCurrentStep("complete");
     } catch (err) {
@@ -522,17 +509,6 @@ export default function SlackSetupPage() {
                     setMessages({ ...messages, trainingBody: e.target.value })
                   }
                   className="w-full bg-gray-700 p-2 rounded h-32"
-                />
-              </div>
-
-              <div>
-                <label className="block mb-2">スプレッドシートURL（オプション）</label>
-                <input
-                  type="url"
-                  value={spreadsheetUrl}
-                  onChange={(e) => setSpreadsheetUrl(e.target.value)}
-                  className="w-full bg-gray-700 p-2 rounded"
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
                 />
               </div>
             </div>
