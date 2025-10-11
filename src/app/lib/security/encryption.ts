@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { env } from "@/app/lib/env";
 
 const KEY_LENGTH = 32; // AES-256
 const IV_LENGTH = 12; // AES-GCM recommended IV length
@@ -11,7 +10,9 @@ export type EncryptionPayload = {
 };
 
 const getKey = (): Buffer => {
-  if (!env.SLACK_TOKEN_ENCRYPTION_KEY) {
+  const encryptionKey = process.env.SLACK_TOKEN_ENCRYPTION_KEY;
+
+  if (!encryptionKey) {
     throw new Error(
       "SLACK_TOKEN_ENCRYPTION_KEY is not set. Please configure a 32-byte base64 string."
     );
@@ -19,7 +20,7 @@ const getKey = (): Buffer => {
 
   let keyBuffer: Buffer;
   try {
-    keyBuffer = Buffer.from(env.SLACK_TOKEN_ENCRYPTION_KEY, "base64");
+    keyBuffer = Buffer.from(encryptionKey, "base64");
   } catch {
     throw new Error(
       "SLACK_TOKEN_ENCRYPTION_KEY must be a base64 encoded 32-byte key."

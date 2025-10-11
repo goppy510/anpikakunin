@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
 import { requireAdmin } from "@/app/lib/auth/middleware";
+import { logActivity, getRequestInfo } from "@/app/lib/activity/logger";
 
 export async function POST(request: NextRequest) {
   const authCheck = await requireAdmin(request);
   if (authCheck instanceof NextResponse) return authCheck;
+  const { user } = authCheck;
 
   try {
     const { workspaceId, name, slackEmoji, buttonColor } = await request.json();
@@ -43,6 +45,19 @@ export async function POST(request: NextRequest) {
         buttonColor: buttonColor || "#5B8FF9",
         displayOrder,
       },
+    });
+
+    // アクティビティログ記録
+    const requestInfo = getRequestInfo(request);
+    await logActivity({
+      userId: user.id,
+      userEmail: user.email,
+      action: "created",
+      resourceType: "department",
+      resourceId: department.id,
+      resourceName: name,
+      details: { workspaceId, slackEmoji, buttonColor },
+      ...requestInfo,
     });
 
     return NextResponse.json(department);

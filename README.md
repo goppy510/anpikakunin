@@ -4,12 +4,19 @@ DMData.jp の地震情報APIを利用して、設定したエリア・震度の�
 
 ## 主要機能
 
-- リアルタイム地震情報監視（WebSocket接続）
-- REST APIによる定期ポーリング（フォールバック）
-- エリア・震度による通知条件フィルタリング
-- Slackワークスペース・チャンネルへの自動通知
-- 地震イベントログの永続化（PostgreSQL）
-- 通知設定の管理UI
+- **地震情報取得**
+  - DMData.jp API から1分間隔で自動取得（バッチ処理）
+  - WebSocket接続によるリアルタイム監視（オプション）
+- **通知機能**
+  - エリア・震度による通知条件フィルタリング
+  - Slackワークスペース・チャンネルへの自動通知
+- **データ管理**
+  - 地震イベントログの永続化（PostgreSQL）
+  - 重複検知機能（eventId + payloadHash）
+- **管理UI**
+  - メンバー管理・権限管理
+  - グループ管理
+  - 通知設定の管理
 
 ## 技術スタック
 
@@ -69,7 +76,10 @@ docker-compose up
 docker-compose up -d
 ```
 
-アプリケーションは [http://localhost:8080](http://localhost:8080) で起動します。
+**起動されるコンテナ:**
+- `anpikakunin`: Next.jsアプリケーション (http://localhost:8080)
+- `earthquake-batch`: 地震情報取得バッチ処理（1分間隔）
+- `postgres`: PostgreSQLデータベース (port 5433)
 
 ### 4. データベースのセットアップ
 
@@ -87,8 +97,16 @@ docker-compose exec anpikakunin npx prisma migrate deploy
 
 ### 5. 動作確認
 
-- リアルタイムモニタリング: http://localhost:8080/monitor
-- 設定画面: http://localhost:8080/
+- **管理画面**: http://localhost:8080/admin
+  - 初回ログイン用管理者アカウントを作成:
+    ```bash
+    docker-compose exec anpikakunin yarn tsx scripts/create-admin.ts
+    ```
+- **リアルタイムモニタリング**: http://localhost:8080/monitor
+- **バッチ処理ログ確認**:
+  ```bash
+  docker-compose logs -f earthquake-batch
+  ```
 
 ## 停止方法
 
@@ -121,14 +139,19 @@ docker-compose down -v
   /api                      # Next.js APIルート
     /earthquake-events      # 地震イベントAPI
     /slack                  # Slack連携API
+    /auth                   # 認証API
+  /admin                    # 管理画面
   /components
     /monitor                # リアルタイム監視UI
-    /safety-confirmation    # 設定画面
     /providers              # Context Providers
   /lib
     /db                     # データベース操作
     /notification           # 通知ロジック
     /security               # 暗号化
+    /auth                   # 認証ロジック
+
+/scripts
+  fetch-earthquakes-batch.ts  # 地震情報取得バッチ処理
 
 /prisma
   schema.prisma             # データベーススキーマ

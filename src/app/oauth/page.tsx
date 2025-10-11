@@ -1,61 +1,39 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { oauth2 } from "@/app/api/Oauth2Service";
+import { useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
-function OauthPageContent() {
-  const [status, setStatus] = useState<string>("Processing...");
+function OAuthCallbackContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   useEffect(() => {
-    const handleOAuthCallback = async () => {
-      try {
-        const code = searchParams.get("code");
-        const state = searchParams.get("state");
-        const error = searchParams.get("error");
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
 
-        if (error) {
-          setStatus(`OAuth Error: ${error}`);
-          return;
-        }
-
-        if (!code || !state) {
-          setStatus("Missing authorization code or state");
-          return;
-        }
-
-        setStatus("Exchanging code for tokens...");
-        await oauth2().exchangeCodeForToken(code, state);
-        
-        setStatus("Authentication successful! Redirecting...");
-        
-        setTimeout(() => {
-          router.push("/");
-        }, 2000);
-        
-      } catch (error) {
-        console.error("OAuth callback error:", error);
-        setStatus(`Failed to process OAuth callback: ${error}`);
-      }
-    };
-
-    handleOAuthCallback();
-  }, [searchParams, router]);
+    if (code && state) {
+      // サーバーサイドのコールバックAPIにリダイレクト
+      window.location.href = `/api/admin/dmdata-oauth/callback?code=${code}&state=${state}`;
+    } else {
+      // エラー時は設定ページに戻る
+      window.location.href = "/admin/dmdata-settings?error=Invalid callback parameters";
+    }
+  }, [searchParams]);
 
   return (
-    <div>
-      <h1>OAuth Callback</h1>
-      <p>{status}</p>
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-lg">OAuth認証処理中...</p>
     </div>
   );
 }
 
-export default function OauthPage() {
+export default function OAuthCallbackPage() {
   return (
-    <Suspense fallback={<div>Loading OAuth callback...</div>}>
-      <OauthPageContent />
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg">読み込み中...</p>
+      </div>
+    }>
+      <OAuthCallbackContent />
     </Suspense>
   );
 }

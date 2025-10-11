@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
 import { requireAdmin } from "@/app/lib/auth/middleware";
+import { logActivity, getRequestInfo } from "@/app/lib/activity/logger";
 
 export async function DELETE(
   request: NextRequest,
@@ -8,13 +9,33 @@ export async function DELETE(
 ) {
   const authCheck = await requireAdmin(request);
   if (authCheck instanceof NextResponse) return authCheck;
+  const { user } = authCheck;
 
   try {
     const { id } = params;
 
+    // 削除前に情報を取得
+    const department = await prisma.department.findUnique({
+      where: { id },
+    });
+
     await prisma.department.delete({
       where: { id },
     });
+
+    // アクティビティログ記録
+    if (department) {
+      const requestInfo = getRequestInfo(request);
+      await logActivity({
+        userId: user.id,
+        userEmail: user.email,
+        action: "deleted",
+        resourceType: "department",
+        resourceId: id,
+        resourceName: department.name,
+        ...requestInfo,
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -32,6 +53,7 @@ export async function PATCH(
 ) {
   const authCheck = await requireAdmin(request);
   if (authCheck instanceof NextResponse) return authCheck;
+  const { user } = authCheck;
 
   try {
     const { id } = params;
@@ -47,6 +69,19 @@ export async function PATCH(
         ...(displayOrder !== undefined && { displayOrder }),
         ...(isActive !== undefined && { isActive }),
       },
+    });
+
+    // アクティビティログ記録
+    const requestInfo = getRequestInfo(request);
+    await logActivity({
+      userId: user.id,
+      userEmail: user.email,
+      action: "updated",
+      resourceType: "department",
+      resourceId: id,
+      resourceName: department.name,
+      details: { name, slackEmoji, buttonColor, displayOrder, isActive },
+      ...requestInfo,
     });
 
     return NextResponse.json(department);
