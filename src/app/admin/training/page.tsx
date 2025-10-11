@@ -34,7 +34,7 @@ type NotificationChannel = {
 
 export default function TrainingModePage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string>("");
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -48,19 +48,19 @@ export default function TrainingModePage() {
   }, []);
 
   useEffect(() => {
-    if (selectedWorkspace) {
+    if (selectedWorkspaceId) {
       loadChannels();
       loadDepartments();
       loadTemplate();
     }
-  }, [selectedWorkspace]);
+  }, [selectedWorkspaceId]);
 
   const loadWorkspaces = async () => {
     try {
       const response = await axios.get("/api/workspaces");
       setWorkspaces(response.data.workspaces || []);
       if (response.data.workspaces?.length > 0) {
-        setSelectedWorkspace(response.data.workspaces[0].id);
+        setSelectedWorkspaceId(response.data.workspaces[0].workspaceId);
       }
     } catch (error) {
       console.error("ワークスペース取得エラー:", error);
@@ -70,7 +70,11 @@ export default function TrainingModePage() {
 
   const loadChannels = async () => {
     try {
-      const response = await axios.get(`/api/notification-channels?workspaceId=${selectedWorkspace}`);
+      // 内部IDを取得
+      const workspace = workspaces.find(w => w.workspaceId === selectedWorkspaceId);
+      if (!workspace) return;
+
+      const response = await axios.get(`/api/notification-channels?workspaceId=${workspace.id}`);
       setChannels(response.data.channels || []);
       const defaultChannel = response.data.channels?.find((c: NotificationChannel) =>
         c.purpose === "earthquake" || c.purpose === "safety_confirmation"
@@ -85,7 +89,7 @@ export default function TrainingModePage() {
 
   const loadDepartments = async () => {
     try {
-      const response = await axios.get(`/api/departments?workspaceId=${selectedWorkspace}`);
+      const response = await axios.get(`/api/departments?workspaceId=${selectedWorkspaceId}`);
       setDepartments(response.data.departments || []);
     } catch (error) {
       console.error("部署取得エラー:", error);
@@ -94,15 +98,17 @@ export default function TrainingModePage() {
 
   const loadTemplate = async () => {
     try {
-      const response = await axios.get(`/api/message-templates?workspaceId=${selectedWorkspace}&type=TRAINING`);
-      setTemplate(response.data.templates?.[0] || null);
+      const response = await axios.get(`/api/message-templates?workspaceId=${selectedWorkspaceId}`);
+      const templates = response.data || [];
+      const trainingTemplate = templates.find((t: MessageTemplate) => t.type === "TRAINING");
+      setTemplate(trainingTemplate || null);
     } catch (error) {
       console.error("テンプレート取得エラー:", error);
     }
   };
 
   const handleSendTraining = async () => {
-    if (!selectedWorkspace) {
+    if (!selectedWorkspaceId) {
       toast.error("ワークスペースを選択してください");
       return;
     }
@@ -125,8 +131,15 @@ export default function TrainingModePage() {
     try {
       setSending(true);
 
+      // 内部IDを取得
+      const workspace = workspaces.find(w => w.workspaceId === selectedWorkspaceId);
+      if (!workspace) {
+        toast.error("ワークスペースが見つかりません");
+        return;
+      }
+
       const response = await axios.post("/api/training/send", {
-        workspaceId: selectedWorkspace,
+        workspaceId: workspace.id,
         channelId: selectedChannel,
         scheduledAt: sendType === "scheduled" ? new Date(scheduledTime).toISOString() : null,
       });
@@ -186,13 +199,13 @@ export default function TrainingModePage() {
                 ワークスペース
               </label>
               <select
-                value={selectedWorkspace}
-                onChange={(e) => setSelectedWorkspace(e.target.value)}
+                value={selectedWorkspaceId}
+                onChange={(e) => setSelectedWorkspaceId(e.target.value)}
                 className="w-full bg-gray-700 text-white p-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
               >
                 <option value="">選択してください</option>
                 {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
+                  <option key={ws.id} value={ws.workspaceId}>
                     {ws.name}
                   </option>
                 ))}
@@ -268,7 +281,7 @@ export default function TrainingModePage() {
         </div>
 
         {/* プレビューカード */}
-        {selectedWorkspace && template && (
+        {selectedWorkspaceId && template && (
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
             <h2 className="text-lg font-bold text-white mb-4">送信内容プレビュー</h2>
 
@@ -300,7 +313,7 @@ export default function TrainingModePage() {
         <div className="flex justify-end gap-4">
           <button
             onClick={handleSendTraining}
-            disabled={sending || !selectedWorkspace || !selectedChannel}
+            disabled={sending || !selectedWorkspaceId || !selectedChannel}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {sending ? (
