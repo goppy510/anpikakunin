@@ -190,7 +190,7 @@ export default function AdminDashboard() {
     {
       title: "ワークスペース",
       value: stats.workspaces,
-      icon: "fa-solid fa-link",
+      icon: "fa-brands fa-slack",
       color: "blue",
       href: "/admin/workspaces",
     },
@@ -290,7 +290,10 @@ export default function AdminDashboard() {
             href="/admin/workspaces"
             className="p-4 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
           >
-            <div className="text-lg font-bold mb-2">🔗 ワークスペース追加</div>
+            <div className="text-lg font-bold mb-2 flex items-center gap-2">
+              <i className="fa-brands fa-slack"></i>
+              <span>ワークスペース追加</span>
+            </div>
             <p className="text-sm text-blue-100">新しいSlackワークスペースを接続</p>
           </Link>
 
@@ -298,7 +301,10 @@ export default function AdminDashboard() {
             href="/admin/members"
             className="p-4 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
           >
-            <div className="text-lg font-bold mb-2">👤 メンバー招待</div>
+            <div className="text-lg font-bold mb-2 flex items-center gap-2">
+              <i className="fa-solid fa-user"></i>
+              <span>メンバー招待</span>
+            </div>
             <p className="text-sm text-green-100">新しいメンバーを招待する</p>
           </Link>
 
@@ -306,7 +312,10 @@ export default function AdminDashboard() {
             href="/admin/conditions"
             className="p-4 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
           >
-            <div className="text-lg font-bold mb-2">⚙️ 通知設定</div>
+            <div className="text-lg font-bold mb-2 flex items-center gap-2">
+              <i className="fa-solid fa-gear"></i>
+              <span>通知設定</span>
+            </div>
             <p className="text-sm text-purple-100">地震通知条件を設定する</p>
           </Link>
         </div>
@@ -314,7 +323,10 @@ export default function AdminDashboard() {
 
       {/* 保存済み地震情報（震度3以上、最新3件） */}
       <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-        <h2 className="text-xl font-bold mb-4">💾 保存済みの地震情報（震度3以上、最新3件）</h2>
+        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <i className="fa-solid fa-database"></i>
+          <span>保存済みの地震情報（震度3以上、最新3件）</span>
+        </h2>
 
         {earthquakes.length === 0 ? (
           <div className="text-gray-400 text-sm">地震情報はありません</div>
