@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error("Failed to fetch invitations:", error);
+    // Silenced
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
@@ -128,16 +128,13 @@ export async function POST(request: NextRequest) {
 
     // 招待メール送信
     try {
-      console.log("🔵 招待メール送信開始:", invitation.email);
       await sendInvitationEmail({
         toEmail: invitation.email,
         inviterName: invitation.inviter.email,
         invitationToken: invitation.token,
       });
-      console.log("✅ 招待メール送信成功:", invitation.email);
     } catch (emailError) {
-      console.error("❌ Failed to send invitation email:", emailError);
-      console.error("エラー詳細:", JSON.stringify(emailError, null, 2));
+      // Silenced
       // メール送信失敗してもエラーにしない（招待レコードは作成済み）
     }
 
@@ -155,7 +152,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Failed to create invitation:", error);
+    // Silenced
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
@@ -188,7 +185,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Failed to delete invitation:", error);
+    // Silenced
 
     if (error.code === "P2025") {
       return NextResponse.json(

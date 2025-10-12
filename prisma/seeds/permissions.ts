@@ -131,7 +131,7 @@ const permissions = [
 ];
 
 export async function seedPermissions() {
-  console.log("🔑 権限マスターデータをシード中...");
+  // Silenced
 
   for (const permission of permissions) {
     await prisma.permission.upsert({
@@ -145,7 +145,7 @@ export async function seedPermissions() {
     });
   }
 
-  console.log(`✅ ${permissions.length}件の権限をシードしました`);
+  // Silenced
 }
 
 async function main() {
@@ -154,8 +154,8 @@ async function main() {
 
 if (require.main === module) {
   main()
-    .catch((e) => {
-      console.error(e);
+    .catch(() => {
+      // Silenced
       process.exit(1);
     })
     .finally(async () => {

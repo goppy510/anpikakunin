@@ -404,10 +404,9 @@ const INTENSITY_SCALES = [
 ];
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  // Silenced
 
   // 都道府県マスターデータ投入
-  console.log("📍 Seeding prefectures...");
   for (const pref of PREFECTURES) {
     await prisma.prefecture.upsert({
       where: { code: pref.code },
@@ -415,10 +414,8 @@ async function main() {
       create: pref,
     });
   }
-  console.log(`✅ Created/Updated ${PREFECTURES.length} prefectures`);
 
   // 震度マスターデータ投入
-  console.log("📊 Seeding intensity scales...");
   for (const intensity of INTENSITY_SCALES) {
     await prisma.intensityScale.upsert({
       where: { value: intensity.value },
@@ -426,10 +423,8 @@ async function main() {
       create: intensity,
     });
   }
-  console.log(`✅ Created/Updated ${INTENSITY_SCALES.length} intensity scales`);
 
   // 権限マスターデータ投入
-  console.log("🔐 Seeding permissions...");
   const permissions = [
     // ダッシュボード
     {
@@ -593,10 +588,8 @@ async function main() {
       create: perm,
     });
   }
-  console.log(`✅ Created/Updated ${permissions.length} permissions`);
 
   // グループマスターデータ投入
-  console.log("👥 Seeding groups...");
   const adminGroup = await prisma.group.upsert({
     where: { name: "管理者グループ" },
     update: {},
@@ -629,10 +622,8 @@ async function main() {
       });
     }
   }
-  console.log(`✅ Created admin group with all permissions`);
 
   // 初期管理者アカウント作成
-  console.log("👤 Creating initial admin user...");
   const adminEmail = process.env.ADMIN_EMAIL || "tgoto@eviry.com";
   const adminPassword = process.env.ADMIN_PASSWORD || "Admin@123";
 
@@ -650,9 +641,7 @@ async function main() {
     },
   });
 
-  console.log(`✅ Admin user created: ${adminEmail}`);
-  console.log(`   Password: ${adminPassword}`);
-  console.log(`   ⚠️  Please change this password after first login!`);
+  // Silenced
 
   // 管理者ユーザーを管理者グループに追加
   await prisma.userGroupMembership.upsert({
@@ -668,10 +657,8 @@ async function main() {
       groupId: adminGroup.id,
     },
   });
-  console.log(`✅ Admin user added to admin group`);
 
   // 地震情報種別マスターデータ投入
-  console.log("📋 Seeding earthquake info types...");
   const earthquakeInfoTypes = [
     {
       code: "VXSE51",
@@ -696,12 +683,8 @@ async function main() {
       create: infoType,
     });
   }
-  console.log(
-    `✅ Created/Updated ${earthquakeInfoTypes.length} earthquake info types`
-  );
 
   // メニューマスターデータ投入
-  console.log("📱 Seeding menus...");
   const menus = [
     {
       name: "ダッシュボード",
@@ -816,10 +799,8 @@ async function main() {
       create: menu,
     });
   }
-  console.log(`✅ Created/Updated ${menus.length} menus`);
 
   // デフォルトメッセージテンプレート投入
-  console.log("💬 Seeding default message templates...");
 
   // ワークスペースが存在する場合のみテンプレート作成
   const workspaces = await prisma.slackWorkspace.findMany();
@@ -894,17 +875,16 @@ async function main() {
         },
       });
     }
-    console.log(`✅ Created message templates for ${workspaces.length} workspace(s)`);
   } else {
-    console.log("ℹ️  No workspaces found, skipping message template creation");
+    // Silenced
   }
 
-  console.log("🎉 Seeding completed!");
+  // Silenced
 }
 
 main()
-  .catch((e) => {
-    console.error("❌ Seeding failed:", e);
+  .catch(() => {
+    // Silenced
     process.exit(1);
   })
   .finally(async () => {

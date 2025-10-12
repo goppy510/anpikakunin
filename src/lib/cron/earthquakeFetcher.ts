@@ -4,14 +4,13 @@ let cronJob: cron.ScheduledTask | null = null;
 
 export function startEarthquakeFetchCron() {
   if (cronJob) {
-    console.log("⚠️ Cron job already running");
     return;
   }
 
   // 1分ごとに実行
   cronJob = cron.schedule("*/1 * * * *", async () => {
     try {
-      console.log("🔄 [Cron] Fetching earthquakes...");
+      // Silenced
 
       // 認証ヘッダーを追加（開発環境では空でも許可される）
       const headers: HeadersInit = {};
@@ -26,22 +25,21 @@ export function startEarthquakeFetchCron() {
       const data = await response.json();
 
       if (data.success) {
-        console.log(`✅ [Cron] ${data.message}`);
+        // Silenced
       } else {
-        console.error(`❌ [Cron] Error: ${data.error}`);
+        // Silenced
       }
     } catch (error) {
-      console.error("❌ [Cron] Failed to fetch earthquakes:", error);
+      // Silenced
     }
   });
 
-  console.log("✅ Earthquake fetch cron job started (every 1 minute)");
+  // Silenced
 }
 
 export function stopEarthquakeFetchCron() {
   if (cronJob) {
     cronJob.stop();
     cronJob = null;
-    console.log("🛑 Earthquake fetch cron job stopped");
   }
 }
