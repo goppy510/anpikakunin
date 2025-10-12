@@ -60,6 +60,13 @@ export class CronJobOrgClient {
   }
 
   /**
+   * APIキーが設定されているかチェック
+   */
+  isConfigured(): boolean {
+    return !!this.apiKey && this.apiKey.length > 0;
+  }
+
+  /**
    * cron-job.org にジョブを作成
    */
   async createJob(request: CreateCronJobRequest): Promise<CronJobResponse> {
