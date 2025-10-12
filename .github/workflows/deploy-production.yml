@@ -1,10 +1,9 @@
 name: Deploy to Production
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       skip_migration:
@@ -42,9 +41,8 @@ jobs:
       - name: Check for new migrations
         id: check
         run: |
-          # PRのベースブランチとの差分をチェック
-          BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
-          if git diff --name-only origin/${BASE_REF}...HEAD | grep -q "prisma/migrations/"; then
+          # 直前のコミットとの差分をチェック（push event用）
+          if git diff --name-only HEAD~1 HEAD | grep -q "prisma/migrations/"; then
             echo "has_migration=true" >> $GITHUB_OUTPUT
             echo "✅ 新しいマイグレーションが検出されました"
           else
@@ -56,18 +54,17 @@ jobs:
         id: diff
         if: steps.check.outputs.has_migration == 'true'
         run: |
-          BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
           echo "## 📋 マイグレーション差分" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "以下のマイグレーションファイルが追加されています：" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          git diff --name-only origin/${BASE_REF}...HEAD | grep "prisma/migrations/" | while read file; do
+          git diff --name-only HEAD~1 HEAD | grep "prisma/migrations/" | while read file; do
             echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### マイグレーション内容" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          git diff --name-only origin/${BASE_REF}...HEAD | grep "prisma/migrations/.*\.sql$" | while read file; do
+          git diff --name-only HEAD~1 HEAD | grep "prisma/migrations/.*\.sql$" | while read file; do
             echo "<details>" >> $GITHUB_STEP_SUMMARY
             echo "<summary><code>$file</code></summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
