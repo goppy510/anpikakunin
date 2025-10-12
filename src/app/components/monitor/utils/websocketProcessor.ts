@@ -245,21 +245,10 @@ export const processWebSocketMessage = (
       return null;
     }
 
-      "Using xmlReport structure:",
-      xmlReport ? Object.keys(xmlReport) : "null"
-    );
-
     // デコードされたデータを優先的に使用
     const earthquake =
       decodedData?.body?.earthquake || xmlReport?.body?.earthquake?.[0];
     const head = xmlReport?.head;
-
-      "- decodedData?.body?.earthquake:",
-      decodedData?.body?.earthquake
-    );
-      "- xmlReport?.body?.earthquake?.[0]:",
-      xmlReport?.body?.earthquake?.[0]
-    );
 
     // イベントIDを取得 (優先順位: decodedData.eventId > head.eventId > message.id)
     const eventId =
@@ -406,13 +395,7 @@ export class WebSocketManager {
               item.id.includes("seismic") ||
               item.id.includes("eew")
           );
-            "Earthquake-related classifications:",
-            earthquakeClassifications
-          );
         } catch (classError) {
-            "Could not fetch telegram classifications (continuing anyway):",
-            classError
-          );
           // Continue with WebSocket connection even if classification fetch fails
         }
       } catch (contractError) {
@@ -452,17 +435,10 @@ export class WebSocketManager {
         // 短い待機時間でサーバー側の処理完了を待つ
         await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (cleanupError) {
-          "🚨 Cleanup failed (continuing anyway):",
-          cleanupError.message
-        );
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
-      // WebSocket接続開始（詳細ログ付き）
-        "telegram.earthquake",
-        // "telegram.tsunami" // 403エラーのため無効化（権限なし）
-      ]);
-
+      // WebSocket接続開始
       const socketResponse = await this.apiService.socketStart(
         [
           "telegram.earthquake",
@@ -518,9 +494,6 @@ export class WebSocketManager {
 
           // エラーメッセージで close=true の場合、接続を閉じる
           if (message.type === "error" && message.close) {
-              "Server requested connection close due to error:",
-              message.error
-            );
             this.ws?.close();
 
             // 最大接続数エラーの場合、緊急クリーンアップを実行
@@ -529,8 +502,6 @@ export class WebSocketManager {
                 "maximum number of simultaneous connections"
               )
             ) {
-                "Maximum connections error detected, performing emergency cleanup..."
-              );
               this.handleMaxConnectionsError();
             }
             return;
@@ -539,9 +510,6 @@ export class WebSocketManager {
           // 津波情報の処理
           const tsunamiWarning = processTsunamiMessage(message);
           if (tsunamiWarning && this.onTsunamiWarning) {
-              "Tsunami warning details:",
-              JSON.stringify(tsunamiWarning, null, 2)
-            );
             this.onTsunamiWarning(tsunamiWarning);
             return; // 津波情報の場合は地震イベント処理をスキップ
           }
@@ -549,16 +517,9 @@ export class WebSocketManager {
           const eventItem = processWebSocketMessage(message);
 
           if (eventItem) {
-              "Event item details:",
-              JSON.stringify(eventItem, null, 2)
-            );
             if (this.onMessage) {
               this.onMessage(eventItem);
-            } else {
             }
-          } else {
-              "❌ No event item created - processWebSocketMessage returned null"
-            );
           }
         } catch (error) {
         }
@@ -586,10 +547,6 @@ export class WebSocketManager {
           const status = (error as any).response.status;
           const responseData = (error as any).response.data;
 
-            "Full response data JSON:",
-            JSON.stringify(responseData, null, 2)
-          );
-
           // 409エラー（最大接続数）の場合、緊急クリーンアップを実行
           if (
             status === 409 &&
@@ -597,30 +554,9 @@ export class WebSocketManager {
               "maximum number of simultaneous connections"
             )
           ) {
-              "409 Maximum connections error detected during connection, performing emergency cleanup..."
-            );
             this.handleMaxConnectionsError();
             return; // 通常の再接続処理をスキップ
           }
-
-          // エラーオブジェクトの詳細を表示
-          if (responseData?.error) {
-              "Detailed error:",
-              JSON.stringify(responseData.error, null, 2)
-            );
-          }
-
-          // メッセージがある場合も表示
-          if (responseData?.message) {
-          }
-
-        }
-
-        if ("config" in error && error.config) {
-            url: (error as any).config.url,
-            method: (error as any).config.method,
-            headers: (error as any).config.headers,
-          });
         }
       }
 
@@ -701,12 +637,8 @@ export class WebSocketManager {
 
       // 再接続を試行
       this.connect();
-      
-    } catch (error) {
-        "🚨 Emergency cleanup failed (socket management may require special permissions):",
-        error.message
-      );
 
+    } catch (error) {
       // socket.list/closeが使えない場合、より長い時間をおいて再接続を試行
       setTimeout(() => {
         this.connect();
