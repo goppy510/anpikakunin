@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { SCOPE_DESCRIPTIONS } from "@/app/lib/slack/requiredScopes";
 
 interface Workspace {
   id: string;
@@ -195,7 +196,7 @@ export default function WorkspacesPage() {
                       <div className="text-sm space-y-2">
                         <div>
                           <p className="text-gray-400 mb-1">必要な権限:</p>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 mb-2">
                             {info.permissions.required.map((scope) => (
                               <span
                                 key={scope}
@@ -207,6 +208,16 @@ export default function WorkspacesPage() {
                               >
                                 {scope}
                               </span>
+                            ))}
+                          </div>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            {info.permissions.required.map((scope) => (
+                              SCOPE_DESCRIPTIONS[scope as keyof typeof SCOPE_DESCRIPTIONS] && (
+                                <div key={`desc-${scope}`}>
+                                  <span className="text-gray-400">{scope}:</span>{" "}
+                                  {SCOPE_DESCRIPTIONS[scope as keyof typeof SCOPE_DESCRIPTIONS]}
+                                </div>
+                              )
                             ))}
                           </div>
                         </div>

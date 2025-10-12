@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSlackBotToken } from "@/app/lib/db/slackSettings";
+import { REQUIRED_SLACK_SCOPES, checkMissingScopes } from "@/app/lib/slack/requiredScopes";
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,7 +41,6 @@ export async function GET(request: NextRequest) {
     }
 
     // 各権限を実際のAPI呼び出しでテスト
-    const requiredScopes = ["emoji:read", "channels:read", "chat:write"];
     const grantedScopes: string[] = [];
 
     // emoji:read をテスト
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     // channels:read をテスト
     try {
-      const channelsTest = await fetch("https://slack.com/api/conversations.list?limit=1", {
+      const channelsTest = await fetch("https://slack.com/api/conversations.list?limit=1&types=public_channel", {
         headers: { Authorization: `Bearer ${botToken}` },
       });
       const channelsData = await channelsTest.json();
@@ -69,12 +69,25 @@ export async function GET(request: NextRequest) {
       console.error("channels:read test failed:", e);
     }
 
+    // users:read をテスト
+    try {
+      const usersTest = await fetch("https://slack.com/api/users.list?limit=1", {
+        headers: { Authorization: `Bearer ${botToken}` },
+      });
+      const usersData = await usersTest.json();
+      if (usersData.ok) {
+        grantedScopes.push("users:read");
+      }
+    } catch (e) {
+      console.error("users:read test failed:", e);
+    }
+
     // chat:write は auth.test が成功すれば基本的に持っている
     grantedScopes.push("chat:write");
 
-    const hasAllRequired = requiredScopes.every((scope) =>
-      grantedScopes.includes(scope)
-    );
+    // 必要な権限との比較
+    const scopeCheck = checkMissingScopes(grantedScopes);
+    const hasAllRequired = scopeCheck.missing.length === 0;
 
     // トークンの後半をマスク
     const maskedToken = botToken.substring(0, 10) + "..." + botToken.substring(botToken.length - 4);
@@ -89,9 +102,11 @@ export async function GET(request: NextRequest) {
         teamName: data.team,
       },
       permissions: {
-        granted: grantedScopes,
-        required: requiredScopes,
+        granted: scopeCheck.granted,
+        required: Array.from(REQUIRED_SLACK_SCOPES),
         hasAllRequired,
+        missing: scopeCheck.missing,
+        extra: scopeCheck.extra,
       },
     });
   } catch (error) {
