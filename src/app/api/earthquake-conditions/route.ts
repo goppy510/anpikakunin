@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(condition);
   } catch (error) {
-    console.error("通知条件登録エラー:", error);
+    // Silenced
     return NextResponse.json(
       { error: "通知条件の登録に失敗しました" },
       { status: 500 }
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(workspace.notificationCondition);
   } catch (error) {
-    console.error("通知条件取得エラー:", error);
+    // Silenced
     return NextResponse.json(
       { error: "通知条件の取得に失敗しました" },
       { status: 500 }

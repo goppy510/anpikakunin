@@ -55,7 +55,7 @@ const menus = [
 ];
 
 export async function seedMenus() {
-  console.log("📋 メニューマスターデータをシード中...");
+  // Silenced
 
   for (const menu of menus) {
     await prisma.menu.upsert({
@@ -70,7 +70,7 @@ export async function seedMenus() {
     });
   }
 
-  console.log(`✅ ${menus.length}件のメニューをシードしました`);
+  // Silenced
 }
 
 async function main() {
@@ -79,8 +79,8 @@ async function main() {
 
 if (require.main === module) {
   main()
-    .catch((e) => {
-      console.error(e);
+    .catch(() => {
+      // Silenced
       process.exit(1);
     })
     .finally(async () => {

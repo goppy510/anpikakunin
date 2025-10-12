@@ -68,7 +68,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (wsManagerRef.current) {
-        console.log("Page unload detected, disconnecting WebSocket...");
         wsManagerRef.current.disconnect();
       }
     };
@@ -76,14 +75,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     // ページがフォーカスを取り戻した時の接続チェック
     const handleVisibilityChange = () => {
       if (!document.hidden && authStatus === "authenticated") {
-        console.log("Page focused, checking connection status...");
         // フォーカス復帰時に接続状態をチェック
         if (
           !wsManagerRef.current ||
           status === "closed" ||
           status === "error"
         ) {
-          console.log("Reconnecting on page focus...");
           setTimeout(() => {
             if (wsManagerRef.current) {
               wsManagerRef.current.reconnect();
@@ -123,7 +120,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         }
         setHasLoadedInitialData(true);
       } catch (error) {
-        console.error("初期データの読み込みに失敗:", error);
         setHasLoadedInitialData(true);
       }
     };
@@ -144,14 +140,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             await apiService.contractList();
 
             // リロード時は必ず全接続をクリーンアップしてから認証状態を設定
-            console.log(
               "=== Page Load: Cleaning up ALL existing connections ==="
             );
             await cleanupOldConnections(apiService);
-            console.log("=== Cleanup completed, setting auth status ===");
             setAuthStatus("authenticated");
           } catch (apiError) {
-            console.error(
               "API access failed despite authentication:",
               apiError
             );
@@ -161,7 +154,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           setAuthStatus("not_authenticated");
         }
       } catch (error) {
-        console.error("Auth check failed:", error);
         setAuthStatus("not_authenticated");
       }
     };
@@ -172,18 +164,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   // 古い接続をクリーンアップする関数（強化版）
   const cleanupOldConnections = async (apiService: ApiService) => {
     try {
-      console.log("=== WebSocket Connection Cleanup ===");
 
       // より徹底的なクリーンアップ: 5回試行
       for (let attempt = 1; attempt <= 5; attempt++) {
-        console.log(`🧹 Cleanup attempt ${attempt}/5`);
 
         const socketList = await apiService.socketList();
         const connectionCount = socketList.items?.length || 0;
-        console.log(`📊 Found ${connectionCount} existing connections`);
 
         if (connectionCount === 0) {
-          console.log("✅ No connections to clean up");
           break;
         }
 
@@ -191,34 +179,27 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         for (const socket of socketList.items!) {
           try {
             await apiService.socketClose(socket.id);
-            console.log(`✅ Closed socket ${socket.id}`);
             // 各クローズ後に少し待機
             await new Promise((resolve) => setTimeout(resolve, 200));
           } catch (error) {
-            console.warn(`⚠️ Failed to close ${socket.id}:`, error.message);
           }
         }
 
         // サーバー側の処理完了を確実に待つ
         if (attempt < 5) {
           const waitTime = attempt * 1000; // 段階的に待機時間を増加
-          console.log(`⏳ Waiting ${waitTime}ms for server cleanup...`);
           await new Promise((resolve) => setTimeout(resolve, waitTime));
         }
       }
 
-      console.log("🎯 Connection cleanup completed");
 
       // 最終確認用の待機時間
-      console.log("⏳ Final wait for server processing...");
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       // データベースのクリーンアップ（30件保持のみ）
       EventDatabase.cleanupOldEvents(30).catch((error) => {
-        console.warn("IndexedDB cleanup failed (continuing anyway):", error);
       });
     } catch (error) {
-      console.warn(
         "🚨 Connection cleanup failed (continuing anyway):",
         error.message
       );
@@ -281,12 +262,10 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
               try {
                 await EventDatabase.cleanupOldEvents(30);
               } catch (cleanupError) {
-                console.warn("IndexedDB クリーンアップに失敗:", cleanupError);
               }
             }
           })
           .catch((error) => {
-            console.error("地震イベントのIndexedDB保存に失敗:", error);
           });
 
         const sortedEvents = updatedEvents.sort((a, b) => {
@@ -307,11 +286,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   useEffect(() => {
     if (authStatus === "authenticated") {
       const handleNewEvent = (event: EventItem) => {
-        console.log("=== WebSocketProvider: Received earthquake event ===");
-        console.log("Event details:", JSON.stringify(event, null, 2));
 
         const maxIntensity = getIntensityValue(event.maxInt);
-        console.log(
           `地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity})`
         );
 
@@ -323,13 +299,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         upsertEvent(normalizedEvent);
         void logEarthquakeEvent(normalizedEvent, "websocket");
 
-        console.log("✅ WebSocketProvider: Event processing completed");
       };
 
       const handleStatusChange = (
         newStatus: "open" | "connecting" | "closed" | "error"
       ) => {
-        console.log("WebSocketProvider: Status changed to", newStatus);
         setStatus(newStatus);
       };
 
@@ -342,8 +316,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       };
 
       const handleTsunamiWarning = (warning: TsunamiWarning) => {
-        console.log("=== WebSocketProvider: Received tsunami warning ===");
-        console.log(
           "Tsunami warning details:",
           JSON.stringify(warning, null, 2)
         );
@@ -367,14 +339,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           return updatedWarnings.filter((w) => !w.isCancel);
         });
 
-        console.log(
           "✅ WebSocketProvider: Tsunami warning processing completed"
         );
       };
 
       // WebSocketマネージャーを初期化（既存のものがあれば再利用）
       if (!wsManagerRef.current) {
-        console.log("WebSocketProvider: Creating new WebSocketManager");
         wsManagerRef.current = new WebSocketManager(
           handleNewEvent,
           handleStatusChange,
@@ -387,7 +357,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       // クリーンアップはコンポーネントアンマウント時のみ
       return () => {
         // コンポーネントが完全にアンマウントされる時のみクリーンアップ
-        console.log("WebSocketProvider: Component cleanup on unmount");
       };
     }
   }, [authStatus]);
@@ -411,7 +380,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
       // IndexedDBに自動保存
       EventDatabase.saveEvent(eventToSave).catch((error) => {
-        console.error("addEventでのIndexedDB自動保存に失敗:", error);
       });
 
       // 発生時刻降順（新しいものが上）でソート
@@ -444,7 +412,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
   const reconnect = () => {
     if (wsManagerRef.current) {
-      console.log("WebSocketProvider: Manual reconnect requested");
       wsManagerRef.current.reconnect();
     }
   };
@@ -461,7 +428,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           const apiService = new ApiService();
           await apiService.contractList();
         } catch (apiError) {
-          console.error(
             "Manual API access failed despite authentication:",
             apiError
           );
@@ -469,7 +435,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         }
       }
     } catch (error) {
-      console.error("Manual auth check failed:", error);
       setAuthStatus("not_authenticated");
     }
   };
@@ -490,7 +455,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       setEvents([]);
       setTsunamiWarnings([]);
     } catch (error) {
-      console.error("Failed to clear auth:", error);
     }
   };
 
@@ -500,7 +464,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       const authUrl = await oauth2Service.buildAuthorizationUrl();
       window.open(authUrl, "_blank");
     } catch (error) {
-      console.error("Failed to build auth URL:", error);
     }
   };
 

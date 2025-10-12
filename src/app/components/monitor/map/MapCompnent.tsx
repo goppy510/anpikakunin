@@ -603,7 +603,6 @@ export default function MapComponent({
       maxHeight: { value: 5, category: 'giant', text: '巨大' }
     };
 
-    console.log('津波シミュレーションを開始:', testTsunamiWarning);
     
     // アクティブな津波警報に追加
     setActiveTsunamiWarnings(prev => {
@@ -624,7 +623,6 @@ export default function MapComponent({
         newWarnings.delete(testTsunamiWarning.id);
         return newWarnings;
       });
-      console.log('津波シミュレーション終了:', testTsunamiWarning.id);
     }, 30000);
   };
 
@@ -698,14 +696,12 @@ export default function MapComponent({
       .then((response) => response.json())
       .then((data) => setPrefectureData(data))
       .catch((error) =>
-        console.error("Failed to load prefecture data:", error)
       );
 
     // 地震観測点データを取得
     fetch("/assets/earthquake/stations.json")
       .then((response) => response.json())
       .then((data) => setStationData(data))
-      .catch((error) => console.error("Failed to load station data:", error));
   }, []);
 
   // WebSocket接続でリアルタイムデータを取得

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import cn from "classnames";
+import toast, { Toaster } from "react-hot-toast";
 import {
   SafetyConfirmationConfig,
   SlackNotificationSettings,
@@ -17,7 +18,6 @@ import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettin
 import { TrainingScheduler } from "../components/TrainingScheduler";
 import { NotificationConditionsSettings } from "../components/NotificationConditionsSettings";
 import { Settings } from "../../../lib/db/settings";
-import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 import { SafetySettingsDatabase } from "../utils/settingsDatabase";
 // EarthquakeNotificationService は動的インポートで読み込み
 
@@ -61,7 +61,6 @@ export function SafetyConfirmationDashboard() {
         } else {
         }
       } catch (error) {
-        console.error("設定の読み込みに失敗しました:", error);
       } finally {
         setIsLoading(false);
         
@@ -69,10 +68,8 @@ export function SafetyConfirmationDashboard() {
         import("../utils/earthquakeNotificationService").then(({ EarthquakeNotificationService }) => {
           const notificationService = EarthquakeNotificationService.getInstance();
           notificationService.loadConfig().catch(error => {
-            console.error("地震通知サービスの初期化に失敗:", error);
           });
         }).catch(error => {
-          console.error("地震通知サービスの動的読み込みに失敗:", error);
         });
       }
     };
@@ -100,13 +97,10 @@ export function SafetyConfirmationDashboard() {
         import("../utils/earthquakeNotificationService").then(({ EarthquakeNotificationService }) => {
           const notificationService = EarthquakeNotificationService.getInstance();
           notificationService.loadConfig().catch(error => {
-            console.error("地震通知サービスの設定更新に失敗:", error);
           });
         }).catch(error => {
-          console.error("地震通知サービスの動的読み込みに失敗:", error);
         });
       } catch (error) {
-        console.error("Slack設定の自動保存に失敗:", error);
       }
     };
 
@@ -130,7 +124,6 @@ export function SafetyConfirmationDashboard() {
 
       alert("設定を保存しました");
     } catch (error) {
-      console.error("設定の保存に失敗しました:", error);
       alert("設定の保存に失敗しました");
     }
   };
@@ -138,21 +131,15 @@ export function SafetyConfirmationDashboard() {
   // デバッグ用：設定状況を確認
   const debugSettings = async () => {
     try {
-      console.log("=== デバッグ: 現在の設定状況 ===");
-      console.log("React State:", config);
 
       const dbConfig = await SafetySettingsDatabase.loadSettings();
-      console.log("IndexedDB:", dbConfig);
 
       const lsConfig = await Settings.get("safetyConfirmationConfig");
-      console.log("LocalStorage:", lsConfig);
 
       const info = await SafetySettingsDatabase.getSettingsInfo();
-      console.log("設定統計:", info);
 
       alert("デバッグ情報をコンソールに出力しました");
     } catch (error) {
-      console.error("デバッグエラー:", error);
     }
   };
 
@@ -213,11 +200,14 @@ export function SafetyConfirmationDashboard() {
         return;
       }
 
-      const scheduler = TrainingScheduleExecutor.getInstance();
-      await scheduler.executeImmediateTraining(config.training.testMessage);
-      alert("✅ テスト通知を訓練用チャンネルに送信しました！");
+      // APIエンドポイント経由でテスト送信
+      // TODO: まだAPIエンドポイントが存在しない場合は実装が必要
+      // 暫定的にトースト表示のみ
+      toast.success("⚠️ テスト送信機能は現在開発中です。\n実際の訓練通知は時刻指定で自動送信されます。", {
+        duration: 5000,
+        position: "top-center",
+      });
     } catch (error) {
-      console.error("テスト通知送信エラー:", error);
       const errorMessage =
         error instanceof Error ? error.message : "不明なエラー";
 
@@ -258,6 +248,7 @@ export function SafetyConfirmationDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      <Toaster />
       <div className="container mx-auto px-6 py-8">
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-8">
@@ -538,11 +529,9 @@ function DepartmentSettings({
           `${Object.keys(data.emoji).length}個のカスタム絵文字を取得しました`
         );
       } else {
-        console.error("Slack API error:", data.error);
         alert(`絵文字取得に失敗: ${data.error}`);
       }
     } catch (error) {
-      console.error("絵文字取得エラー:", error);
       alert("絵文字取得に失敗しました");
     }
   };
@@ -797,7 +786,6 @@ function MessageTemplateSettings({
       await SafetySettingsDatabase.saveSettings(newConfig);
       await Settings.set("safetyConfirmationConfig", newConfig);
     } catch (error) {
-      console.error("テンプレート設定の自動保存に失敗:", error);
     }
   };
 
@@ -814,7 +802,6 @@ function MessageTemplateSettings({
       await SafetySettingsDatabase.saveSettings(newConfig);
       await Settings.set("safetyConfirmationConfig", newConfig);
     } catch (error) {
-      console.error("訓練設定の自動保存に失敗:", error);
     }
   };
 

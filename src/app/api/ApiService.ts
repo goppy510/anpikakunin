@@ -34,51 +34,36 @@ export class ApiService {
           const service = oauth2();
           await service.ensureInitialized();
           const auth = await service.oauth2Instance?.getAuthorization();
-          console.log("Authorization token:", auth ? "***TOKEN***" : "null");
           return auth || "";
         } catch (error) {
-          console.error("Error getting authorization:", error);
           return "";
         }
       },
       getDPoPProofJWT: async (method: string, uri: string, nonce?: string | null) => {
         try {
-          console.log("=== DPoP JWT Request ===");
-          console.log("Method:", method);
-          console.log("URI:", uri);
-          console.log("Nonce:", nonce);
           
           const service = oauth2();
           await service.ensureInitialized();
           const oauth2Instance = service.oauth2Instance;
           
           if (!oauth2Instance) {
-            console.log("DPoP JWT: No OAuth2 instance");
             return "";
           }
           
           // DPoP: 現在無効化中 - 常に空文字を返す
-          console.log("DPoP JWT: Disabled (returning empty)");
           return "";
           
-          console.log("OAuth2 instance exists, checking methods...");
-          console.log("Available methods:", Object.getOwnPropertyNames(oauth2Instance));
-          console.log("Available prototype methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(oauth2Instance)));
           
           if (typeof (oauth2Instance as any).getDPoPProofJWT !== 'function') {
-            console.log("DPoP JWT: getDPoPProofJWT method not available");
             
             // Alternative method names to try
             const alternativeNames = ['generateDPoPProof', 'createDPoPProof', 'dpop'];
             for (const altName of alternativeNames) {
               if (typeof (oauth2Instance as any)[altName] === 'function') {
-                console.log(`Found alternative method: ${altName}`);
                 try {
                   const jwt = await (oauth2Instance as any)[altName](method, uri, nonce);
-                  console.log("Alternative DPoP JWT:", jwt ? "***JWT***" : "null");
                   return jwt || "";
                 } catch (altError) {
-                  console.error(`Error with alternative method ${altName}:`, altError);
                 }
               }
             }
@@ -87,11 +72,8 @@ export class ApiService {
           }
           
           const jwt = await (oauth2Instance as any).getDPoPProofJWT(method, uri, nonce);
-          console.log("DPoP JWT result:", jwt ? "***JWT***" : "null");
           return jwt || "";
         } catch (error) {
-          console.error("Error getting DPoP JWT:", error);
-          console.error("Error details:", {
             name: error instanceof Error ? error.name : 'Unknown',
             message: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined
@@ -128,18 +110,15 @@ export class ApiService {
           const xmlDoc = parser.parseFromString(res.data, "application/xml");
           // Check for parser errors
           if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
-            console.warn("XML parsing error. Returning raw XML string.");
             return res.data; // Or throw an error, depending on desired behavior
           }
           return xmlDoc;
         } catch (e) {
-          console.error("Error parsing XML:", e);
           // Fallback or re-throw depending on requirements
           return res.data;
         }
       } else {
         // Handle non-browser environment (e.g., Node.js) if necessary
-        console.warn(
           "DOMParser not available or not in Browser environment. Returning raw XML string."
         );
         return res.data;
@@ -147,7 +126,6 @@ export class ApiService {
     }
     // Check status code explicitly for non-successful responses before assuming string
     if (res.status !== 200) {
-      console.warn(`Received non-200 status: ${res.status}`);
       // Return status or handle error appropriately
       return res.status;
     }
@@ -157,13 +135,11 @@ export class ApiService {
     }
     // Handle cases where data might be null or undefined even with 200 OK
     if (res.data === null || res.data === undefined) {
-      console.warn("Received null or undefined data with 200 status.");
       // Return status or an empty string/object based on expectations
       return res.status; // Or return '';
     }
 
     // Fallback for unexpected content types or data types with 200 status
-    console.warn(
       `Unhandled content type or data type: ${contentType}, typeof data: ${typeof res.data}`
     );
     // You might return the raw data, status, or throw an error

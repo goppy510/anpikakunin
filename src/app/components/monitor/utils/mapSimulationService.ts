@@ -149,11 +149,8 @@ export const runEarthquakeSimulation = (
     })
     .sort((a, b) => a.distance - b.distance);
 
-  console.log('地震波伝播アニメーション開始（段階的震度変化）:');
-  console.log('マッチした観測点数:', stationsWithDistance.length);
 
   if (stationsWithDistance.length === 0) {
-    console.log('観測点が見つかりません。');
     return;
   }
 
@@ -162,7 +159,6 @@ export const runEarthquakeSimulation = (
 
   // 各観測点で段階的震度変化をシミュレート
   stationsWithDistance.forEach((item) => {
-    console.log(`${item.station.name}: 距離${item.distance.toFixed(1)}km, 最終震度${item.earthquakeData.intensity}`);
     simulateIntensityProgression(
       item.station.code, 
       item.earthquakeData.intensity, 

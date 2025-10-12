@@ -116,7 +116,6 @@ export const runProgressiveSimulation = (callbacks: ProgressiveSimulationCallbac
         }, 1000); // マップアニメーションは1秒後に開始
       }
       
-      console.log(`地震情報更新 - ${phase.phase}:`, {
         震度: phase.maxInt,
         マグニチュード: phase.magnitude,
         震源: phase.hypocenter.name,

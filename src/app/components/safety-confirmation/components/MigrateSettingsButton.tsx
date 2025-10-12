@@ -26,7 +26,6 @@ export function MigrateSettingsButton() {
       }
       setStatus("idle");
     } catch (error) {
-      console.error("Settings check failed:", error);
       setMessage(`設定の確認に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`);
       setStatus("error");
     }
@@ -68,14 +67,11 @@ export function MigrateSettingsButton() {
       setStatus("success");
 
       // 成功した場合、詳細をコンソールに出力
-      console.log("Migration result:", result);
 
       // 失敗したワークスペースがあれば警告
       if (result.details.failed.length > 0) {
-        console.warn("Failed workspaces:", result.details.failed);
       }
     } catch (error) {
-      console.error("Migration failed:", error);
       setMessage(`移行に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`);
       setStatus("error");
     }

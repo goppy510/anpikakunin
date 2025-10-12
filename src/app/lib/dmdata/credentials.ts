@@ -24,25 +24,20 @@ export async function getDmdataApiKey(): Promise<string | null> {
         const payload = JSON.parse(apiKeyRecord.apiKey);
         const decrypted = decrypt(payload);
         if (decrypted) {
-          console.log("Using DMData API key from database");
           return decrypted;
         }
       } catch (error) {
-        console.error("Failed to decrypt API key from database:", error);
       }
     }
 
     // データベースに登録がない場合、環境変数から取得
     const envKey = env.DMDATA_API_KEY;
     if (envKey) {
-      console.log("Using DMData API key from environment variable");
       return envKey;
     }
 
-    console.warn("No DMData API key found in database or environment");
     return null;
   } catch (error) {
-    console.error("Failed to get DMData API key:", error);
     // エラー時は環境変数から取得を試みる
     return env.DMDATA_API_KEY || null;
   }

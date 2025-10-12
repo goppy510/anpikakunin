@@ -79,12 +79,9 @@ export default function Monitor() {
       const latestEvent = globalEvents[0];
       if (latestEvent && !latestEvent.isTest) {
         const intensity = getIntensityValue(latestEvent.maxInt || "0");
-        console.log(`音声通知チェック: 震度${latestEvent.maxInt} (数値:${intensity}) 閾値:${notificationThreshold}`);
         if (intensity >= notificationThreshold) {
-          console.log("音声通知を再生します");
           audioManager.current.playAlert(intensity);
         } else {
-          console.log("音声通知をスキップします（閾値未満）");
         }
       }
     }
@@ -94,13 +91,11 @@ export default function Monitor() {
   // テストモードの変更を監視（津波警報はWebSocketProviderで管理）
   useEffect(() => {
     if (!testMode) {
-      console.log('テストモードオフ');
     }
   }, [testMode]);
   
   // 津波シミュレーションハンドラー
   const handleTsunamiSimulation = (warning: TsunamiWarning) => {
-    console.log("津波シミュレーションを受信:", warning);
     addTsunamiWarning(warning);
   };
 
@@ -121,7 +116,6 @@ export default function Monitor() {
         
         setHasLoadedFromDB(true);
       } catch (error) {
-        console.error("IndexedDBからのイベント読み込みに失敗:", error);
         setHasLoadedFromDB(true);
       }
     };
@@ -168,45 +162,35 @@ export default function Monitor() {
   
   const cleanupConnections = async () => {
     try {
-      console.log("🎆 === EMERGENCY CONNECTION CLEANUP ===");
       const apiService = new ApiService();
       
       // 緊急時は10回試行で確実にクリーンアップ
       for (let attempt = 1; attempt <= 10; attempt++) {
-        console.log(`🚑 EMERGENCY cleanup attempt ${attempt}/10`);
         
         const socketList = await apiService.socketList();
         const connectionCount = socketList.items?.length || 0;
-        console.log(`📡 Found ${connectionCount} connections to destroy`);
         
         if (connectionCount === 0) {
-          console.log("🎉 EMERGENCY SUCCESS: All connections destroyed");
           break;
         }
         
         // 全接続を並列で強制終了
         const closePromises = socketList.items!.map(async (socket, index) => {
-          console.log(`💥 EMERGENCY DESTROY ${index + 1}/${connectionCount}: ${socket.id}`);
           try {
             await apiService.socketClose(socket.id);
-            console.log(`☠️ DESTROYED: ${socket.id}`);
           } catch (error) {
-            console.error(`⚠️ Destruction failed for ${socket.id}:`, error);
           }
         });
         
         await Promise.all(closePromises);
-        console.log(`🎆 EMERGENCY BATCH ${attempt} COMPLETE`);
         
         // 段階的待機時間 (最大7秒)
         if (attempt < 10) {
           const waitTime = Math.min(attempt * 800, 7000);
-          console.log(`⏱️ EMERGENCY COOLING: ${waitTime}ms...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
       
-      console.log("🎆 EMERGENCY CLEANUP COMPLETED - Reconnecting...");
       
       // 最終待機
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -215,7 +199,6 @@ export default function Monitor() {
       reconnect();
       
     } catch (error) {
-      console.error("🚑 EMERGENCY cleanup failed:", error);
     }
   };
 

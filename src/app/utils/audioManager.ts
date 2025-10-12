@@ -34,7 +34,7 @@ export class AudioManager {
           await this.audioContext.resume();
         }
       } catch (error) {
-        console.error("Failed to initialize AudioContext:", error);
+        // Silenced
       }
     }
   }
@@ -49,7 +49,6 @@ export class AudioManager {
       await this.initAudioContext();
 
       if (!this.audioContext) {
-        console.warn("AudioContext not available");
         return;
       }
 
@@ -66,7 +65,7 @@ export class AudioManager {
         }
       }
     } catch (error) {
-      console.error("Failed to play alert sound:", error);
+      // Silenced
     }
   }
 

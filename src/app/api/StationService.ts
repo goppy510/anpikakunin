@@ -41,7 +41,6 @@ export class StationService {
       .then(() => {
         // This block executes only if BOTH promises resolve successfully
         this.isInitialized = true;
-        console.log(
           "StationService initialized successfully (stations and areas loaded)."
         );
         // No return value needed, resolves with void
@@ -49,7 +48,6 @@ export class StationService {
       .catch((error) => {
         // This block executes if EITHER promise rejects
         this.isInitialized = false; // Ensure status is false on failure
-        console.error("StationService initialization failed:", error);
         // Optional: Depending on application needs, you might want to allow partial loading
         // or provide more granular error state.
         // Re-throw the error so callers awaiting initializationPromise are notified of failure.
@@ -102,7 +100,6 @@ export class StationService {
    * @returns Promise<void> Resolves on success, rejects on failure.
    */
   private async requestEarthquakeStationList(): Promise<void> {
-    console.log("Requesting earthquake stations...");
     try {
       // Assumes api.parameterEarthquakeStation() is async and returns Promise<ParameterEarthquakeStationData>
       // ParameterEarthquakeStationData should have an 'items' property according to the original code.
@@ -138,16 +135,13 @@ export class StationService {
           if (r.code && r.latitude != null && r.longitude != null) {
             map.set(r.code, [+r.latitude, +r.longitude]);
           } else {
-            console.warn("Skipping station item with missing data:", r);
           }
         }
       );
 
       this.earthquakeStations = map;
       this.stationsLoaded = true; // Mark this part as successfully loaded
-      console.log(`Earthquake stations loaded (${map.size} entries).`);
     } catch (err) {
-      console.error("Failed to fetch or process earthquake station list:", err);
       this.stationsLoaded = false; // Ensure flag is false on error
       // Re-throw the error so that Promise.all in the constructor catches it
       throw err;
@@ -160,7 +154,6 @@ export class StationService {
    * @returns Promise<void> Resolves on success, rejects on failure.
    */
   private async requestEarthquakeAreasList(): Promise<void> {
-    console.log("Requesting earthquake areas...");
     try {
       const res = await axios.get<ApiParametersEarthQuakeArea>(endpoint.area);
 
@@ -177,15 +170,12 @@ export class StationService {
         if (r.code && r.latitude != null && r.longitude != null) {
           map.set(r.code, [+r.latitude, +r.longitude]);
         } else {
-          console.warn("Skipping area item with missing data:", r);
         }
       });
 
       this.earthquakeAreas = map;
       this.areasLoaded = true; // Mark this part as successfully loaded
-      console.log(`Earthquake areas loaded (${map.size} entries).`);
     } catch (err) {
-      console.error("Failed to fetch or process earthquake area list:", err);
       this.areasLoaded = false; // Ensure flag is false on error
       // Re-throw the error so that Promise.all in the constructor catches it
       throw err;

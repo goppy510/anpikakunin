@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const workspaceId = searchParams.get("workspaceId");
     const botToken = searchParams.get("botToken");
 
+
     let token = botToken;
 
     // workspaceIdが指定されている場合はDBから取得
@@ -86,9 +87,11 @@ export async function GET(request: NextRequest) {
       count: channels.length,
     });
   } catch (error) {
-    console.error("チャンネル取得エラー:", error);
     return NextResponse.json(
-      { error: "チャンネルの取得に失敗しました" },
+      {
+        error: "チャンネルの取得に失敗しました",
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

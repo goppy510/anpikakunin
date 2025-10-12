@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    console.error("Failed to accept invitation:", error);
+    // Silenced
 
     // ユニーク制約違反（既にユーザーが存在）
     if (error.code === "P2002") {

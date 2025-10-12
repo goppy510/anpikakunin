@@ -303,7 +303,6 @@ class WebSocketManager {
 
   async reconnect() {
     if (this.retryCount >= this.maxRetries) {
-      console.error("WebSocket再接続上限に達しました");
       // REST APIポーリングに切り替え
       this.fallbackToRestPolling();
       return;
@@ -312,7 +311,6 @@ class WebSocketManager {
     const delay = this.baseDelay * Math.pow(2, this.retryCount); // 指数バックオフ
     this.retryCount++;
 
-    console.log(`${delay}ms 後に再接続を試行します（${this.retryCount}/${this.maxRetries}）`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
     this.connect();
@@ -336,7 +334,6 @@ async function sendSlackNotificationWithRetry(
       });
 
       if (response.ok) {
-        console.log("Slack通知成功");
         return true;
       }
 
@@ -349,7 +346,6 @@ async function sendSlackNotificationWithRetry(
 
       throw new Error(`Slack API error: ${response.status}`);
     } catch (error) {
-      console.error(`Slack通知失敗（試行 ${i + 1}/${maxRetries}）:`, error);
       if (i === maxRetries - 1) {
         // 最終試行失敗
         return false;
@@ -368,7 +364,6 @@ async function saveEarthquakeEvent(event: EventItem) {
   try {
     await logEarthquakeEvent(event, "websocket");
   } catch (error) {
-    console.error("PostgreSQL保存失敗:", error);
     // フォールバック: IndexedDBのみで運用
     await EventDatabase.saveEvent(event);
     // 管理者に通知
@@ -428,7 +423,6 @@ class RestEarthquakePoller {
         this.lastEventId = item.id;
       }
     } catch (error) {
-      console.error("REST APIポーリング失敗:", error);
     }
   }
 }

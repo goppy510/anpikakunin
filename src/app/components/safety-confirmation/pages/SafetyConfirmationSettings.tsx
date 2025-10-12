@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import cn from "classnames";
+import toast, { Toaster } from "react-hot-toast";
 import {
   SafetyConfirmationConfig,
   SlackNotificationSettings,
@@ -10,7 +11,6 @@ import {
 import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettings";
 import { TrainingScheduler } from "../components/TrainingScheduler";
 import { Settings } from "../../../lib/db/settings";
-import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 import { SafetySettingsDatabase } from "../utils/settingsDatabase";
 
 interface SafetyConfirmationSettingsProps {
@@ -42,7 +42,6 @@ export function SafetyConfirmationSettings({
         // まずIndexedDBから読み込み
         const dbConfig = await SafetySettingsDatabase.loadSettings();
         if (dbConfig) {
-          console.log("IndexedDBから安否確認設定を読み込みました");
           setConfig(dbConfig);
           return;
         }
@@ -50,15 +49,12 @@ export function SafetyConfirmationSettings({
         // IndexedDBにない場合は従来のLocalStorageから読み込み
         const savedConfig = await Settings.get("safetyConfirmationConfig");
         if (savedConfig) {
-          console.log("LocalStorageから安否確認設定を読み込みました");
           setConfig(savedConfig);
 
           // IndexedDBに移行保存
           await SafetySettingsDatabase.saveSettings(savedConfig);
-          console.log("設定をIndexedDBに移行保存しました");
         }
       } catch (error) {
-        console.error("設定の読み込みに失敗しました:", error);
       }
     };
 
@@ -81,9 +77,7 @@ export function SafetyConfirmationSettings({
     // 自動保存
     try {
       await SafetySettingsDatabase.saveSettings(newConfig);
-      console.log("Slack設定を自動保存しました");
     } catch (error) {
-      console.error("Slack設定の自動保存に失敗:", error);
     }
   };
 
@@ -105,14 +99,12 @@ export function SafetyConfirmationSettings({
       alert("設定を保存しました");
       onClose();
     } catch (error) {
-      console.error("設定の保存に失敗しました:", error);
       alert("設定の保存に失敗しました");
     }
   };
 
   const sendTestNotification = async () => {
     try {
-      console.log("テスト通知送信を開始...");
 
       // 設定確認
       if (!config.slack.workspaces.some((ws) => ws.isEnabled)) {
@@ -129,13 +121,14 @@ export function SafetyConfirmationSettings({
         return;
       }
 
-      const scheduler = TrainingScheduleExecutor.getInstance();
-      await scheduler.executeImmediateTraining(
-        config.training.testMessage || "これはテスト通知です。"
-      );
-      alert("✅ テスト通知を訓練用チャンネルに送信しました！");
+      // APIエンドポイント経由でテスト送信
+      // TODO: まだAPIエンドポイントが存在しない場合は実装が必要
+      // 暫定的にトースト表示のみ
+      toast.success("⚠️ テスト送信機能は現在開発中です。\n実際の訓練通知は時刻指定で自動送信されます。", {
+        duration: 5000,
+        position: "top-center",
+      });
     } catch (error) {
-      console.error("テスト通知送信エラー:", error);
       const errorMessage =
         error instanceof Error ? error.message : "不明なエラー";
 
@@ -161,6 +154,7 @@ export function SafetyConfirmationSettings({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <Toaster />
       <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-6xl h-5/6 flex flex-col">
         {/* ヘッダー */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
@@ -454,7 +448,6 @@ function MessageTab({
       );
       await SafetySettingsDatabase.saveSettings(newConfig);
     } catch (error) {
-      console.error("設定の自動保存に失敗:", error);
     }
   };
 

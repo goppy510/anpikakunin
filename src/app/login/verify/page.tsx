@@ -92,7 +92,7 @@ function VerifyOtpContent() {
         alert("認証コードを再送信しました");
       }
     } catch (err) {
-      console.error("Resend error:", err);
+      // Silenced
     } finally {
       setLoading(false);
     }

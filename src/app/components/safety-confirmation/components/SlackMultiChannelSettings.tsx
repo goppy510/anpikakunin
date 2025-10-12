@@ -84,10 +84,8 @@ export function SlackMultiChannelSettings({
           ...currentConfig,
           slack: newSettings,
         });
-        console.log("ワークスペース設定を自動保存しました");
       }
     } catch (error) {
-      console.error("ワークスペース設定の自動保存に失敗:", error);
     }
   };
 
@@ -220,7 +218,6 @@ export function SlackMultiChannelSettings({
           slack: newSettings,
         });
       } catch (error) {
-        console.error("チャンネル設定の自動保存に失敗:", error);
       }
     }
   };
@@ -282,12 +279,10 @@ export function SlackMultiChannelSettings({
               slack: updatedSettings,
             });
           } catch (error) {
-            console.error("チャンネル名自動保存に失敗:", error);
           }
         }
       }
     } catch (error) {
-      console.error("チャンネル情報取得エラー:", error);
     }
   };
 
