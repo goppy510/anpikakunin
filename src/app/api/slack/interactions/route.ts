@@ -16,13 +16,6 @@ function verifySlackSignature(body: string, signature: string, timestamp: string
     .update(sigBasestring, 'utf8')
     .digest('hex');
 
-    received: signature,
-    computed: mySignature,
-    match: signature === mySignature,
-    bodyLength: body.length,
-    signingSecretLength: signingSecret.length,
-  });
-
   return crypto.timingSafeEqual(
     Buffer.from(mySignature, 'utf8'),
     Buffer.from(signature, 'utf8')
