@@ -32,11 +32,21 @@ Slack本番アプリ → anpikakunin.xyz → Vercel → Supabase PostgreSQL
    - Project name: `anpikakunin-production`
    - Database Password: 強力なパスワードを生成・保存
    - Region: `Northeast Asia (Tokyo)` を選択
-3. プロジェクト作成後、**Settings** → **Database** から接続情報を取得：
+3. プロジェクト作成後、**Settings** → **Database** → **Connection Info** から接続情報を取得：
+
+   **Transaction mode (Connection Pooling)** - アプリケーション用：
    ```
-   Connection string (URI)
-   postgresql://postgres:[YOUR-PASSWORD]@[YOUR-PROJECT-REF].supabase.co:5432/postgres
+   postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
    ```
+
+   **Session mode (Direct connection)** - マイグレーション用：
+   ```
+   postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
+   ```
+
+   **重要**: Prismaでは両方の接続URLが必要です
+   - `DATABASE_URL`: Transaction mode (ポート6543)
+   - `DIRECT_URL`: Session mode (ポート5432、マイグレーション専用)
 
 ### 2. Vercel プロジェクト作成
 
@@ -55,8 +65,14 @@ Slack本番アプリ → anpikakunin.xyz → Vercel → Supabase PostgreSQL
 Vercel ダッシュボード → **Settings** → **Environment Variables** で以下を設定：
 
 ```bash
-# データベース（Supabase）
-SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@[PROJECT-REF].supabase.co:5432/postgres
+# データベース（Supabase）- Transaction mode（Connection Pooling）
+DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+
+# データベース（Supabase）- Session mode（マイグレーション用）
+DIRECT_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
+
+# 互換性のため（一部のコードで使用）
+SUPABASE_DB_URL=${DATABASE_URL}
 SUPABASE_DB_SSL=require
 
 # Slack設定
@@ -181,11 +197,16 @@ cat .vercel/project.json
 以下のSecretsを追加：
 
 ```
-SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@[PROJECT-REF].supabase.co:5432/postgres
+# マイグレーション用（Session mode、ポート5432）
+SUPABASE_DB_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
+
+# Vercel設定
 VERCEL_TOKEN=Vercelトークン（Vercel → Settings → Tokens で生成）
 VERCEL_ORG_ID=上記で取得した orgId
 VERCEL_PROJECT_ID=上記で取得した projectId
 ```
+
+**重要**: GitHub Actionsでは`SUPABASE_DB_URL`にSession mode（ポート5432）を使用してください。Connection Pooling（ポート6543）ではマイグレーションが失敗します。
 
 ## デプロイフロー
 
