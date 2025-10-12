@@ -128,14 +128,7 @@ export class Oauth2Service {
       redirect_uri: REDIRECT_URI,
       code_verifier: storedCodeVerifier,
     });
-    
-      grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
-      code: code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: storedCodeVerifier ? "***EXISTS***" : "NULL",
-    });
-    
+
     const tokenResponse = await fetch('https://manager.dmdata.jp/account/oauth2/v1/token', {
       method: 'POST',
       headers: {

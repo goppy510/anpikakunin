@@ -695,8 +695,7 @@ export default function MapComponent({
     )
       .then((response) => response.json())
       .then((data) => setPrefectureData(data))
-      .catch((error) =>
-      );
+      .catch((error) => {});
 
     // 地震観測点データを取得
     fetch("/assets/earthquake/stations.json")

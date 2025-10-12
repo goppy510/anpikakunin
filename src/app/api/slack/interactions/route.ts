@@ -16,13 +16,6 @@ function verifySlackSignature(body: string, signature: string, timestamp: string
     .update(sigBasestring, 'utf8')
     .digest('hex');
 
-    received: signature,
-    computed: mySignature,
-    match: signature === mySignature,
-    bodyLength: body.length,
-    signingSecretLength: signingSecret.length,
-  });
-
   return crypto.timingSafeEqual(
     Buffer.from(mySignature, 'utf8'),
     Buffer.from(signature, 'utf8')
@@ -44,11 +37,6 @@ export async function POST(request: NextRequest) {
 
     if (!skipSignatureVerification && signingSecret && slackSignature && timestamp) {
       const isValid = verifySlackSignature(body, slackSignature, timestamp, signingSecret);
-        isValid,
-        timestamp,
-        hasSigningSecret: !!signingSecret,
-        hasSlackSignature: !!slackSignature,
-      });
       if (!isValid) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
@@ -57,11 +45,6 @@ export async function POST(request: NextRequest) {
 
     // URLエンコードされたペイロードをパース
     const payload = JSON.parse(decodeURIComponent(body.replace('payload=', '')));
-    
-      type: payload.type,
-      user: payload.user?.name,
-      action: payload.actions?.[0]?.action_id
-    });
 
     // ボタンクリック処理
     if (payload.type === 'block_actions' && payload.actions?.[0]) {

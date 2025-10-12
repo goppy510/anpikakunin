@@ -74,10 +74,6 @@ export class ApiService {
           const jwt = await (oauth2Instance as any).getDPoPProofJWT(method, uri, nonce);
           return jwt || "";
         } catch (error) {
-            name: error instanceof Error ? error.name : 'Unknown',
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
-          });
           return "";
         }
       },
@@ -119,8 +115,6 @@ export class ApiService {
         }
       } else {
         // Handle non-browser environment (e.g., Node.js) if necessary
-          "DOMParser not available or not in Browser environment. Returning raw XML string."
-        );
         return res.data;
       }
     }
@@ -140,8 +134,6 @@ export class ApiService {
     }
 
     // Fallback for unexpected content types or data types with 200 status
-      `Unhandled content type or data type: ${contentType}, typeof data: ${typeof res.data}`
-    );
     // You might return the raw data, status, or throw an error
     return res.data; // Returning raw data as a last resort
   }

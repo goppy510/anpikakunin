@@ -218,8 +218,6 @@ const getCoastalCoordinates = (
     }
   }
 
-    `No coordinates found for tsunami area: ${areaCode} - ${areaName}`
-  );
   return undefined;
 };
 
