@@ -35,11 +35,6 @@ export async function sendEmail({
 }: SendEmailParams): Promise<void> {
   // 開発環境ではコンソールにも出力
   if (process.env.NODE_ENV === "development") {
-    console.log("=== 📧 メール送信 ===");
-    console.log(`宛先: ${to}`);
-    console.log(`件名: ${subject}`);
-    console.log(`本文: ${text || html}`);
-    console.log("===================\n");
   }
 
   await transporter.sendMail({

@@ -26,11 +26,8 @@ function OauthPageContent() {
 
         // TODO: Exchange code for tokens using your OAuth2Service
         setStatus("OAuth callback received successfully!");
-        console.log("Authorization code:", code);
-        console.log("State:", state);
         
       } catch (error) {
-        console.error("OAuth callback error:", error);
         setStatus("Failed to process OAuth callback");
       }
     };

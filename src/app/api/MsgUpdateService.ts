@@ -48,7 +48,6 @@ export class MsgUpdateService {
   public newTelegrams(
     callback: (data: EarthquakeInformation.Latest.Main) => void
   ): void {
-    console.log("Setting up new telegram subscription.");
     this.onNewTelegramCallback = callback;
 
     // Reset state for a new subscription
@@ -71,7 +70,6 @@ export class MsgUpdateService {
    * Initiates a WebSocket connection attempt.
    */
   public webSocketStart(): void {
-    console.log("WebSocket start requested.");
     this.connectWebSocket();
   }
 
@@ -84,7 +82,6 @@ export class MsgUpdateService {
       this.webSocketStatus === "connecting"
     ) {
       if (this.webSocketSubject) {
-        console.log("Closing WebSocket connection.");
         this.webSocketSubject.close();
         // State will be updated by the 'close' event handler in connectWebSocket
         this.webSocketSubject = undefined; // Clear reference
@@ -119,7 +116,6 @@ export class MsgUpdateService {
         }
       }
     } catch (error) {
-      console.error("Failed to process WebSocket data:", error, data);
     }
   }
 
@@ -132,13 +128,11 @@ export class MsgUpdateService {
       this.webSocketStatus === "connecting" ||
       this.webSocketStatus === "open"
     ) {
-      console.log(
         `WebSocket connection attempt skipped, status: ${this.webSocketStatus}`
       );
       return;
     }
 
-    console.log("Attempting to connect WebSocket...");
     this.webSocketStatus = "connecting";
 
     try {
@@ -153,7 +147,6 @@ export class MsgUpdateService {
       if (response instanceof WebSocketService) {
         // Check if status changed while awaiting (e.g., manual close)
         if (this.webSocketStatus !== "connecting") {
-          console.log(
             "WebSocket connection aborted before listeners attached."
           );
           response.close(); // Ensure the obtained socket is closed
@@ -162,16 +155,13 @@ export class MsgUpdateService {
 
         this.webSocketSubject = response;
       } else {
-        console.error(
           "Failed to establish WebSocket connection: Invalid response type."
         );
         this.webSocketStatus = "error";
         return;
       }
-      console.log("WebSocket connection established, attaching listeners.");
 
       this.webSocketSubject?.on("start", () => {
-        console.log("WebSocket connection open.");
         if (this.webSocketStatus !== "closed") {
           // Avoid status update if closed manually right before 'start'
           this.webSocketStatus = "open";
@@ -187,7 +177,6 @@ export class MsgUpdateService {
         // Check if this close was initiated manually or unexpectedly
         if (this.webSocketStatus !== "closed") {
           // Avoid double logging if closed manually
-          console.log(
             `WebSocket connection closed. Code: ${event?.code || 'unknown'}, Reason: ${event?.reason || 'unknown'}`
           );
           this.webSocketStatus = "closed";
@@ -200,7 +189,6 @@ export class MsgUpdateService {
       });
 
       this.webSocketSubject?.on("error", (error) => {
-        console.error("WebSocket error:", error);
         if (this.webSocketStatus !== "closed") {
           // Avoid status update if closed manually right before 'error'
           this.webSocketStatus = "error";
@@ -213,7 +201,6 @@ export class MsgUpdateService {
         }
       });
     } catch (error) {
-      console.error("Failed to start WebSocket connection:", error);
       // Ensure status reflects failure if we were trying to connect
       if (this.webSocketStatus === "connecting") {
         this.webSocketStatus = "error"; // Or 'closed' depending on desired state
@@ -231,11 +218,9 @@ export class MsgUpdateService {
   private startPollingLoop(): void {
     // Prevent multiple loops or starting if WebSocket is active
     if (this.isPollingActive || this.webSocketStatus === "open") {
-      // console.log("Start polling loop skipped."); // Too noisy?
       return;
     }
 
-    console.log("Starting polling loop...");
     this.isPollingActive = true;
     // Reset initial poll flag - crucial if loop restarts after WS close
     this.isInitialPollComplete = false;
@@ -245,7 +230,6 @@ export class MsgUpdateService {
     const loop = async () => {
       // Primary exit conditions for the loop continuation
       if (!this.isPollingActive || this.webSocketStatus === "open") {
-        console.log("Polling loop stopping.");
         this.isPollingActive = false; // Ensure flag is set correctly
         return;
       }
@@ -265,14 +249,12 @@ export class MsgUpdateService {
         if (!this.isInitialPollComplete) {
           // Just completed the first poll, obtained the token.
           this.isInitialPollComplete = true;
-          console.log(
             `Initial poll complete. Next token: ${
               this.nextPoolingToken ? "obtained" : "not available"
             }. Processing items from next poll.`
           );
         } else if (currentItems && currentItems.length > 0) {
           // This is a subsequent poll, process the items found.
-          console.log(`Polling found ${currentItems.length} items.`);
           for (const item of currentItems) {
             if (this.telegramTypes.includes(item.head.type)) {
               // Check distinctness *before* fetching details (optimization)
@@ -296,26 +278,22 @@ export class MsgUpdateService {
                       this.onNewTelegramCallback?.(processedData);
                     }
                   } else {
-                    console.warn(
                       `Received unexpected data type or structure for telegram ID ${item.id}:`,
                       typeof detail
                     );
                   }
                 } catch (getErr) {
-                  console.error(
                     `Failed to get telegram detail for ID ${item.id}:`,
                     getErr
                   );
                   // Decide if you want to retry or just skip this item
                 }
               } else {
-                // console.log(`Skipping already processed ID (from polling): ${item._originalId}`); // Can be noisy
               }
             }
           }
         }
       } catch (listError) {
-        console.error("Polling telegramList API call failed:", listError);
         // Optional: Add delay/backoff logic here if needed
       }
 
@@ -336,7 +314,6 @@ export class MsgUpdateService {
    */
   private stopPollingLoop(): void {
     if (!this.isPollingActive) return;
-    console.log("Stopping polling loop...");
     this.isPollingActive = false;
     clearTimeout(this.pollingTimeoutId);
   }

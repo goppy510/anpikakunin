@@ -13,20 +13,15 @@ export const processTsunamiMessage = (
   message: WebSocketMessage
 ): TsunamiWarning | null => {
   try {
-    console.log("=== Processing Tsunami Message ===");
-    console.log("Message type:", message.type);
-    console.log("Message classification:", message.classification);
 
     // 津波関連メッセージかチェック
     if (
       !message.classification?.includes("tsunami") &&
       !message.classification?.includes("telegram.tsunami")
     ) {
-      console.log("Non-tsunami message, skipping");
       return null;
     }
 
-    console.log("=== Tsunami Message Detected ===");
 
     // メッセージボディをデコード
     let decodedData = null;
@@ -47,12 +42,10 @@ export const processTsunamiMessage = (
         }
       }
     } catch (error) {
-      console.error("Failed to decode tsunami message:", error);
     }
 
     const xmlReport = message.xmlReport || decodedData?.xmlReport;
     if (!xmlReport) {
-      console.log("No XML report in tsunami message");
       return null;
     }
 
@@ -61,7 +54,6 @@ export const processTsunamiMessage = (
     const body = xmlReport.body;
 
     if (!head || !body) {
-      console.log("Missing head or body in tsunami XML");
       return null;
     }
 
@@ -70,9 +62,6 @@ export const processTsunamiMessage = (
     const title = head.title || "";
     const headline = head.headline || "";
 
-    console.log("Tsunami info kind:", infoKind);
-    console.log("Tsunami title:", title);
-    console.log("Tsunami headline:", headline);
 
     let warningType: "major_warning" | "warning" | "advisory" | "forecast" =
       "forecast";
@@ -140,12 +129,9 @@ export const processTsunamiMessage = (
       maxHeight: extractTsunamiHeight(body.tsunami),
     };
 
-    console.log("=== Processed Tsunami Warning ===");
-    console.log("Tsunami warning:", JSON.stringify(tsunamiWarning, null, 2));
 
     return tsunamiWarning;
   } catch (error) {
-    console.error("Error processing tsunami message:", error);
     return null;
   }
 };
@@ -232,7 +218,6 @@ const getCoastalCoordinates = (
     }
   }
 
-  console.warn(
     `No coordinates found for tsunami area: ${areaCode} - ${areaName}`
   );
   return undefined;

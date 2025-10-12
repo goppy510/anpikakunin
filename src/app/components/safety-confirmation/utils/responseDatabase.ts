@@ -20,14 +20,11 @@ export class SafetyResponseDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
       await db.put("safetyResponses", response);
-      console.log("✅ 安否確認応答を保存しました:", response.id);
     } catch (error) {
-      console.error("安否確認応答の保存に失敗:", error);
     }
   }
 
@@ -36,7 +33,6 @@ export class SafetyResponseDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return [];
       }
 
@@ -45,7 +41,6 @@ export class SafetyResponseDatabase {
         response.messageTs === messageTs && response.channelId === channelId
       );
     } catch (error) {
-      console.error("安否確認応答の取得に失敗:", error);
       return [];
     }
   }
@@ -62,7 +57,6 @@ export class SafetyResponseDatabase {
       
       return counts;
     } catch (error) {
-      console.error("部署別カウントの取得に失敗:", error);
       return {};
     }
   }
@@ -72,7 +66,6 @@ export class SafetyResponseDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return [];
       }
 
@@ -81,7 +74,6 @@ export class SafetyResponseDatabase {
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, limit);
     } catch (error) {
-      console.error("最新応答の取得に失敗:", error);
       return [];
     }
   }
@@ -91,14 +83,11 @@ export class SafetyResponseDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
       await db.delete("safetyResponses", id);
-      console.log("🗑️ 安否確認応答を削除しました:", id);
     } catch (error) {
-      console.error("安否確認応答の削除に失敗:", error);
     }
   }
 
@@ -107,7 +96,6 @@ export class SafetyResponseDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
@@ -123,9 +111,7 @@ export class SafetyResponseDatabase {
         await db.delete("safetyResponses", response.id);
       }
 
-      console.log(`🧹 ${oldResponses.length}件の古い安否確認応答をクリーンアップしました`);
     } catch (error) {
-      console.error("安否確認応答のクリーンアップに失敗:", error);
     }
   }
 
@@ -134,14 +120,11 @@ export class SafetyResponseDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
       await db.clear("safetyResponses");
-      console.log("🗑️ 全ての安否確認応答をクリアしました");
     } catch (error) {
-      console.error("安否確認応答のクリアに失敗:", error);
     }
   }
 }

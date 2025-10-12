@@ -48,10 +48,7 @@ function AcceptInvitationContent() {
       const res = await axios.get(`/api/invitations/verify?token=${token}`);
       setInvitation(res.data);
     } catch (error: any) {
-      // 404や410などは想定内のエラーなのでログ出力しない
-      if (error.response?.status !== 404 && error.response?.status !== 410 && error.response?.status !== 400) {
-        console.error("招待確認エラー:", error);
-      }
+      // Silenced
       const errorMsg = error.response?.data?.error || "招待の確認に失敗しました";
       toast.error(errorMsg);
       router.push("/login");
@@ -83,10 +80,7 @@ function AcceptInvitationContent() {
       toast.success("アカウントを作成しました");
       router.push("/login");
     } catch (error: any) {
-      // 400 (バリデーションエラー) や 409 (重複) は想定内のエラーなのでログ出力しない
-      if (error.response?.status !== 400 && error.response?.status !== 409 && error.response?.status !== 404 && error.response?.status !== 410) {
-        console.error("招待受諾エラー:", error);
-      }
+      // Silenced
       const errorMsg = error.response?.data?.error || "アカウント作成に失敗しました";
       toast.error(errorMsg);
     } finally {

@@ -13,7 +13,6 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
@@ -30,7 +29,6 @@ export class EventDatabase {
 
       await db.put("earthquakeEvents", storedEvent);
     } catch (error) {
-      console.error("地震イベントの保存に失敗:", error);
     }
   }
 
@@ -39,7 +37,6 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
@@ -61,7 +58,6 @@ export class EventDatabase {
 
       await tx.done;
     } catch (error) {
-      console.error("地震イベントの一括保存に失敗:", error);
     }
   }
 
@@ -70,7 +66,6 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return [];
       }
 
@@ -91,10 +86,8 @@ export class EventDatabase {
         })
         .map(({ createdAt, updatedAt, ...event }) => event); // DB固有フィールドを除去
 
-      console.log(`IndexedDBから地震イベント ${sortedEvents.length}件 を取得しました`);
       return sortedEvents;
     } catch (error) {
-      console.error("地震イベントの取得に失敗:", error);
       return [];
     }
   }
@@ -104,7 +97,6 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return null;
       }
 
@@ -115,7 +107,6 @@ export class EventDatabase {
       const { createdAt, updatedAt, ...event } = storedEvent;
       return event;
     } catch (error) {
-      console.error(`地震イベント ${eventId} の取得に失敗:`, error);
       return null;
     }
   }
@@ -125,14 +116,11 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
       await db.delete("earthquakeEvents", eventId);
-      console.log(`地震イベント ${eventId} を削除しました`);
     } catch (error) {
-      console.error(`地震イベント ${eventId} の削除に失敗:`, error);
     }
   }
 
@@ -141,7 +129,6 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
@@ -149,7 +136,6 @@ export class EventDatabase {
       const allEvents = await db.getAllFromIndex("earthquakeEvents", "by-created-at");
       
       if (allEvents.length <= keepCount) {
-        console.log(`保存済みイベント数 ${allEvents.length}件 は上限 ${keepCount}件 以下のため、クリーンアップ不要`);
         return;
       }
 
@@ -167,9 +153,7 @@ export class EventDatabase {
       }
 
       await tx.done;
-      console.log(`古い地震イベント ${eventsToDelete.length}件 を削除しました（残り ${keepCount}件）`);
     } catch (error) {
-      console.error("古いイベントのクリーンアップに失敗:", error);
     }
   }
 
@@ -204,7 +188,6 @@ export class EventDatabase {
         newestEvent: sortedByArrival[sortedByArrival.length - 1]?.arrivalTime
       };
     } catch (error) {
-      console.error("データベース統計の取得に失敗:", error);
       return { totalEvents: 0, confirmedEvents: 0, testEvents: 0 };
     }
   }
@@ -214,7 +197,6 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
@@ -230,7 +212,6 @@ export class EventDatabase {
       });
 
       if (eventsToDelete.length === 0) {
-        console.log(`保持期間 ${retentionDays}日 以内のイベントのみのため、日付ベースクリーンアップ不要`);
         return;
       }
 
@@ -240,16 +221,13 @@ export class EventDatabase {
       }
       await tx.done;
 
-      console.log(`${retentionDays}日以上前の地震イベント ${eventsToDelete.length}件 を削除しました`);
     } catch (error) {
-      console.error("日付ベースの古いイベントクリーンアップに失敗:", error);
     }
   }
 
   // 包括的なクリーンアップ（件数制限と日付制限の両方を適用）
   static async performComprehensiveCleanup(keepCount: number = 30, retentionDays: number = 7): Promise<void> {
     try {
-      console.log("=== 包括的なIndexedDBクリーンアップ開始 ===");
       
       // まず日付ベースでの削除
       await this.cleanupOldEventsByDate(retentionDays);
@@ -259,11 +237,8 @@ export class EventDatabase {
       
       // 統計情報を取得して結果を表示
       const stats = await this.getStats();
-      console.log(`クリーンアップ完了: 現在の保存イベント数 ${stats.totalEvents}件`);
       
-      console.log("=== 包括的なIndexedDBクリーンアップ完了 ===");
     } catch (error) {
-      console.error("包括的なクリーンアップに失敗:", error);
     }
   }
 
@@ -285,7 +260,6 @@ export class EventDatabase {
         estimatedSizeMB: Math.round(estimatedSizeMB * 100) / 100
       };
     } catch (error) {
-      console.error("ストレージ使用量の取得に失敗:", error);
       return {
         totalEvents: 0,
         estimatedSizeKB: 0,
@@ -299,14 +273,11 @@ export class EventDatabase {
     try {
       const db = await getDb();
       if (!db) {
-        console.warn("IndexedDB not available (SSR)");
         return;
       }
 
       await db.clear("earthquakeEvents");
-      console.log("地震イベントデータベースをクリアしました");
     } catch (error) {
-      console.error("データベースのクリアに失敗:", error);
     }
   }
 }

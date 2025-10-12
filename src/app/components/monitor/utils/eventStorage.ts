@@ -23,9 +23,7 @@ export class EventStorage {
       };
       
       localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
-      console.log(`地震イベント ${eventsToSave.length}件 をローカルストレージに保存しました`);
     } catch (error) {
-      console.error("地震イベントの保存に失敗:", error);
     }
   }
 
@@ -40,13 +38,10 @@ export class EventStorage {
       const storageData = JSON.parse(stored);
       const events = storageData.events || [];
       
-      console.log(`地震イベント ${events.length}件 をローカルストレージから読み込みました`);
-      console.log(`最終保存日時: ${storageData.lastSaved}`);
       
       // savedAt フィールドを除去して返す
       return events.map(({ savedAt, ...event }: any) => event);
     } catch (error) {
-      console.error("地震イベントの読み込みに失敗:", error);
       return [];
     }
   }
@@ -57,9 +52,7 @@ export class EventStorage {
       if (typeof window === "undefined") return;
       
       localStorage.removeItem(STORAGE_KEY);
-      console.log("地震イベントストレージをクリアしました");
     } catch (error) {
-      console.error("地震イベントストレージのクリアに失敗:", error);
     }
   }
 
@@ -72,12 +65,9 @@ export class EventStorage {
       if (index >= 0) {
         events[index] = updatedEvent;
         this.saveEvents(events);
-        console.log(`イベント ${eventId} を更新しました`);
       } else {
-        console.log(`イベント ${eventId} が見つかりません`);
       }
     } catch (error) {
-      console.error(`イベント ${eventId} の更新に失敗:`, error);
     }
   }
 
@@ -97,7 +87,6 @@ export class EventStorage {
       
       this.saveEvents(events);
     } catch (error) {
-      console.error("イベントの追加に失敗:", error);
     }
   }
 
@@ -117,7 +106,6 @@ export class EventStorage {
         storageSize: new Blob([stored]).size
       };
     } catch (error) {
-      console.error("ストレージ情報の取得に失敗:", error);
       return { eventCount: 0, storageSize: 0 };
     }
   }

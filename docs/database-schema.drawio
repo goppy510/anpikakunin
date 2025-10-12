@@ -1,0 +1,286 @@
+<mxfile host="app.diagrams.net" modified="2025-10-12T00:00:00.000Z" agent="Claude" version="22.0.0">
+  <diagram name="Database Schema" id="database">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="地震監視・Slack通知システム データベーススキーマ" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="800" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- EarthquakeEventLog -->
+        <mxCell id="earthquake_event_log" value="&lt;b&gt;earthquake_event_logs&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="280" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_1" value="id: Int (PK, auto)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="26" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_2" value="event_id: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="49" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_3" value="payload_hash: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="72" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_4" value="source: String (&quot;cron&quot; | &quot;websocket&quot;)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="95" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_5" value="payload: Json" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="118" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_6" value="fetched_at: DateTime" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="141" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="earthquake_event_log_7" value="UNIQUE(event_id, payload_hash)" style="text;strokeColor=none;fillColor=#fff2cc;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;whiteSpace=wrap;html=1;fontStyle=2" vertex="1" parent="earthquake_event_log">
+          <mxGeometry y="164" width="280" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- DmdataApiKey -->
+        <mxCell id="dmdata_api_key" value="&lt;b&gt;dmdata_api_keys&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="360" y="80" width="280" height="167" as="geometry" />
+        </mxCell>
+        <mxCell id="dmdata_api_key_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="dmdata_api_key">
+          <mxGeometry y="26" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="dmdata_api_key_2" value="api_key: String (暗号化)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="dmdata_api_key">
+          <mxGeometry y="49" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="dmdata_api_key_3" value="description: String?" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="dmdata_api_key">
+          <mxGeometry y="72" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="dmdata_api_key_4" value="is_active: Boolean" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="dmdata_api_key">
+          <mxGeometry y="95" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="dmdata_api_key_5" value="created_at: DateTime" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="dmdata_api_key">
+          <mxGeometry y="118" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="dmdata_api_key_6" value="updated_at: DateTime" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="dmdata_api_key">
+          <mxGeometry y="141" width="280" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- SlackWorkspace -->
+        <mxCell id="slack_workspace" value="&lt;b&gt;slack_workspaces&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="680" y="80" width="280" height="213" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="26" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_2" value="workspace_id: String (UNIQUE)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="49" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_3" value="name: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="72" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_4" value="bot_token_ciphertext: String (暗号化)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="95" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_5" value="bot_token_iv: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="118" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_6" value="bot_token_tag: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="141" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_7" value="is_enabled: Boolean" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="164" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_workspace_8" value="created_at, updated_at: DateTime" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="slack_workspace">
+          <mxGeometry y="187" width="280" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- EarthquakeNotificationCondition -->
+        <mxCell id="notification_condition" value="&lt;b&gt;earthquake_notification_conditions&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="80" width="320" height="237" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="26" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_2" value="workspace_ref: String (FK → slack_workspaces.id)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="49" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_3" value="earthquake_info_type: String (VXSE51 | VXSE53)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="72" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_4" value="min_intensity: String (例: &quot;5-&quot;)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="95" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_5" value="target_prefectures: String[] (対象都道府県)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="118" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_6" value="channel_id: String (Slack channel ID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="141" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_7" value="is_enabled: Boolean" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="164" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_8" value="created_at, updated_at: DateTime" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="notification_condition">
+          <mxGeometry y="187" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="notification_condition_9" value="UNIQUE(workspace_ref)" style="text;strokeColor=none;fillColor=#fff2cc;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;whiteSpace=wrap;html=1;fontStyle=2" vertex="1" parent="notification_condition">
+          <mxGeometry y="210" width="320" height="27" as="geometry" />
+        </mxCell>
+
+        <!-- User -->
+        <mxCell id="user" value="&lt;b&gt;users&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="40" y="350" width="280" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="user_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="26" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="user_2" value="email: String (UNIQUE)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="49" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="user_3" value="password_hash: String?" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="72" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="user_4" value="role: UserRole (ADMIN | EDITOR)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="95" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="user_5" value="is_active: Boolean" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="118" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="user_6" value="email_verified: Boolean" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="141" width="280" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="user_7" value="created_at, updated_at: DateTime" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="user">
+          <mxGeometry y="164" width="280" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- MessageTemplate -->
+        <mxCell id="message_template" value="&lt;b&gt;message_templates&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="360" y="350" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="message_template">
+          <mxGeometry y="26" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_2" value="workspace_ref: String (FK → slack_workspaces.id)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="message_template">
+          <mxGeometry y="49" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_3" value="type: MessageTemplateType (PRODUCTION | TRAINING)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="message_template">
+          <mxGeometry y="72" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_4" value="title: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="message_template">
+          <mxGeometry y="95" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_5" value="body: Text" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="message_template">
+          <mxGeometry y="118" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_6" value="is_active, created_at, updated_at" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="message_template">
+          <mxGeometry y="141" width="320" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="message_template_7" value="UNIQUE(workspace_ref, type)" style="text;strokeColor=none;fillColor=#fff2cc;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;whiteSpace=wrap;html=1;fontStyle=2" vertex="1" parent="message_template">
+          <mxGeometry y="164" width="320" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- Department -->
+        <mxCell id="department" value="&lt;b&gt;departments&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="720" y="350" width="300" height=190" as="geometry" />
+        </mxCell>
+        <mxCell id="department_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="26" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="department_2" value="workspace_ref: String (FK → slack_workspaces.id)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="49" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="department_3" value="name: String (部署名)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="72" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="department_4" value="slack_emoji: String (例: &quot;:dev:&quot;)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="95" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="department_5" value="button_color: String (#RGB)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="118" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="department_6" value="display_order: Int" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="141" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="department_7" value="is_active, created_at, updated_at" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="department">
+          <mxGeometry y="164" width="300" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- TrainingNotification -->
+        <mxCell id="training_notification" value="&lt;b&gt;training_notifications&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="350" width="300" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_1" value="id: String (PK, UUID)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="26" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_2" value="workspace_id: String (FK → slack_workspaces.id)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="49" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_3" value="channel_id: String" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="72" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_4" value="message_ts: String?" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="95" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_5" value="notification_status: String (pending | sent | failed)" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="118" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_6" value="scheduled_at: DateTime?" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="141" width="300" height="23" as="geometry" />
+        </mxCell>
+        <mxCell id="training_notification_7" value="notified_at, created_at, updated_at" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;whiteSpace=wrap;html=1;" vertex="1" parent="training_notification">
+          <mxGeometry y="164" width="300" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- Relationships -->
+
+        <!-- SlackWorkspace to NotificationCondition -->
+        <mxCell id="rel1" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERoneToMany;startArrow=ERmandOne;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="slack_workspace_1" target="notification_condition_2">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="960" y="120" as="sourcePoint" />
+            <mxPoint x="1000" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SlackWorkspace to MessageTemplate -->
+        <mxCell id="rel2" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERoneToMany;startArrow=ERmandOne;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="slack_workspace" target="message_template">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="820" y="300" as="sourcePoint" />
+            <mxPoint x="520" y="350" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="820" y="320" />
+              <mxPoint x="520" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SlackWorkspace to Department -->
+        <mxCell id="rel3" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERoneToMany;startArrow=ERmandOne;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="slack_workspace" target="department">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="820" y="300" as="sourcePoint" />
+            <mxPoint x="870" y="350" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="820" y="320" />
+              <mxPoint x="870" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SlackWorkspace to TrainingNotification -->
+        <mxCell id="rel4" value="" style="edgeStyle=orthogonalEdgeStyle;fontSize=12;html=1;endArrow=ERoneToMany;startArrow=ERmandOne;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="slack_workspace" target="training_notification">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="960" y="240" as="sourcePoint" />
+            <mxPoint x="1060" y="390" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1000" y="240" />
+              <mxPoint x="1000" y="398" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;b&gt;凡例&lt;/b&gt;&lt;br&gt;AES-256-GCM: Slack Bot Token, DMData APIキーの暗号化&lt;br&gt;source='cron': サーバーサイドcronからの保存&lt;br&gt;source='websocket': WebSocketからの保存&lt;br&gt;heartbeat: 新規データなしの実行記録" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="420" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Notes -->
+        <mxCell id="notes" value="&lt;b&gt;主要な制約&lt;/b&gt;&lt;br&gt;• earthquake_event_logs: UNIQUE(event_id, payload_hash)&lt;br&gt;• earthquake_notification_conditions: 1ワークスペース1設定&lt;br&gt;• message_templates: 1ワークスペース1タイプ(本番/訓練)&lt;br&gt;• 全ての暗号化データはAES-256-GCM使用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="500" y="600" width="460" height="100" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

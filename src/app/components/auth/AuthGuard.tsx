@@ -43,7 +43,7 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
 
         setUser(authenticatedUser);
       } catch (error) {
-        console.error("Auth check error:", error);
+        // Silenced
         router.push("/login");
       } finally {
         setLoading(false);

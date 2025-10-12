@@ -10,7 +10,6 @@ function isAuthorized(request: NextRequest): boolean {
 
   // CRON_SECRETが設定されていない場合は警告を出すが、開発環境では許可
   if (!cronSecret) {
-    console.warn("⚠️ CRON_SECRET is not configured. This endpoint is unprotected!");
     return process.env.NODE_ENV === "development";
   }
 
@@ -75,7 +74,6 @@ async function saveEarthquakeEventLog(telegram: any) {
 export async function GET(request: NextRequest) {
   // 認証チェック
   if (!isAuthorized(request)) {
-    console.error("❌ Unauthorized cron request");
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }
@@ -83,10 +81,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log("=== Cron: Fetching earthquakes from DMData.jp ===");
 
     const telegrams = await fetchEarthquakesFromDMData();
-    console.log(`Fetched ${telegrams.length} telegrams from DMData.jp`);
 
     let savedCount = 0;
 
@@ -108,13 +104,10 @@ export async function GET(request: NextRequest) {
             payload: { type: "heartbeat", executedAt: new Date().toISOString(), fetchedCount: telegrams.length },
           },
         });
-        console.log("✅ Cron heartbeat record saved");
       } catch (error) {
-        console.log("⚠️ Heartbeat save failed (not critical):", error);
       }
     }
 
-    console.log(`=== Cron: Saved ${savedCount} new earthquake events ===`);
 
     return NextResponse.json({
       success: true,
@@ -123,7 +116,6 @@ export async function GET(request: NextRequest) {
       message: `Fetched ${telegrams.length} telegrams, saved ${savedCount} new events`,
     });
   } catch (error: any) {
-    console.error("Cron fetch earthquakes error:", error);
     return NextResponse.json(
       {
         success: false,

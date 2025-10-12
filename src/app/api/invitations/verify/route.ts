@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       createdAt: invitation.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("Failed to verify invitation:", error);
+    // Silenced
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

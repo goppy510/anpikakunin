@@ -7,7 +7,6 @@ import { prisma } from '@/app/lib/db/prisma';
 function verifySlackSignature(body: string, signature: string, timestamp: string, signingSecret: string): boolean {
   const time = Math.floor(new Date().getTime() / 1000);
   if (Math.abs(time - parseInt(timestamp)) > 300) {
-    console.log('⏰ Timestamp too old:', { time, timestamp, diff: Math.abs(time - parseInt(timestamp)) });
     return false; // リクエストが5分以上古い場合は無効
   }
 
@@ -17,7 +16,6 @@ function verifySlackSignature(body: string, signature: string, timestamp: string
     .update(sigBasestring, 'utf8')
     .digest('hex');
 
-  console.log('🔑 Signature comparison:', {
     received: signature,
     computed: mySignature,
     match: signature === mySignature,
@@ -46,7 +44,6 @@ export async function POST(request: NextRequest) {
 
     if (!skipSignatureVerification && signingSecret && slackSignature && timestamp) {
       const isValid = verifySlackSignature(body, slackSignature, timestamp, signingSecret);
-      console.log('🔐 Slack signature validation:', {
         isValid,
         timestamp,
         hasSigningSecret: !!signingSecret,
@@ -56,13 +53,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     } else if (skipSignatureVerification) {
-      console.log('⚠️ Slack signature verification SKIPPED (development mode)');
     }
 
     // URLエンコードされたペイロードをパース
     const payload = JSON.parse(decodeURIComponent(body.replace('payload=', '')));
     
-    console.log('📨 Slack interaction received:', {
       type: payload.type,
       user: payload.user?.name,
       action: payload.actions?.[0]?.action_id
@@ -294,7 +289,6 @@ export async function POST(request: NextRequest) {
           messageTs: message.ts
         };
 
-        console.log('✅ 安否確認記録:', responseData);
 
         // データベースに記録を保存
         try {
@@ -304,7 +298,6 @@ export async function POST(request: NextRequest) {
             id: `${responseData.userId}_${responseData.departmentId}_${Date.now()}`
           });
         } catch (dbError) {
-          console.error('データベース保存エラー:', dbError);
         }
 
         // メッセージを更新してカウントを増やす
@@ -323,7 +316,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ response_type: 'ephemeral', text: 'インタラクションを処理しました' });
 
   } catch (error) {
-    console.error('Slack interaction処理エラー:', error);
     return NextResponse.json(
       { error: 'インタラクション処理に失敗しました' }, 
       { status: 500 }

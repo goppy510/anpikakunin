@@ -79,7 +79,6 @@ export default function ConditionsPage() {
         }
       }
     } catch (error) {
-      console.error("Failed to load workspaces:", error);
     } finally {
       setLoading(false);
     }
@@ -93,7 +92,6 @@ export default function ConditionsPage() {
         setPrefectures(data);
       }
     } catch (error) {
-      console.error("Failed to load prefectures:", error);
     }
   };
 
@@ -105,7 +103,6 @@ export default function ConditionsPage() {
         setIntensityScales(data);
       }
     } catch (error) {
-      console.error("Failed to load intensity scales:", error);
     }
   };
 
@@ -114,11 +111,9 @@ export default function ConditionsPage() {
       const response = await fetch(`/api/slack/channels?workspaceId=${selectedWorkspace}`);
       if (response.ok) {
         const data = await response.json();
-        console.log("Channels loaded:", data);
         setChannels(data.channels || []);
       } else {
         const text = await response.text();
-        console.error("Channel API error:", response.status, text);
         let errorMessage = "チャンネルの取得に失敗しました";
         try {
           const error = JSON.parse(text);
@@ -129,7 +124,6 @@ export default function ConditionsPage() {
         toast.error(errorMessage);
       }
     } catch (error) {
-      console.error("Failed to load channels:", error);
       toast.error("チャンネルの取得に失敗しました");
     }
   };
@@ -149,7 +143,6 @@ export default function ConditionsPage() {
         }
       }
     } catch (error) {
-      console.error("Failed to load condition:", error);
     }
   };
 
@@ -178,7 +171,6 @@ export default function ConditionsPage() {
         toast.error(error.error || "保存に失敗しました");
       }
     } catch (error) {
-      console.error("Failed to save condition:", error);
       toast.error("保存に失敗しました");
     }
   };

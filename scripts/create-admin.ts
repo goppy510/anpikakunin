@@ -25,13 +25,11 @@ function question(prompt: string): Promise<string> {
 }
 
 async function main() {
-  console.log("=== 管理者アカウント作成 ===\n");
 
   // メールアドレス入力
   const email = await question("メールアドレス: ");
 
   if (!email || !email.includes("@")) {
-    console.error("❌ 有効なメールアドレスを入力してください");
     process.exit(1);
   }
 
@@ -41,7 +39,6 @@ async function main() {
   });
 
   if (existingUser) {
-    console.error("❌ このメールアドレスは既に登録されています");
     process.exit(1);
   }
 
@@ -51,9 +48,7 @@ async function main() {
   // パスワード強度チェック
   const passwordValidation = validatePasswordStrength(password);
   if (!passwordValidation.valid) {
-    console.error("❌ パスワード強度エラー:");
     passwordValidation.errors.forEach((error) => {
-      console.error(`   - ${error}`);
     });
     process.exit(1);
   }
@@ -62,12 +57,10 @@ async function main() {
   const passwordConfirm = await question("パスワード（確認）: ");
 
   if (password !== passwordConfirm) {
-    console.error("❌ パスワードが一致しません");
     process.exit(1);
   }
 
   // ハッシュ化
-  console.log("\n⏳ アカウントを作成中...");
   const passwordHash = await hashPassword(password);
 
   // ユーザー作成
@@ -81,18 +74,12 @@ async function main() {
     },
   });
 
-  console.log("\n✅ 管理者アカウントを作成しました！");
-  console.log(`   メール: ${user.email}`);
-  console.log(`   権限: ${user.role}`);
-  console.log(`   ID: ${user.id}`);
-  console.log("\nhttp://localhost:8080/login からログインできます。");
 
   rl.close();
   await prisma.$disconnect();
 }
 
 main().catch((error) => {
-  console.error("❌ エラーが発生しました:", error);
   rl.close();
   prisma.$disconnect();
   process.exit(1);

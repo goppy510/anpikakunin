@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { ApiService } from "@/app/api/ApiService";
 import { oauth2 } from "@/app/api/Oauth2Service";
+import { WebSocketProvider } from "@/app/components/providers/WebSocketProvider";
 import pack from "@/../package.json";
 
 const Monitor = dynamic(() => import("@/app/components/monitor/Monitor"), {
@@ -23,16 +24,13 @@ export default function MainPage() {
     (async () => {
       try {
         const isValid = await oauth2().refreshTokenCheck();
-        console.log("refreshTokenCheck result:", isValid);
         if (isValid) {
-          console.log("Token valid, calling contractCheck");
           await contractCheck();
         } else {
-          console.log("Token invalid, setting initMode to true");
           setInitMode(true);
         }
       } catch (e) {
-        console.error(e);
+        // Silenced
         setStatus("no-auth");
       }
     })();
@@ -53,7 +51,7 @@ export default function MainPage() {
       const authUrl = await oauth2().buildAuthorizationUrl(); // ← 下で実装
       window.location.href = authUrl; // ブラウザ遷移
     } catch (e) {
-      console.error(e);
+      // Silenced
       setStatus("no-auth");
     }
   };
@@ -61,22 +59,17 @@ export default function MainPage() {
   const contractCheck = async () => {
     setInitMode(false);
     try {
-      console.log("Starting contract check...");
       const res = await apiService.contractList();
-      console.log("Contract list response:", res);
       if ("items" in res && Array.isArray(res.items)) {
         const hasEarthquake = res.items.some(
           (r) => r.classification === "telegram.earthquake"
         );
-        console.log("Has earthquake contract:", hasEarthquake);
-        console.log("Setting status to:", hasEarthquake ? "ok" : "no-contract");
         setStatus(hasEarthquake ? "ok" : "no-contract");
       } else {
-        console.error("Unexpected response format:", res);
         setStatus("no-auth");
       }
     } catch (err) {
-      console.error(err);
+      // Silenced
       setStatus("no-auth");
     }
   };
@@ -159,6 +152,9 @@ export default function MainPage() {
   }
 
   /* 通常モニタ画面 */
-  console.log("Rendering Monitor component, status:", status, "initMode:", initMode);
-  return <Monitor />;
+  return (
+    <WebSocketProvider>
+      <Monitor />
+    </WebSocketProvider>
+  );
 }
