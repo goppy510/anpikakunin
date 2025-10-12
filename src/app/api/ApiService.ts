@@ -115,8 +115,6 @@ export class ApiService {
         }
       } else {
         // Handle non-browser environment (e.g., Node.js) if necessary
-          "DOMParser not available or not in Browser environment. Returning raw XML string."
-        );
         return res.data;
       }
     }

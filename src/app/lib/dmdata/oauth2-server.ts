@@ -140,13 +140,6 @@ export class DmdataOAuth2ServerService {
       code_verifier: tokenRecord.codeVerifier,
     });
 
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code: code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: tokenRecord.codeVerifier ? "***EXISTS***" : "NULL",
-    });
-
     const tokenResponse = await fetch(
       "https://manager.dmdata.jp/account/oauth2/v1/token",
       {

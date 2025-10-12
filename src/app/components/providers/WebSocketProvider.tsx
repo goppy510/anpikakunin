@@ -277,10 +277,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   useEffect(() => {
     if (authStatus === "authenticated") {
       const handleNewEvent = (event: EventItem) => {
-
         const maxIntensity = getIntensityValue(event.maxInt);
-          `地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity})`
-        );
 
         const normalizedEvent: EventItem = {
           ...event,
