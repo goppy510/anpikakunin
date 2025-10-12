@@ -42,7 +42,6 @@ export function SafetyConfirmationSettings({
         // まずIndexedDBから読み込み
         const dbConfig = await SafetySettingsDatabase.loadSettings();
         if (dbConfig) {
-          console.log("IndexedDBから安否確認設定を読み込みました");
           setConfig(dbConfig);
           return;
         }
@@ -50,15 +49,12 @@ export function SafetyConfirmationSettings({
         // IndexedDBにない場合は従来のLocalStorageから読み込み
         const savedConfig = await Settings.get("safetyConfirmationConfig");
         if (savedConfig) {
-          console.log("LocalStorageから安否確認設定を読み込みました");
           setConfig(savedConfig);
 
           // IndexedDBに移行保存
           await SafetySettingsDatabase.saveSettings(savedConfig);
-          console.log("設定をIndexedDBに移行保存しました");
         }
       } catch (error) {
-        console.error("設定の読み込みに失敗しました:", error);
       }
     };
 
@@ -81,9 +77,7 @@ export function SafetyConfirmationSettings({
     // 自動保存
     try {
       await SafetySettingsDatabase.saveSettings(newConfig);
-      console.log("Slack設定を自動保存しました");
     } catch (error) {
-      console.error("Slack設定の自動保存に失敗:", error);
     }
   };
 
@@ -105,14 +99,12 @@ export function SafetyConfirmationSettings({
       alert("設定を保存しました");
       onClose();
     } catch (error) {
-      console.error("設定の保存に失敗しました:", error);
       alert("設定の保存に失敗しました");
     }
   };
 
   const sendTestNotification = async () => {
     try {
-      console.log("テスト通知送信を開始...");
 
       // 設定確認
       if (!config.slack.workspaces.some((ws) => ws.isEnabled)) {
@@ -137,7 +129,6 @@ export function SafetyConfirmationSettings({
         position: "top-center",
       });
     } catch (error) {
-      console.error("テスト通知送信エラー:", error);
       const errorMessage =
         error instanceof Error ? error.message : "不明なエラー";
 
@@ -457,7 +448,6 @@ function MessageTab({
       );
       await SafetySettingsDatabase.saveSettings(newConfig);
     } catch (error) {
-      console.error("設定の自動保存に失敗:", error);
     }
   };
 

@@ -26,25 +26,15 @@ export class EarthquakeNotificationService {
   public async loadConfig(): Promise<void> {
     try {
       this.config = await SafetySettingsDatabase.loadSettings();
-      console.log("地震通知サービス: 設定を読み込みました");
       
       if (this.config) {
-        console.log("ワークスペース数:", this.config.slack?.workspaces?.length || 0);
         this.config.slack?.workspaces?.forEach((ws, index) => {
-          console.log(`ワークスペース${index + 1}: ${ws.name}`);
-          console.log(`  有効: ${ws.isEnabled}`);
-          console.log(`  BotToken: ${ws.botToken ? 'あり' : 'なし'}`);
-          console.log(`  通知条件: ${ws.conditions ? 'あり' : 'なし'}`);
           if (ws.conditions) {
-            console.log(`  最小震度: ${ws.conditions.minIntensity}`);
-            console.log(`  対象都道府県: ${ws.conditions.targetPrefectures.length}件`);
           }
         });
       } else {
-        console.log("設定が見つかりませんでした");
       }
     } catch (error) {
-      console.error("地震通知サービス: 設定の読み込みに失敗:", error);
     }
   }
 
@@ -53,11 +43,6 @@ export class EarthquakeNotificationService {
    */
   public async processEarthquakeEvent(event: EventItem): Promise<void> {
     try {
-      console.log("=== 地震通知サービス: イベント処理開始 ===");
-      console.log("Event:", JSON.stringify(event, null, 2));
-      console.log("Event maxInt:", event.maxInt);
-      console.log("Event isTest:", event.isTest);
-      console.log("Event eventId:", event.eventId);
 
       // 設定が読み込まれていない場合は読み込む
       if (!this.config) {
@@ -66,63 +51,42 @@ export class EarthquakeNotificationService {
 
       // 設定がない場合は処理しない
       if (!this.config || !this.config.slack?.workspaces?.length) {
-        console.log("地震通知サービス: 設定が未登録のため処理をスキップ");
-        console.log("Config exists:", !!this.config);
-        console.log("Workspaces count:", this.config?.slack?.workspaces?.length || 0);
         return;
       }
 
-      console.log("地震通知サービス: 設定確認完了");
-      console.log("Workspaces count:", this.config.slack.workspaces.length);
 
       // テストデータは除外
       if (event.isTest) {
-        console.log("地震通知サービス: テストデータのため処理をスキップ");
         return;
       }
 
       // 同じイベントIDで既に通知済みの場合はスキップ
       if (this.lastNotifiedEventId === event.eventId) {
-        console.log("地震通知サービス: 既に通知済みのイベントのためスキップ");
         return;
       }
 
       // 各ワークスペースの設定を確認して通知判定
       for (const workspace of this.config.slack.workspaces) {
-        console.log(`=== ワークスペース処理: ${workspace.name} ===`);
-        console.log(`isEnabled: ${workspace.isEnabled}`);
-        console.log(`botToken exists: ${!!workspace.botToken}`);
-        console.log(`conditions exists: ${!!workspace.conditions}`);
         
         if (!workspace.isEnabled || !workspace.botToken) {
-          console.log(`ワークスペース ${workspace.name}: 無効またはBotToken未設定のためスキップ`);
           continue;
         }
 
         const conditions = workspace.conditions;
         if (conditions) {
-          console.log(`通知条件:`, conditions);
-          console.log(`最小震度設定: ${conditions.minIntensity}`);
-          console.log(`対象都道府県数: ${conditions.targetPrefectures.length}`);
           
           const shouldNotify = this.shouldNotify(event, conditions);
-          console.log(`通知判定結果: ${shouldNotify}`);
           
           if (shouldNotify) {
-            console.log(`ワークスペース ${workspace.name}: 通知条件に一致、Slack通知を送信`);
             await this.sendSlackNotification(event, workspace);
             this.lastNotifiedEventId = event.eventId;
           } else {
-            console.log(`ワークスペース ${workspace.name}: 通知条件に一致しないためスキップ`);
           }
         } else {
-          console.log(`ワークスペース ${workspace.name}: 通知条件が未設定のためスキップ`);
         }
       }
 
-      console.log("=== 地震通知サービス: イベント処理完了 ===");
     } catch (error) {
-      console.error("地震通知サービス: イベント処理中にエラー:", error);
     }
   }
 
@@ -130,47 +94,37 @@ export class EarthquakeNotificationService {
    * 通知すべきかどうかを判定
    */
   private shouldNotify(event: EventItem, conditions: NotificationConditions): boolean {
-    console.log("通知判定開始:", { event, conditions });
 
     // 震度チェック
     const eventIntensity = this.getIntensityValue(event.maxInt || "");
     const minIntensity = conditions.minIntensity;
     
-    console.log(`震度チェック: イベント震度=${eventIntensity}, 最小震度=${minIntensity}`);
     
     // 震度が未確定（"-"や0）の場合でも、マグニチュードで判定
     if (eventIntensity === 0 && (event.maxInt === "-" || !event.maxInt)) {
-      console.log("震度未確定のため、マグニチュードで判定");
       
       // マグニチュード4.5以上なら通知対象とする（震度3相当）
       const magnitude = event.magnitude?.value;
       if (magnitude && magnitude >= 4.5) {
-        console.log(`マグニチュード ${magnitude} ≥ 4.5 のため通知対象`);
         // マグニチュードベースの判定を続行
       } else {
-        console.log(`マグニチュード ${magnitude} < 4.5 のため通知しない`);
         return false;
       }
     } else if (eventIntensity < minIntensity) {
-      console.log("震度が条件を満たさないため通知しない");
       return false;
     }
 
     // 都道府県チェック（震源地名から判定）
     if (conditions.targetPrefectures.length > 0 && event.hypocenter?.name) {
       const isTargetArea = this.isTargetPrefecture(event.hypocenter.name, conditions.targetPrefectures);
-      console.log(`都道府県チェック: 震源地=${event.hypocenter.name}, 対象エリア=${isTargetArea}`);
       
       if (!isTargetArea) {
-        console.log("対象都道府県ではないため通知しない");
         return false;
       }
     }
 
     // 通知タイプチェック（現在は全て通知するが、将来的に細分化可能）
-    console.log(`通知タイプ: ${conditions.notificationType}`);
 
-    console.log("全ての条件を満たすため通知する");
     return true;
   }
 
@@ -179,12 +133,10 @@ export class EarthquakeNotificationService {
    */
   private getIntensityValue(intensity: string): number {
     if (!intensity || intensity === "-" || intensity === "不明") {
-      console.log("震度が不明または未設定のため、震度0として判定");
       return 0;
     }
     
     const normalizedIntensity = intensity.trim();
-    console.log(`震度変換: "${normalizedIntensity}"`);
     
     if (normalizedIntensity === "5弱" || normalizedIntensity === "5-") return 5.0;
     if (normalizedIntensity === "5強" || normalizedIntensity === "5+") return 5.5;
@@ -193,7 +145,6 @@ export class EarthquakeNotificationService {
     
     const numericValue = parseFloat(normalizedIntensity);
     const result = isNaN(numericValue) ? 0 : numericValue;
-    console.log(`震度変換結果: ${normalizedIntensity} → ${result}`);
     return result;
   }
 
@@ -262,14 +213,11 @@ export class EarthquakeNotificationService {
     }
 
     // 震源地名に対象都道府県のキーワードが含まれるかチェック
-    console.log(`都道府県チェック: 震源地="${hypocenterName}"`);
-    console.log(`対象キーワード: ${targetKeywords.join(", ")}`);
     
     const isMatch = targetKeywords.some(keyword => 
       hypocenterName.includes(keyword)
     );
     
-    console.log(`都道府県マッチ結果: ${isMatch}`);
     return isMatch;
   }
 
@@ -278,7 +226,6 @@ export class EarthquakeNotificationService {
    */
   private async sendSlackNotification(event: EventItem, workspace: SlackWorkspace): Promise<void> {
     try {
-      console.log(`Slack通知送信開始: ワークスペース=${workspace.name}`);
 
       // 本番用チャンネルを取得
       const productionChannels = this.config!.slack.channels.filter(
@@ -289,7 +236,6 @@ export class EarthquakeNotificationService {
       );
 
       if (productionChannels.length === 0) {
-        console.log("本番用チャンネルが設定されていないため通知をスキップ");
         return;
       }
 
@@ -298,7 +244,6 @@ export class EarthquakeNotificationService {
 
       // 各本番用チャンネルに送信
       for (const channel of productionChannels) {
-        console.log(`チャンネル ${channel.channelName} (${channel.channelId}) に通知送信`);
         
         const response = await fetch("/api/slack/send-message", {
           method: "POST",
@@ -318,15 +263,11 @@ export class EarthquakeNotificationService {
         const result = await response.json();
         
         if (result.success) {
-          console.log(`✅ Slack通知送信成功: チャンネル=${channel.channelName}`);
         } else {
-          console.error(`❌ Slack通知送信失敗: チャンネル=${channel.channelName}, エラー=${result.error}`);
         }
       }
 
-      console.log("Slack通知送信完了");
     } catch (error) {
-      console.error("Slack通知送信中にエラー:", error);
     }
   }
 

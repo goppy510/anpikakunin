@@ -30,15 +30,8 @@ const normalizeIntensity = (intensity: string): string => {
 // WebSocketメッセージのbodyをデコードする関数
 const decodeMessageBody = (message: any): any => {
   try {
-    console.log("=== Decoding Message Body ===");
-    console.log("Message encoding:", message.encoding);
-    console.log("Message compression:", message.compression);
-    console.log("Message format:", message.format);
-    console.log("Message body exists:", !!message.body);
-    console.log("Message body type:", typeof message.body);
 
     if (!message.body) {
-      console.log("No message body to decode");
       return null;
     }
 
@@ -46,7 +39,6 @@ const decodeMessageBody = (message: any): any => {
 
     // base64デコード
     if (message.encoding === "base64") {
-      console.log("Decoding base64 data...");
       const binaryString = atob(decodedBody);
       const uint8Array = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
@@ -55,33 +47,24 @@ const decodeMessageBody = (message: any): any => {
 
       // gzip展開
       if (message.compression === "gzip") {
-        console.log("Decompressing gzip data...");
         const decompressed = pako.inflate(uint8Array, { to: "string" });
         decodedBody = decompressed;
-        console.log(
           "Gzip decompression successful, length:",
           decompressed.length
         );
       } else {
         decodedBody = new TextDecoder().decode(uint8Array);
-        console.log("Base64 decode successful, length:", decodedBody.length);
       }
     }
 
     // JSON解析
     if (message.format === "json") {
-      console.log("Parsing JSON data...");
       const parsed = JSON.parse(decodedBody);
-      console.log("JSON parsing successful");
       return parsed;
     }
 
-    console.log("Returning raw decoded body");
     return decodedBody;
   } catch (error) {
-    console.error("Failed to decode message body:", error);
-    console.error("Error details:", error.message);
-    console.error("Stack trace:", error.stack);
     return null;
   }
 };
@@ -89,28 +72,23 @@ const decodeMessageBody = (message: any): any => {
 // 最大震度を取得する関数
 const getMaxIntensity = (message: WebSocketMessage): string => {
   try {
-    console.log("=== getMaxIntensity: Starting ===");
 
     // まずデコードされたbodyから震度を取得を試行
     const decodedBody = decodeMessageBody(message);
-    console.log("Decoded body for intensity extraction:", decodedBody);
 
     // 新しいDMDATAフォーマットの場合
     if (decodedBody?.body?.intensity?.maxInt) {
       const maxInt = decodedBody.body.intensity.maxInt;
-      console.log("Found maxInt in decoded body.body.intensity:", maxInt);
       return normalizeIntensity(maxInt);
     }
 
     // レガシーフォーマットの場合
     if (decodedBody?.Body?.Intensity?.Observation) {
       const observations = decodedBody.Body.Intensity.Observation;
-      console.log("Found observations in decoded body:", observations);
 
       if (Array.isArray(observations) && observations.length > 0) {
         const maxInt = observations[0].MaxInt;
         if (maxInt) {
-          console.log("Max intensity from decoded body:", maxInt);
           return normalizeIntensity(maxInt);
         }
       }
@@ -131,7 +109,6 @@ const getMaxIntensity = (message: WebSocketMessage): string => {
           }
         });
         if (maxIntensity !== "0") {
-          console.log("Max intensity from prefecture data:", maxIntensity);
           return maxIntensity;
         }
       }
@@ -142,7 +119,6 @@ const getMaxIntensity = (message: WebSocketMessage): string => {
     if (observations && observations.length > 0) {
       const maxInt = observations[0].maxInt;
       if (maxInt) {
-        console.log("Max intensity from xmlReport:", maxInt);
         return normalizeIntensity(maxInt);
       }
     }
@@ -162,12 +138,10 @@ const getMaxIntensity = (message: WebSocketMessage): string => {
     });
 
     if (maxIntensity !== "0") {
-      console.log("Max intensity from xmlReport prefectures:", maxIntensity);
     }
 
     return maxIntensity;
   } catch (error) {
-    console.error("Error getting max intensity:", error);
     return "0";
   }
 };
@@ -195,14 +169,9 @@ export const processWebSocketMessage = (
   message: WebSocketMessage
 ): EventItem | null => {
   try {
-    console.log("=== Processing WebSocket Message ===");
-    console.log("Message type:", message.type);
-    console.log("Message classification:", message.classification);
-    console.log("Full message keys:", Object.keys(message));
 
     // エラーメッセージの場合
     if (message.type === "error") {
-      console.error("WebSocket error message:", {
         error: message.error,
         code: message.code,
         close: message.close,
@@ -216,13 +185,11 @@ export const processWebSocketMessage = (
       message.type === "pong" ||
       message.type === "start"
     ) {
-      console.log(`Control message (${message.type}), skipping`);
       return null;
     }
 
     // classification が存在しない場合はスキップ
     if (!message.classification) {
-      console.log("No classification in message, skipping");
       return null;
     }
 
@@ -231,16 +198,12 @@ export const processWebSocketMessage = (
       !message.classification.includes("earthquake") &&
       !message.classification.includes("telegram.earthquake")
     ) {
-      console.log("Non-earthquake message, skipping");
       return null;
     }
 
-    console.log("=== Earthquake Message Detected ===");
-    console.log("Checking for xmlReport...");
 
     // 情報種別を確認
     const infoKind = message.xmlReport?.head?.infoKind;
-    console.log("Info kind:", infoKind);
 
     // 情報種別による処理分岐
     const isHypocenterInfo = infoKind === "震源速報";
@@ -254,7 +217,6 @@ export const processWebSocketMessage = (
     let decodedData = null;
 
     // 常にbodyをデコードしてみる（詳細な地震データが含まれている可能性）
-    console.log("Attempting to decode message body...");
     decodedData = decodeMessageBody(message);
 
     // 確定状態の判定（複数の条件をチェック）- decodedData初期化後に実行
@@ -262,12 +224,6 @@ export const processWebSocketMessage = (
     const serial = message.xmlReport?.head?.serial || decodedData?.serialNo;
     const headline = message.xmlReport?.head?.headline || decodedData?.headline;
 
-    console.log("Info kind:", infoKind);
-    console.log("Info type:", infoType);
-    console.log("Serial number:", serial);
-    console.log("Headline:", headline);
-    console.log("Is hypocenter info (震源速報):", isHypocenterInfo);
-    console.log("Is intensity info (震度速報/地震情報):", isIntensityInfo);
 
     // 確定状態の詳細判定
     const isFinalReport =
@@ -277,15 +233,11 @@ export const processWebSocketMessage = (
       infoType === "確定";
     const hasSerialNumber = serial && serial !== "1"; // 1より大きい連番は続報
 
-    console.log("Is final report (headline/infoType):", isFinalReport);
-    console.log("Has serial number > 1:", hasSerialNumber);
 
     if (decodedData) {
-      console.log("Decoded data structure:", Object.keys(decodedData));
 
       // デコードされたデータをxmlReportにマージまたは置換
       if (decodedData.Body && decodedData.Head) {
-        console.log("Found complete earthquake data in decoded body");
         xmlReport = {
           head: xmlReport?.head || decodedData.Head,
           body: decodedData.Body,
@@ -293,9 +245,7 @@ export const processWebSocketMessage = (
         };
       } else if (decodedData.xmlReport) {
         xmlReport = decodedData.xmlReport;
-        console.log("Found xmlReport in decoded data");
       } else {
-        console.log(
           "Decoded data contents:",
           JSON.stringify(decodedData, null, 2)
         );
@@ -303,11 +253,9 @@ export const processWebSocketMessage = (
     }
 
     if (!xmlReport && !decodedData) {
-      console.log("No XML report or decodable data in message, skipping");
       return null;
     }
 
-    console.log(
       "Using xmlReport structure:",
       xmlReport ? Object.keys(xmlReport) : "null"
     );
@@ -317,16 +265,12 @@ export const processWebSocketMessage = (
       decodedData?.body?.earthquake || xmlReport?.body?.earthquake?.[0];
     const head = xmlReport?.head;
 
-    console.log("Earthquake data source check:");
-    console.log(
       "- decodedData?.body?.earthquake:",
       decodedData?.body?.earthquake
     );
-    console.log(
       "- xmlReport?.body?.earthquake?.[0]:",
       xmlReport?.body?.earthquake?.[0]
     );
-    console.log("- Final earthquake:", earthquake);
 
     // イベントIDを取得 (優先順位: decodedData.eventId > head.eventId > message.id)
     const eventId =
@@ -334,22 +278,18 @@ export const processWebSocketMessage = (
       head?.eventId ||
       message.id ||
       `event-${Date.now()}`;
-    console.log("Event ID:", eventId);
 
     // 震源情報を取得（デコードデータを優先）
     const hypocenter = earthquake?.hypocenter;
-    console.log("Hypocenter object:", hypocenter);
     const hypoName = hypocenter?.name || hypocenter?.area?.name || "震源不明";
     const hypoDepth = hypocenter?.depth?.value
       ? parseInt(hypocenter.depth.value)
       : undefined;
-    console.log("Extracted hypocenter name:", hypoName, "Depth:", hypoDepth);
 
     // マグニチュード情報を取得（デコードデータを優先）
     const magnitudeValue = earthquake?.magnitude?.value
       ? parseFloat(earthquake.magnitude.value)
       : undefined;
-    console.log("Magnitude:", magnitudeValue);
 
     // 時刻情報を取得（デコードデータを優先）
     const arrivalTime =
@@ -358,46 +298,35 @@ export const processWebSocketMessage = (
       message.head?.time ||
       new Date().toISOString();
     const originTime = earthquake?.originTime;
-    console.log("Arrival time:", arrivalTime, "Origin time:", originTime);
 
     // 最大震度を取得
-    console.log("=== Getting Max Intensity ===");
     let maxInt = getMaxIntensity(message);
-    console.log("Extracted max intensity:", maxInt);
 
     // 震源速報の場合は震源調査中として扱う
     if (isHypocenterInfo && maxInt === "0") {
       maxInt = "-"; // 震源調査中
-      console.log("震源速報のため震度を震源調査中（-）に設定");
     }
 
-    console.log("Final max intensity:", maxInt);
 
     // テストかどうかを判定
     const isTest = message.head?.test || false;
-    console.log("Is test:", isTest);
 
     // 確定状態の判定：地震情報（震源・震度）なら確定
     let isConfirmed = false; // デフォルトは未確定
 
     const title = message.xmlReport?.control?.title || decodedData?.type;
-    console.log("Report title:", title);
 
     if (title?.includes("震源・震度") || infoKind === "地震情報") {
       // 「震源・震度に関する情報」または「地震情報」なら確定
-      console.log("✅ Confirmed: Final earthquake report (震源・震度情報)");
       isConfirmed = true;
     } else if (isHypocenterInfo) {
       // 震源速報は未確定
-      console.log("⚠️ Unconfirmed: Hypocenter information only");
       isConfirmed = false;
     } else if (infoKind?.includes("震度")) {
       // 震度速報は未確定（震源・震度の詳細情報を待つ）
-      console.log("⚠️ Unconfirmed: Intensity information only");
       isConfirmed = false;
     } else if (hypoName !== "震源不明" && maxInt !== "0") {
       // 震源地と震度がある場合は確定
-      console.log("✅ Confirmed: Has both hypocenter and intensity");
       isConfirmed = true;
     }
 
@@ -416,11 +345,8 @@ export const processWebSocketMessage = (
       isConfirmed,
     };
 
-    console.log("=== Final Processed Event Item ===");
-    console.log("Event item:", JSON.stringify(eventItem, null, 2));
     return eventItem;
   } catch (error) {
-    console.error("Error processing WebSocket message:", error);
     return null;
   }
 };
@@ -462,33 +388,27 @@ export class WebSocketManager {
 
       // OAuth2認証状態を詳しく確認
       const oauth2Service = oauth2();
-      console.log("=== WebSocket Connection Debug ===");
 
       // デバッグ情報を表示
       await oauth2Service.debugTokenStatus();
 
       const hasToken = await oauth2Service.refreshTokenCheck();
-      console.log("Token check result:", hasToken);
 
       if (!hasToken) {
-        console.log("No valid OAuth token, connection failed");
         this.onStatusChange?.("error");
         return;
       }
 
       // 認証ヘッダーも確認
       const auth = await oauth2Service.oauth2Instance?.getAuthorization();
-      console.log("Authorization header:", auth ? "***TOKEN***" : "null");
 
       // 契約状態も確認
       try {
         const contracts = await this.apiService.contractList();
-        console.log("Contract list:", contracts);
 
         // 利用可能な分類も確認
         try {
           const classifications = await this.apiService.telegramList({});
-          console.log("Available telegram classifications:", classifications);
 
           // 地震関連の分類のみを抽出して表示
           const earthquakeClassifications = classifications.items?.filter(
@@ -497,36 +417,29 @@ export class WebSocketManager {
               item.id.includes("seismic") ||
               item.id.includes("eew")
           );
-          console.log(
             "Earthquake-related classifications:",
             earthquakeClassifications
           );
         } catch (classError) {
-          console.warn(
             "Could not fetch telegram classifications (continuing anyway):",
             classError
           );
           // Continue with WebSocket connection even if classification fetch fails
         }
       } catch (contractError) {
-        console.error("Failed to get contracts:", contractError);
         // 契約確認に失敗した場合でも続行を試みる
       }
 
       // WebSocket接続前に軽量なクリーンアップを実行
-      console.log("=== WebSocket Connection Cleanup ===");
 
       try {
         // 軽量化: 3回試行のみ
         for (let attempt = 1; attempt <= 3; attempt++) {
-          console.log(`🧹 Cleanup attempt ${attempt}/3`);
 
           const socketList = await this.apiService.socketList();
           const connectionCount = socketList.items?.length || 0;
-          console.log(`📡 Found ${connectionCount} existing connections`);
 
           if (connectionCount === 0) {
-            console.log("✅ No connections to clean up");
             break;
           }
 
@@ -534,9 +447,7 @@ export class WebSocketManager {
           const closePromises = socketList.items!.map(async (socket) => {
             try {
               await this.apiService.socketClose(socket.id);
-              console.log(`✅ Closed socket ${socket.id}`);
             } catch (error) {
-              console.warn(`⚠️ Failed to close ${socket.id}:`, error.message);
             }
           });
 
@@ -548,12 +459,10 @@ export class WebSocketManager {
           }
         }
 
-        console.log("🎯 Cleanup completed");
 
         // 短い待機時間でサーバー側の処理完了を待つ
         await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (cleanupError) {
-        console.warn(
           "🚨 Cleanup failed (continuing anyway):",
           cleanupError.message
         );
@@ -561,7 +470,6 @@ export class WebSocketManager {
       }
 
       // WebSocket接続開始（詳細ログ付き）
-      console.log("Attempting socket start with classifications:", [
         "telegram.earthquake",
         // "telegram.tsunami" // 403エラーのため無効化（権限なし）
       ]);
@@ -574,23 +482,15 @@ export class WebSocketManager {
         "anpikakunin"
       );
 
-      console.log("Socket response:", socketResponse);
-      console.log("Socket URL:", socketResponse.websocket?.url);
-      console.log("Socket classifications:", socketResponse.classifications);
-      console.log("Socket expiration:", socketResponse.websocket?.expiration);
 
       if (!socketResponse.websocket?.url) {
         throw new Error("No WebSocket URL in response");
       }
 
-      console.log("Connecting to WebSocket:", socketResponse.websocket.url);
 
       this.ws = new WebSocket(socketResponse.websocket.url);
 
       this.ws.onopen = () => {
-        console.log("WebSocket connected successfully");
-        console.log("WebSocket readyState:", this.ws?.readyState);
-        console.log("WebSocket URL:", this.ws?.url);
         this.onStatusChange?.("open");
 
         // 接続成功時は再接続タイマーをクリア
@@ -600,7 +500,6 @@ export class WebSocketManager {
         }
 
         // 接続直後にテストメッセージを送信（必要に応じて）
-        console.log("WebSocket is ready to receive messages");
       };
 
       this.ws.onmessage = (event) => {
@@ -609,14 +508,8 @@ export class WebSocketManager {
 
           // ping以外のメッセージの詳細ログ（デバッグ用）
           if (message.type !== "ping" && message.type !== "pong") {
-            console.log("=== WebSocket Message Received ===");
-            console.log("Message type:", message.type);
-            console.log("Classification:", message.classification);
-            console.log("Head:", message.head);
             if (message.xmlReport?.head) {
-              console.log("XML Report head:", message.xmlReport.head);
             }
-            console.log("Full message:", JSON.stringify(message, null, 2));
           }
 
           // サーバー時刻を抽出してコールバック実行
@@ -636,7 +529,6 @@ export class WebSocketManager {
 
           // エラーメッセージで close=true の場合、接続を閉じる
           if (message.type === "error" && message.close) {
-            console.error(
               "Server requested connection close due to error:",
               message.error
             );
@@ -648,7 +540,6 @@ export class WebSocketManager {
                 "maximum number of simultaneous connections"
               )
             ) {
-              console.log(
                 "Maximum connections error detected, performing emergency cleanup..."
               );
               this.handleMaxConnectionsError();
@@ -659,8 +550,6 @@ export class WebSocketManager {
           // 津波情報の処理
           const tsunamiWarning = processTsunamiMessage(message);
           if (tsunamiWarning && this.onTsunamiWarning) {
-            console.log("=== WebSocketManager: Tsunami Warning Processed ===");
-            console.log(
               "Tsunami warning details:",
               JSON.stringify(tsunamiWarning, null, 2)
             );
@@ -670,32 +559,23 @@ export class WebSocketManager {
 
           const eventItem = processWebSocketMessage(message);
 
-          console.log("=== WebSocketManager: Event Processing Result ===");
-          console.log("Event item created:", !!eventItem);
           if (eventItem) {
-            console.log(
               "Event item details:",
               JSON.stringify(eventItem, null, 2)
             );
-            console.log("Calling onMessage callback...");
             if (this.onMessage) {
               this.onMessage(eventItem);
-              console.log("✅ onMessage callback called successfully");
             } else {
-              console.error("❌ No onMessage callback registered!");
             }
           } else {
-            console.log(
               "❌ No event item created - processWebSocketMessage returned null"
             );
           }
         } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
         }
       };
 
       this.ws.onclose = (event) => {
-        console.log("WebSocket closed:", event.code, event.reason);
         this.onStatusChange?.("closed");
 
         // 自動再接続
@@ -705,25 +585,18 @@ export class WebSocketManager {
       };
 
       this.ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
         this.onStatusChange?.("error");
       };
     } catch (error) {
-      console.error("Failed to connect WebSocket:", error);
 
       // 詳細なエラー情報を表示
       if (error instanceof Error) {
-        console.error("Error name:", error.name);
-        console.error("Error message:", error.message);
 
         // Axiosエラーの場合、詳細情報を表示
         if ("response" in error && error.response) {
           const status = (error as any).response.status;
           const responseData = (error as any).response.data;
 
-          console.error("HTTP Status:", status);
-          console.error("Response data:", responseData);
-          console.error(
             "Full response data JSON:",
             JSON.stringify(responseData, null, 2)
           );
@@ -735,7 +608,6 @@ export class WebSocketManager {
               "maximum number of simultaneous connections"
             )
           ) {
-            console.log(
               "409 Maximum connections error detected during connection, performing emergency cleanup..."
             );
             this.handleMaxConnectionsError();
@@ -744,7 +616,6 @@ export class WebSocketManager {
 
           // エラーオブジェクトの詳細を表示
           if (responseData?.error) {
-            console.error(
               "Detailed error:",
               JSON.stringify(responseData.error, null, 2)
             );
@@ -752,14 +623,11 @@ export class WebSocketManager {
 
           // メッセージがある場合も表示
           if (responseData?.message) {
-            console.error("Error message:", responseData.message);
           }
 
-          console.error("Response headers:", (error as any).response.headers);
         }
 
         if ("config" in error && error.config) {
-          console.error("Request config:", {
             url: (error as any).config.url,
             method: (error as any).config.method,
             headers: (error as any).config.headers,
@@ -782,7 +650,6 @@ export class WebSocketManager {
     }
 
     this.reconnectTimeout = setTimeout(() => {
-      console.log("Attempting to reconnect WebSocket...");
       this.connect();
     }, 5000); // 5秒後に再接続
   }
@@ -808,34 +675,26 @@ export class WebSocketManager {
 
   private async handleMaxConnectionsError(): Promise<void> {
     try {
-      console.log("=== Emergency Connection Cleanup (Max Connections Error) ===");
       
       // 複数回試行でより確実にクリーンアップ
       for (let attempt = 1; attempt <= 5; attempt++) {
-        console.log(`🚨 Emergency cleanup attempt ${attempt}/5`);
         
         const socketList = await this.apiService.socketList();
         const connectionCount = socketList.items?.length || 0;
-        console.log(`📊 Found ${connectionCount} connections during emergency cleanup`);
 
         if (connectionCount === 0) {
-          console.log("✅ No connections found, cleanup complete");
           break;
         }
 
         if (socketList.items && socketList.items.length > 0) {
-          console.log("🧹 Emergency cleanup: Closing all connections...");
           
           // 順次処理で安全性を高める
           for (const socket of socketList.items) {
             try {
-              console.log(`🔌 Emergency cleanup: Closing socket ${socket.id} (status: ${socket.status})`);
               await this.apiService.socketClose(socket.id);
-              console.log(`✅ Emergency cleanup: Closed socket ${socket.id}`);
               // 各クローズ後に短い待機
               await new Promise(resolve => setTimeout(resolve, 100));
             } catch (error) {
-              console.error(`❌ Emergency cleanup: Failed to close socket ${socket.id}:`, error);
             }
           }
         }
@@ -843,31 +702,24 @@ export class WebSocketManager {
         // 段階的に待機時間を増加
         if (attempt < 5) {
           const waitTime = attempt * 1000;
-          console.log(`⏳ Emergency cleanup: Waiting ${waitTime}ms before next attempt...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
 
-      console.log("🎯 Emergency cleanup completed");
 
       // より長い待機時間で確実にサーバー側処理完了を待つ
-      console.log("⏳ Emergency cleanup: Final wait for server processing...");
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       // 再接続を試行
-      console.log("🔄 Emergency cleanup: Attempting reconnection...");
       this.connect();
       
     } catch (error) {
-      console.warn(
         "🚨 Emergency cleanup failed (socket management may require special permissions):",
         error.message
       );
 
       // socket.list/closeが使えない場合、より長い時間をおいて再接続を試行
-      console.log("⏳ Falling back to extended timed reconnection strategy...");
       setTimeout(() => {
-        console.log("🔄 Extended timed reconnection attempt...");
         this.connect();
       }, 30000); // 30秒後に再試行
     }
@@ -877,7 +729,6 @@ export class WebSocketManager {
   private processEEWData(message: WebSocketMessage): EventItem | null {
     try {
       if (!message.head) {
-        console.log("No head in EEW message");
         return null;
       }
 
@@ -899,7 +750,6 @@ export class WebSocketManager {
 
       return event;
     } catch (error) {
-      console.error("Error processing EEW data:", error);
       return null;
     }
   }
@@ -942,7 +792,6 @@ export class WebSocketManager {
       */
     } catch (error) {
       // 時刻抽出エラーは静かに処理（メイン機能に影響させない）
-      console.debug("Server time extraction failed:", error);
     }
   }
 }

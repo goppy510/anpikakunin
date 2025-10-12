@@ -19,28 +19,22 @@ export async function getCronJobApiKey(): Promise<string | null> {
         const payload = JSON.parse(dbKey.apiKey);
         const decrypted = decrypt(payload);
         if (decrypted) {
-          console.log("✅ Using cron-job.org API key from database");
           return decrypted;
         }
       } catch (error) {
-        console.error("Failed to decrypt cron-job.org API key from DB:", error);
       }
     }
 
     // 環境変数フォールバック
     if (env.CRONJOB_API_KEY) {
-      console.log("⚠️ Using cron-job.org API key from environment variable (fallback)");
       return env.CRONJOB_API_KEY;
     }
 
-    console.warn("⚠️ No cron-job.org API key found (neither DB nor environment variable)");
     return null;
   } catch (error) {
-    console.error("Failed to get cron-job.org API key:", error);
 
     // エラー時は環境変数フォールバック
     if (env.CRONJOB_API_KEY) {
-      console.log("⚠️ Using cron-job.org API key from environment variable (error fallback)");
       return env.CRONJOB_API_KEY;
     }
 
