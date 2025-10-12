@@ -21,14 +21,9 @@ export default function MessagesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [editingType, setEditingType] = useState<"PRODUCTION" | "TRAINING" | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [productionForm, setProductionForm] = useState({
-    title: "",
-    body: "",
-  });
-
-  const [trainingForm, setTrainingForm] = useState({
     title: "",
     body: "",
   });
@@ -64,13 +59,9 @@ export default function MessagesPage() {
       setTemplates(res.data);
 
       const production = res.data.find((t: MessageTemplate) => t.type === "PRODUCTION");
-      const training = res.data.find((t: MessageTemplate) => t.type === "TRAINING");
 
       if (production) {
         setProductionForm({ title: production.title, body: production.body });
-      }
-      if (training) {
-        setTrainingForm({ title: training.title, body: training.body });
       }
     } catch (error) {
       console.error("テンプレート取得エラー:", error);
@@ -78,22 +69,20 @@ export default function MessagesPage() {
     }
   };
 
-  const handleSave = async (type: "PRODUCTION" | "TRAINING") => {
+  const handleSave = async () => {
     if (!selectedWorkspaceId) {
       toast.error("ワークスペースが選択されていません");
       return;
     }
 
     try {
-      const formData = type === "PRODUCTION" ? productionForm : trainingForm;
-
       await axios.post("/api/message-templates", {
         workspaceId: selectedWorkspaceId,
-        [type === "PRODUCTION" ? "production" : "training"]: formData,
+        production: productionForm,
       });
 
       toast.success("保存しました");
-      setEditingType(null);
+      setIsEditing(false);
       fetchTemplates(selectedWorkspaceId);
     } catch (error) {
       console.error("保存エラー:", error);
@@ -101,16 +90,12 @@ export default function MessagesPage() {
     }
   };
 
-  const handleCancel = (type: "PRODUCTION" | "TRAINING") => {
-    setEditingType(null);
-    const template = templates.find((t) => t.type === type);
+  const handleCancel = () => {
+    setIsEditing(false);
+    const template = templates.find((t) => t.type === "PRODUCTION");
 
     if (template) {
-      if (type === "PRODUCTION") {
-        setProductionForm({ title: template.title, body: template.body });
-      } else {
-        setTrainingForm({ title: template.title, body: template.body });
-      }
+      setProductionForm({ title: template.title, body: template.body });
     }
   };
 
@@ -215,11 +200,11 @@ export default function MessagesPage() {
               <span className="bg-red-600 text-white px-2 py-1 rounded text-sm mr-2">
                 本番
               </span>
-              本番用メッセージ
+              地震通知メッセージ
             </h3>
-            {editingType !== "PRODUCTION" ? (
+            {!isEditing ? (
               <button
-                onClick={() => setEditingType("PRODUCTION")}
+                onClick={() => setIsEditing(true)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
               >
                 編集
@@ -227,13 +212,13 @@ export default function MessagesPage() {
             ) : (
               <div className="space-x-2">
                 <button
-                  onClick={() => handleCancel("PRODUCTION")}
+                  onClick={handleCancel}
                   className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded"
                 >
                   キャンセル
                 </button>
                 <button
-                  onClick={() => handleSave("PRODUCTION")}
+                  onClick={handleSave}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
                 >
                   保存
@@ -245,7 +230,7 @@ export default function MessagesPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">タイトル</label>
-              {editingType === "PRODUCTION" ? (
+              {isEditing ? (
                 <input
                   type="text"
                   value={productionForm.title}
@@ -266,7 +251,7 @@ export default function MessagesPage() {
 
             <div>
               <label className="block text-sm font-medium mb-2">本文</label>
-              {editingType === "PRODUCTION" ? (
+              {isEditing ? (
                 <textarea
                   value={productionForm.body}
                   onChange={(e) =>
@@ -285,85 +270,6 @@ export default function MessagesPage() {
             </div>
           </div>
         </div>
-
-        {/* 訓練用メッセージ */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold flex items-center">
-              <span className="bg-yellow-600 text-white px-2 py-1 rounded text-sm mr-2">
-                訓練
-              </span>
-              訓練用メッセージ
-            </h3>
-            {editingType !== "TRAINING" ? (
-              <button
-                onClick={() => setEditingType("TRAINING")}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
-              >
-                編集
-              </button>
-            ) : (
-              <div className="space-x-2">
-                <button
-                  onClick={() => handleCancel("TRAINING")}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded"
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={() => handleSave("TRAINING")}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
-                >
-                  保存
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">タイトル</label>
-              {editingType === "TRAINING" ? (
-                <input
-                  type="text"
-                  value={trainingForm.title}
-                  onChange={(e) =>
-                    setTrainingForm({ ...trainingForm, title: e.target.value })
-                  }
-                  className="w-full bg-gray-700 p-3 rounded"
-                  placeholder="【訓練】地震発生通知"
-                />
-              ) : (
-                <div className="w-full bg-gray-700 p-3 rounded">
-                  {trainingForm.title || (
-                    <span className="text-gray-400">未設定</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">本文</label>
-              {editingType === "TRAINING" ? (
-                <textarea
-                  value={trainingForm.body}
-                  onChange={(e) =>
-                    setTrainingForm({ ...trainingForm, body: e.target.value })
-                  }
-                  className="w-full bg-gray-700 p-3 rounded h-64"
-                  placeholder="🔔【これは訓練です】🔔&#10;&#10;【安否確認のため、下記対応をお願いします】&#10;各リーダー・上長の方は、自組織のメンバーの押下確認お願いします。&#10;• 無事な方は所属の絵文字を押してください,&#10;• 救助などが必要な方は:sos:を押してください,&#10;• 連続で通知された場合は最後の通知の絵文字を押してください,&#10;落ち着いて行動してください&#10;&#10;** 【地震情報詳細】 **&#10;📍 震源地: {epicenter}&#10;📊 最大震度{intensity}&#10;発生時刻: {occurrence_time}&#10;マグニチュード: {magnitude}&#10;震源の深さ: 約{depth}km&#10;📋 情報種別: 確定情報&#10;&#10;安否確認（該当部署のボタンを押してください）&#10;⚠️ 一人一回のみ回答可能です&#10;&#10;🔔【これは訓練です】🔔"
-                />
-              ) : (
-                <div className="w-full bg-gray-700 p-3 rounded whitespace-pre-wrap min-h-[8rem]">
-                  {trainingForm.body || (
-                    <span className="text-gray-400">未設定</span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   );
