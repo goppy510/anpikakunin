@@ -36,12 +36,9 @@ async function fetchEarthquakesFromDMData() {
   url.searchParams.append("type", "VXSE51,VXSE53");
   url.searchParams.append("limit", "20");
   url.searchParams.append("order", "new");
+  url.searchParams.append("key", DMDATA_API_KEY); // クエリパラメータで認証
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${DMDATA_API_KEY}`,
-    },
-  });
+  const response = await fetch(url.toString());
 
   if (!response.ok) {
     throw new Error(`DMData API error: ${response.status} ${response.statusText}`);
