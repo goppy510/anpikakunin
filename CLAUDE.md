@@ -6,11 +6,12 @@ DMData.jp の地震情報API（VXSE53）を利用して、設定したエリア�
 
 ### 主要機能
 - リアルタイム地震情報監視（WebSocket接続）
-- REST APIによる定期ポーリング（フォールバック）
+- サーバーサイドcronによる地震情報自動取得（1分ごと）
 - エリア・震度による通知条件フィルタリング
 - Slackワークスペース・チャンネルへの自動通知
 - 地震イベントログの永続化（PostgreSQL）
 - 通知設定の管理UI
+- 訓練モード（安否確認訓練）
 
 ## 技術スタック
 
@@ -31,11 +32,13 @@ DMData.jp の地震情報API（VXSE53）を利用して、設定したエリア�
 ### インフラ
 - **Docker Compose** (ローカル開発環境)
 - **Supabase** (本番PostgreSQL)
+- **Vercel** (本番ホスティング)
+- **cron-job.org** (外部cronサービス、無料)
 
 ### 外部API
 - **DMData.jp API v2** (地震情報取得)
   - WebSocket: リアルタイム配信
-  - REST API: 過去データ・フォールバック
+  - REST API: サーバーサイドcron取得
 - **Slack Web API** (通知送信)
 
 ## データベーススキーマ
@@ -47,7 +50,7 @@ model EarthquakeEventLog {
   id          Int      @id @default(autoincrement())
   eventId     String   @map("event_id")
   payloadHash String   @map("payload_hash")
-  source      String   // "rest" | "websocket"
+  source      String   // "cron" | "websocket"
   payload     Json     // 地震イベント全体
   fetchedAt   DateTime @default(now())
 
@@ -96,17 +99,42 @@ model SlackNotificationSetting {
 
 ```
 DMData.jp API
-  ├─ WebSocket (リアルタイム)
-  │   └─> WebSocketProvider
+  ├─ WebSocket (リアルタイム、ブラウザ起動時のみ)
+  │   └─> WebSocketProvider (クライアントサイド)
   │       └─> EventDatabase (IndexedDB)
   │       └─> POST /api/earthquake-events/log (PostgreSQL保存)
   │       └─> 通知条件チェック → Slack通知
   │
-  └─ REST API (定期ポーリング)
-      └─> RestEarthquakePoller
-          └─> EventDatabase (IndexedDB)
-          └─> POST /api/earthquake-events/log (PostgreSQL保存)
-          └─> 通知条件チェック → Slack通知
+  └─ REST API (サーバーサイドcron、常時実行)
+      └─> cron-job.org (外部cronサービス、1分ごと)
+          └─> GET /api/cron/fetch-earthquakes (Bearer Token認証)
+              └─> DMData.jp REST API (最新20件取得)
+              └─> PostgreSQL保存 (source='cron')
+              └─> 通知条件チェック → Slack通知
+```
+
+### 認証フロー
+
+#### DMData.jp認証
+```
+1. APIキー認証（サーバーサイドcron用）
+   - 管理画面でAPIキー登録
+   - DmdataApiKeyテーブルに暗号化保存
+   - getDmdataApiKey()でDB取得 → 環境変数フォールバック
+
+2. OAuth2認証（WebSocket用）
+   - ブラウザでOAuth認証フロー実行
+   - DmdataOAuthTokenテーブルに保存
+   - /monitorページでリアルタイム監視
+```
+
+#### cronエンドポイント認証
+```
+外部cronサービス (cron-job.org)
+  └─> Authorization: Bearer <CRON_SECRET>
+      └─> /api/cron/fetch-earthquakes
+          - CRON_SECRET検証
+          - 不正アクセス防止
 ```
 
 ### ディレクトリ構成
@@ -114,14 +142,22 @@ DMData.jp API
 ```
 /src/app
   /api
+    /cron
+      /fetch-earthquakes/route.ts   # サーバーサイドcronエンドポイント（認証付き）
     /earthquake-events/log/route.ts  # 地震ログ保存API
+    /admin
+      /dmdata-api-keys/route.ts      # DMData APIキー管理
+      /dmdata-oauth/route.ts         # DMData OAuth管理
+      /rest-poller-health/route.ts   # cron実行監視
     /slack
       /workspaces/route.ts           # ワークスペース管理API
       /send-message/route.ts         # Slack通知API
       /interactions/route.ts         # Slackインタラクション
   /components
     /monitor                         # リアルタイム監視UI
-    /safety-confirmation             # 設定画面
+    /admin                           # 管理画面UI
+      /dmdata-settings               # DMData設定画面
+      /training                      # 訓練モード画面
     /providers
       /WebSocketProvider.tsx         # WebSocket接続管理
   /lib
@@ -129,8 +165,13 @@ DMData.jp API
       /prisma.ts                     # Prismaクライアント
       /earthquakeEvents.ts           # 地震イベントDB操作
       /slackSettings.ts              # Slack設定DB操作
+    /dmdata
+      /credentials.ts                # DMData認証情報取得
     /security
       /encryption.ts                 # AES-256-GCM暗号化
+    /cron
+      /earthquakeFetcher.ts          # ローカルnode-cron実装
+/src/instrumentation.ts              # Next.js起動時フック（cron開始）
 ```
 
 ## 環境変数
@@ -142,18 +183,35 @@ DATABASE_SSL=disable  # ローカル開発時
 SUPABASE_DB_URL=postgresql://...  # 本番環境（優先）
 SUPABASE_DB_SSL=require
 
-# Slack設定
+# DMData.jp 設定
 NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:3000/oauth
-SLACK_SIGNING_SECRET=your_slack_signing_secret_here
+# ※ APIキーは管理画面から設定（DB暗号化保存）
+# 環境変数はフォールバックとして機能（オプション）
+# DMDATA_API_KEY=your_api_key_here
 
+# Slack設定
+SLACK_SIGNING_SECRET=your_slack_signing_secret_here
 # Slack トークン暗号化キー（32バイト base64）
 SLACK_TOKEN_ENCRYPTION_KEY=openssl rand -base64 32で生成
+
+# Cron認証（外部cronサービス用、本番必須）
+CRON_SECRET=openssl rand -base64 32で生成
+
+# SMTP設定（パスワードリセット・招待メール）
+SMTP_HOST=mail1042.onamae.ne.jp
+SMTP_PORT=465
+SMTP_USER=noreply@anpikakunin.xyz
+SMTP_PASSWORD=[お名前.comメールパスワード]
+SMTP_FROM_EMAIL=noreply@anpikakunin.xyz
 
 # 開発環境用（オプション）
 SLACK_SKIP_SIGNATURE_VERIFICATION=true  # Slack署名検証をスキップ
 ```
 
-**注:** DMData.jp APIキーは環境変数不要。管理画面（`/admin/dmdata-settings`）からデータベースに暗号化保存します。
+**重要な環境変数:**
+- **CRON_SECRET**: 外部cronサービス（cron-job.org）からのリクエスト認証に必須
+- **SLACK_TOKEN_ENCRYPTION_KEY**: Slack Bot Tokenの暗号化に使用
+- **DMDATA_API_KEY**: 管理画面から設定（DB暗号化保存）。環境変数はフォールバック用
 
 ## 開発ワークフロー
 
