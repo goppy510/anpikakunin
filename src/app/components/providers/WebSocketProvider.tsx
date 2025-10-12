@@ -140,14 +140,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             await apiService.contractList();
 
             // リロード時は必ず全接続をクリーンアップしてから認証状態を設定
-              "=== Page Load: Cleaning up ALL existing connections ==="
-            );
             await cleanupOldConnections(apiService);
             setAuthStatus("authenticated");
           } catch (apiError) {
-              "API access failed despite authentication:",
-              apiError
-            );
             setAuthStatus("not_authenticated");
           }
         } else {

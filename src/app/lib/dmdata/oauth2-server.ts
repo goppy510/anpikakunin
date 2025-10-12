@@ -65,8 +65,6 @@ export class DmdataOAuth2ServerService {
           const auth = await this.oauth2.getAuthorization();
           return !!auth;
         } catch (error) {
-            "refreshTokenCheck: Authorization test failed, returning false"
-          );
           return false;
         }
       }
