@@ -37,11 +37,6 @@ export async function POST(request: NextRequest) {
 
     if (!skipSignatureVerification && signingSecret && slackSignature && timestamp) {
       const isValid = verifySlackSignature(body, slackSignature, timestamp, signingSecret);
-        isValid,
-        timestamp,
-        hasSigningSecret: !!signingSecret,
-        hasSlackSignature: !!slackSignature,
-      });
       if (!isValid) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
