@@ -20,8 +20,6 @@ function isAuthorized(request: NextRequest): boolean {
   const cronSecret = env.CRON_SECRET;
 
   if (!cronSecret) {
-      "⚠️ CRON_SECRET is not configured. This endpoint is unprotected!"
-    );
     return process.env.NODE_ENV === "development";
   }
 
