@@ -63,13 +63,6 @@ function getResourceTypeText(resourceType: string): string {
   return map[resourceType] || resourceType;
 }
 
-interface BatchHealth {
-  status: "healthy" | "warning" | "error";
-  lastRunAt: string | null;
-  elapsedMinutes: number | null;
-  message: string;
-}
-
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
     workspaces: 0,
@@ -81,7 +74,6 @@ export default function AdminDashboard() {
   const [earthquakes, setEarthquakes] = useState<EarthquakeRecord[]>([]);
   const [fetchedEarthquakes, setFetchedEarthquakes] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [batchHealth, setBatchHealth] = useState<BatchHealth | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<{
     fetched: number;
@@ -114,18 +106,6 @@ export default function AdminDashboard() {
       }
     };
 
-    const fetchBatchHealth = async () => {
-      try {
-        const response = await fetch("/api/admin/batch-health");
-        if (response.ok) {
-          const data = await response.json();
-          setBatchHealth(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch batch health:", error);
-      }
-    };
-
     const fetchActivityLogs = async () => {
       try {
         const response = await fetch("/api/admin/activity-logs?limit=10");
@@ -141,11 +121,6 @@ export default function AdminDashboard() {
     fetchStats();
     fetchEarthquakes();
     fetchActivityLogs();
-    fetchBatchHealth();
-
-    // 30秒ごとにヘルスチェックを更新
-    const interval = setInterval(fetchBatchHealth, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleFetchNow = async () => {
@@ -226,45 +201,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* バッチヘルスチェック */}
-      {batchHealth && (
-        <div
-          className={`p-4 rounded-lg border ${
-            batchHealth.status === "healthy"
-              ? "bg-green-900/30 border-green-700"
-              : batchHealth.status === "warning"
-              ? "bg-yellow-900/30 border-yellow-700"
-              : "bg-red-900/30 border-red-700"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  batchHealth.status === "healthy"
-                    ? "bg-green-500"
-                    : batchHealth.status === "warning"
-                    ? "bg-yellow-500"
-                    : "bg-red-500"
-                }`}
-              />
-              <div>
-                <h3 className="font-semibold">地震情報取得バッチ</h3>
-                <p className="text-sm text-gray-400">{batchHealth.message}</p>
-              </div>
-            </div>
-            {batchHealth.lastRunAt && (
-              <div className="text-sm text-gray-400">
-                最終実行: {new Date(batchHealth.lastRunAt).toLocaleString("ja-JP")}
-                {batchHealth.elapsedMinutes !== null && (
-                  <span className="ml-2">({batchHealth.elapsedMinutes}分前)</span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* 統計カード */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card) => (
