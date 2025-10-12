@@ -45,11 +45,6 @@ export async function POST(request: NextRequest) {
 
     // URLエンコードされたペイロードをパース
     const payload = JSON.parse(decodeURIComponent(body.replace('payload=', '')));
-    
-      type: payload.type,
-      user: payload.user?.name,
-      action: payload.actions?.[0]?.action_id
-    });
 
     // ボタンクリック処理
     if (payload.type === 'block_actions' && payload.actions?.[0]) {
