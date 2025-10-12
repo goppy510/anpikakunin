@@ -107,14 +107,13 @@ NODE_ENV=production
    - Workspace: 本番用ワークスペース
 
 #### OAuth & Permissions
-**Bot Token Scopes** を追加：
-- `channels:history` - チャンネル履歴の読み取り
-- `channels:read` - パブリックチャンネル情報の読み取り
-- `chat:write` - メッセージの投稿
-- `chat:write.public` - ボットが参加していないパブリックチャンネルへの投稿
-- `emoji:read` - 絵文字情報の読み取り
-- `groups:read` - プライベートチャンネル情報の読み取り
-- `users:read` - ユーザー情報の読み取り
+**Bot Token Scopes** を追加（このアプリに必要な権限のみ）：
+- `channels:read` - 通知先チャンネル情報の取得
+- `chat:write` - 地震通知・訓練通知の送信
+- `chat:write.public` - ボット未参加チャンネルへの通知送信（推奨）
+- `emoji:read` - 部署設定で絵文字選択に使用
+- `groups:read` - プライベートチャンネルへの通知に必要
+- `users:read` - ユーザー名取得（安否確認応答で使用）
 
 **Redirect URLs**:
 ```
