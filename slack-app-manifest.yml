@@ -1,0 +1,26 @@
+display_information:
+  name: 安否確認システム（本番）
+  description: 地震発生時の安否確認を自動化するシステム
+  background_color: "#2c2d30"
+features:
+  bot_user:
+    display_name: 安否確認
+    always_online: true
+oauth_config:
+  redirect_urls:
+    - https://anpikakunin.xyz/oauth
+  scopes:
+    bot:
+      - channels:read
+      - chat:write
+      - chat:write.public
+      - emoji:read
+      - groups:read
+      - users:read
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://anpikakunin.xyz/api/slack/interactions
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

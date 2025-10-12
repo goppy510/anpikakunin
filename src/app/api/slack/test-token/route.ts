@@ -84,61 +84,70 @@ export async function POST(request: NextRequest) {
       console.warn("絵文字の取得に失敗しましたが、接続テストは継続します:", emojiError);
     }
 
-    // OAuth スコープ情報を収集
-    let scopes = [];
-    
-    // auth.testレスポンスからスコープ情報を抽出
-    if (authData.response_metadata?.scopes) {
+    // OAuth スコープ情報を取得（auth.apps.info APIを使用）
+    let scopes: string[] = [];
+
+    try {
+      const authAppsResponse = await fetch('https://slack.com/api/auth.apps.info', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${botToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const authAppsData = await authAppsResponse.json();
+
+      console.log('auth.apps.info response:', JSON.stringify(authAppsData, null, 2));
+
+      if (authAppsData.ok && authAppsData.app?.bot_scopes) {
+        scopes = authAppsData.app.bot_scopes;
+      }
+    } catch (e) {
+      console.warn('auth.apps.info failed, falling back to auth.test:', e);
+    }
+
+    // フォールバック: auth.testのresponse_metadataから取得
+    if (scopes.length === 0 && authData.response_metadata?.scopes) {
       scopes = authData.response_metadata.scopes;
     }
-    
-    // 代替方法: 実際にアクセスできるAPIから推測
-    const testScopes = [];
-    
-    // chat:writeをテスト（常に必要）
-    testScopes.push('chat:write');
-    
-    // channels:readをテスト
-    try {
-      const channelTestResponse = await fetch('https://slack.com/api/conversations.list?limit=1', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${botToken}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-      const channelTestData = await channelTestResponse.json();
-      if (channelTestData.ok) {
-        testScopes.push('channels:read');
-      }
-    } catch (e) {
-      // channels:readがない
-    }
-    
-    // emoji:readをテスト（絵文字取得が成功した場合）
-    if (emojis.length > 0) {
-      testScopes.push('emoji:read');
-    }
-    
-    // users:readをテスト
-    try {
-      const usersTestResponse = await fetch('https://slack.com/api/users.list?limit=1', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${botToken}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-      const usersTestData = await usersTestResponse.json();
-      if (usersTestData.ok) {
-        testScopes.push('users:read');
-      }
-    } catch (e) {
-      // users:readがない
-    }
-    
-    // スコープが空の場合は推測結果を使用
+
+    // 最終フォールバック: 実際にAPIをテストして推測
     if (scopes.length === 0) {
+      const testScopes = [];
+
+      // chat:write（必須）
+      testScopes.push('chat:write');
+
+      // channels:read
+      try {
+        const channelTestResponse = await fetch('https://slack.com/api/conversations.list?limit=1&types=public_channel', {
+          headers: { 'Authorization': `Bearer ${botToken}` }
+        });
+        const channelTestData = await channelTestResponse.json();
+        if (channelTestData.ok) testScopes.push('channels:read');
+      } catch (e) {}
+
+      // emoji:read
+      if (emojis.length > 0) testScopes.push('emoji:read');
+
+      // users:read
+      try {
+        const usersTestResponse = await fetch('https://slack.com/api/users.list?limit=1', {
+          headers: { 'Authorization': `Bearer ${botToken}` }
+        });
+        const usersTestData = await usersTestResponse.json();
+        if (usersTestData.ok) testScopes.push('users:read');
+      } catch (e) {}
+
+      // groups:read (プライベートチャンネル)
+      try {
+        const groupsTestResponse = await fetch('https://slack.com/api/conversations.list?limit=1&types=private_channel', {
+          headers: { 'Authorization': `Bearer ${botToken}` }
+        });
+        const groupsTestData = await groupsTestResponse.json();
+        if (groupsTestData.ok) testScopes.push('groups:read');
+      } catch (e) {}
+
       scopes = testScopes;
     }
 
