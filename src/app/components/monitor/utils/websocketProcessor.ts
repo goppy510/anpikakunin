@@ -169,10 +169,6 @@ export const processWebSocketMessage = (
 
     // エラーメッセージの場合
     if (message.type === "error") {
-        error: message.error,
-        code: message.code,
-        close: message.close,
-      });
       return null;
     }
 
