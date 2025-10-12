@@ -304,10 +304,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       };
 
       const handleTsunamiWarning = (warning: TsunamiWarning) => {
-          "Tsunami warning details:",
-          JSON.stringify(warning, null, 2)
-        );
-
         setTsunamiWarnings((prevWarnings) => {
           const existingIndex = prevWarnings.findIndex(
             (w) => w.id === warning.id

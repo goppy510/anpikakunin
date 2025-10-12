@@ -134,8 +134,6 @@ export class ApiService {
     }
 
     // Fallback for unexpected content types or data types with 200 status
-      `Unhandled content type or data type: ${contentType}, typeof data: ${typeof res.data}`
-    );
     // You might return the raw data, status, or throw an error
     return res.data; // Returning raw data as a last resort
   }
