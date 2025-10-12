@@ -51,10 +51,8 @@ export class Oauth2Service {
       if (this.oauth2) {
         try {
           const auth = await this.oauth2.getAuthorization();
-          console.log("refreshTokenCheck: Authorization test successful");
           return !!auth;
         } catch (error) {
-          console.log("refreshTokenCheck: Authorization test failed, returning false");
           // If DPoP error or other auth failure, token is invalid
           return false;
         }
@@ -62,7 +60,6 @@ export class Oauth2Service {
       
       return false;
     } catch (error) {
-      console.error("Refresh token check failed:", error);
       return false;
     }
   }
@@ -73,29 +70,20 @@ export class Oauth2Service {
       Settings.get("oauthDPoPKeypair")
     ]);
     
-    console.log("=== OAuth Debug ===");
-    console.log("Stored refresh token:", storedRefreshToken ? "EXISTS" : "NULL");
-    console.log("Stored DPoP keypair:", storedDPoPKeypair ? "EXISTS" : "NULL");
-    console.log("OAuth2 instance:", this.oauth2 ? "EXISTS" : "NULL");
     
     if (this.oauth2) {
       try {
         const auth = await this.oauth2.getAuthorization();
-        console.log("getAuthorization result:", auth ? "EXISTS" : "NULL");
         
         // DPoP JWT生成テスト
         try {
           const dpopJWT = await (this.oauth2 as any).getDPoPProofJWT("POST", "https://api.dmdata.jp/v2/socket");
-          console.log("DPoP JWT test:", dpopJWT ? "SUCCESS" : "FAILED");
         } catch (dpopError) {
-          console.log("DPoP JWT test error:", dpopError);
         }
         
       } catch (error) {
-        console.log("getAuthorization error:", error);
       }
     }
-    console.log("==================");
   }
 
   async refreshTokenDelete(): Promise<void> {
@@ -116,9 +104,7 @@ export class Oauth2Service {
       this.state = null;
       this.initPromise = null;
       
-      console.log("All OAuth data cleared");
     } catch (error) {
-      console.error("Failed to delete refresh token:", error);
       throw error;
     }
   }
@@ -130,9 +116,6 @@ export class Oauth2Service {
       Settings.get("oauthState")
     ]);
     
-    console.log("Exchange - code verifier found:", !!storedCodeVerifier);
-    console.log("Exchange - state found:", !!storedState);
-    console.log("Exchange - state match:", storedState === state);
     
     if (!storedCodeVerifier) throw new Error("Code verifier not found");
     if (!storedState || storedState !== state) throw new Error("State mismatch");
@@ -146,7 +129,6 @@ export class Oauth2Service {
       code_verifier: storedCodeVerifier,
     });
     
-    console.log("Token request params:", {
       grant_type: 'authorization_code',
       client_id: CLIENT_ID,
       code: code,
@@ -164,23 +146,18 @@ export class Oauth2Service {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error("Token exchange failed:", tokenResponse.status, errorText);
       throw new Error(`Token exchange failed: ${tokenResponse.status} ${errorText}`);
     }
 
     const tokens = await tokenResponse.json();
-    console.log("Token response:", tokens);
     
     if (tokens.refresh_token) {
-      console.log("Storing refresh token");
       await Settings.set("oauthRefreshToken", tokens.refresh_token);
       
       // Clear old OAuth2 instance and reinitialize with new token
       this.oauth2 = null;
       await this.init();
-      console.log("OAuth2 reinitialized with new refresh token");
     } else {
-      console.error("No refresh_token in response");
     }
     
     // Clean up stored values
@@ -232,14 +209,12 @@ export class Oauth2Service {
       
       // Store code verifier and state for later use
       await Settings.set("oauthCodeVerifier", this.codeVerifier);
-      console.log("Auth URL - code verifier stored");
     }
 
     // Generate state if not available
     if (!this.state) {
       this.state = this.generateState();
       await Settings.set("oauthState", this.state);
-      console.log("Auth URL - state stored");
     }
     
     const qp = new URLSearchParams({
@@ -261,9 +236,6 @@ export class Oauth2Service {
       Settings.get("oauthDPoPKeypair"),
     ]);
 
-    console.log("Init - refresh token exists:", !!refreshToken);
-    console.log("Init - dpop keypair exists:", !!dpopKeypair);
-    console.log("Init - dpop keypair content:", dpopKeypair ? "***KEYPAIR***" : "null");
 
     this.oauth2 = new OAuth2Code({
       endpoint: {
@@ -284,18 +256,14 @@ export class Oauth2Service {
 
     this.oauth2
       .on("refresh_token", (t) => {
-        console.log("Saving new refresh token");
         Settings.set("oauthRefreshToken", t);
       })
       .on("dpop_keypair", (k) => {
-        console.log("Saving new DPoP keypair");
         Settings.set("oauthDPoPKeypair", k);
       });
 
-    console.log("OAuth2 instance initialized");
     
     // DPoP: 現在無効化中（Web Crypto APIエラーのため）
-    console.log("DPoP is disabled to avoid Web Crypto API errors");
   }
 }
 
