@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
+import { getDmdataApiKey } from "@/app/lib/dmdata/credentials";
 
 // DMData.jp APIから地震情報を取得する関数
 async function fetchEarthquakesFromDMData() {
-  const DMDATA_API_KEY = process.env.DMDATA_API_KEY;
+  const DMDATA_API_KEY = await getDmdataApiKey();
 
   if (!DMDATA_API_KEY) {
-    throw new Error("DMDATA_API_KEY is not configured");
+    throw new Error("DMDATA_API_KEY is not configured in database or environment");
   }
 
   const url = new URL("https://api.dmdata.jp/v2/telegram");

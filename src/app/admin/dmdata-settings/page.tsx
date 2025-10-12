@@ -228,9 +228,9 @@ export default function DmdataSettingsPage() {
 
       {/* API Key 管理 */}
       <div className="mb-8 p-6 bg-white rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">API Key 管理（REST API用）</h2>
+        <h2 className="text-xl font-semibold mb-4">API Key 管理（サーバーサイドcron用）</h2>
         <p className="text-sm text-gray-600 mb-4">
-          定期的なポーリングやバッチ処理で地震情報を取得する場合に使用します
+          サーバーサイドcronジョブ（1分ごと）で地震情報を自動取得する際に使用します。ブラウザを閉じても動作し続けます。
         </p>
 
         <form onSubmit={handleAddApiKey} className="mb-6 space-y-3">

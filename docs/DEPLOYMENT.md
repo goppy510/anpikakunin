@@ -19,7 +19,7 @@ Slack本番アプリ → anpikakunin.xyz → Vercel → Supabase PostgreSQL
 - GitHub アカウント
 - Vercel アカウント
 - Supabase アカウント
-- **DMData.jp アカウント**（地震情報取得に必須。APIキーを取得してください）
+- **DMData.jp アカウント**（地震情報取得に必須。デプロイ後に管理画面からAPIキーを設定）
 - Slack 本番用ワークスペース
 - `anpikakunin.xyz` ドメインの管理権限
 
@@ -76,12 +76,12 @@ DIRECT_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.p
 SUPABASE_DB_URL=${DATABASE_URL}
 SUPABASE_DB_SSL=require
 
-# DMData.jp API設定（地震情報取得）
-# サーバーサイドcronジョブ用APIキー（DMData.jp契約ページで取得）
-DMDATA_API_KEY=your_api_key_here
-
 # DMData.jp OAuth設定（ユーザーがブラウザから認証する際に使用）
 NEXT_PUBLIC_OAUTH_REDIRECT_URI=https://anpikakunin.xyz/oauth
+
+# DMData.jp APIキー（オプション：環境変数フォールバック用）
+# ※ 通常は管理画面から設定するため不要。環境変数は設定されていない場合のみ使用されます
+# DMDATA_API_KEY=your_api_key_here
 
 # 基本設定
 NEXT_PUBLIC_BASE_URL=https://anpikakunin.xyz
@@ -240,12 +240,26 @@ VERCEL_PROJECT_ID=上記で取得した projectId
 2. 管理者アカウントを作成
 3. `https://anpikakunin.xyz/login` でログイン
 
-#### 8.2. DMData.jp 設定確認（地震情報取得）
+#### 8.2. DMData.jp APIキー設定（地震情報取得）
 
-**重要**: `DMDATA_API_KEY` が設定されていないと地震情報が一切取得できません。
+**重要**: DMData.jp APIキーが設定されていないと地震情報が一切取得できません。
+
+##### APIキーの設定手順
+
+1. ログイン後、管理画面にアクセス `https://anpikakunin.xyz/admin`
+2. **DMData.jp 設定** セクションで **APIキーを設定** をクリック
+3. DMData.jp契約ページで取得したAPIキーを入力
+4. **保存** をクリック
+
+**取得方法**:
+- [DMData.jp](https://dmdata.jp/) にログイン
+- マイページ → API設定 → APIキーを発行・コピー
+
+APIキーはデータベースに暗号化保存されます。
 
 ##### サーバーサイドcron（常時実行）
-Vercel Cron Jobsが1分ごとに自動実行されます：
+
+APIキー設定後、Vercel Cron Jobsが1分ごとに自動実行されます：
 - `/api/cron/fetch-earthquakes` が自動実行
 - DMData.jp APIから最新20件の地震情報を取得
 - データベースに保存（重複は自動スキップ）
@@ -273,7 +287,7 @@ Vercel Cron Jobsが1分ごとに自動実行されます：
    - 地震発生時に自動的にイベントが表示される
 
 **トラブルシューティング**:
-- Cron Jobが実行されない → Vercel環境変数で`DMDATA_API_KEY`が設定されているか確認
+- Cron Jobが実行されない → 管理画面でDMData.jp APIキーが設定されているか確認
 - WebSocket接続エラー → ブラウザのコンソールログを確認
 - 認証失敗 → DMData.jpアカウントの契約状態を確認
 
