@@ -75,7 +75,6 @@ export class CronJobOrgClient {
       return dbKey;
     }
 
-    console.warn("⚠️ CRONJOB_API_KEY is not configured");
     return null;
   }
 
@@ -96,9 +95,6 @@ export class CronJobOrgClient {
       throw new Error("CRONJOB_API_KEY is not configured");
     }
 
-    // リクエスト内容をログ出力
-    console.log("📤 cron-job.org API request:", JSON.stringify({ job: request }, null, 2));
-
     const response = await fetch(`${CRONJOB_API_BASE}/jobs`, {
       method: "PUT",
       headers: {
@@ -112,17 +108,13 @@ export class CronJobOrgClient {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("❌ cron-job.org API error response:", error);
-      console.error("❌ Request body:", JSON.stringify({ job: request }, null, 2));
       throw new Error(`cron-job.org API error: ${response.status} ${error}`);
     }
 
     const data = await response.json();
-    console.log("✅ cron-job.org API response:", JSON.stringify(data, null, 2));
 
     // APIレスポンスは { jobId: number } 形式
     if (!data.jobId) {
-      console.error("❌ Unexpected response structure:", data);
       throw new Error(`Unexpected response structure from cron-job.org: ${JSON.stringify(data)}`);
     }
 
@@ -245,12 +237,6 @@ export class CronJobOrgClient {
       const expSeconds = String(expiresDate.getSeconds()).padStart(2, '0');
       const expiresAt = parseInt(`${expYear}${expMonth}${expDay}${expHours}${expMinutes}${expSeconds}`);
 
-      console.log(`📅 One-time schedule for ${date.toISOString()}:`);
-      console.log(`   Execution: ${year}/${month}/${day} ${hours}:${minutes}:${seconds}`);
-      console.log(`   Expires:   ${expYear}/${expMonth}/${expDay} ${expHours}:${expMinutes}:${expSeconds}`);
-      console.log(`   Schedule: hours=[${date.getHours()}], minutes=[${date.getMinutes()}], mdays=[${date.getDate()}], months=[${date.getMonth() + 1}], wdays=[${date.getDay()}]`);
-      console.log(`   expiresAt: ${expiresAt}`);
-
       return {
         hours: [date.getHours()],
         minutes: [date.getMinutes()],
@@ -286,10 +272,6 @@ export class CronJobOrgClient {
     // scheduledTimeはUTC時刻で渡されるため、JSTに変換
     // UTCからJSTは+9時間
     const jstTime = new Date(scheduledTime.getTime() + (9 * 60 * 60 * 1000));
-
-    console.log(`🕐 Scheduled time conversion:`);
-    console.log(`   Input (UTC):  ${scheduledTime.toISOString()}`);
-    console.log(`   Converted (JST): ${jstTime.toISOString()} (will use local values for cron)`);
 
     const callbackUrl = `${env.NEXT_PUBLIC_APP_URL}/api/cron/training-send?trainingId=${trainingId}`;
 
