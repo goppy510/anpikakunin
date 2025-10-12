@@ -81,7 +81,6 @@ export async function POST(request: NextRequest) {
           );
       }
     } catch (emojiError) {
-      console.warn("絵文字の取得に失敗しましたが、接続テストは継続します:", emojiError);
     }
 
     // OAuth スコープ情報を取得（auth.apps.info APIを使用）
@@ -97,13 +96,11 @@ export async function POST(request: NextRequest) {
       });
       const authAppsData = await authAppsResponse.json();
 
-      console.log('auth.apps.info response:', JSON.stringify(authAppsData, null, 2));
 
       if (authAppsData.ok && authAppsData.app?.bot_scopes) {
         scopes = authAppsData.app.bot_scopes;
       }
     } catch (e) {
-      console.warn('auth.apps.info failed, falling back to auth.test:', e);
     }
 
     // フォールバック: auth.testのresponse_metadataから取得
@@ -159,7 +156,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Slack API接続テストエラー:", error);
     return NextResponse.json(
       {
         success: false,

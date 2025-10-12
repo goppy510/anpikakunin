@@ -59,7 +59,6 @@ async function parseXmlToTelegramItem(xmlString: string, meta: any): Promise<Tel
       },
     };
   } catch (error) {
-    console.error("XML parse error:", error);
     return null;
   }
 }
@@ -80,7 +79,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log("📡 DMData API 取得開始");
 
     // VXSE51（震度速報）とVXSE53（震源・震度に関する情報）を並行取得
     const [vxse51Response, vxse53Response] = await Promise.all([
@@ -105,7 +103,6 @@ export async function POST(request: NextRequest) {
     const vxse51Events = vxse51Response.data.items || [];
     const vxse53Events = vxse53Response.data.items || [];
 
-    console.log(`📊 取得結果: VXSE51=${vxse51Events.length}件, VXSE53=${vxse53Events.length}件`);
 
     // eventIdでVXSE51とVXSE53をマッピング
     const vxse53Map = new Map<string, any>();
@@ -114,7 +111,6 @@ export async function POST(request: NextRequest) {
       vxse53Map.set(vxse53.id, vxse53);
     }
 
-    console.log(`📥 詳細データ取得: VXSE51を優先して最新10件`);
 
     const earthquakes: EarthquakeInfo[] = [];
     const processedEventIds = new Set<string>();
@@ -123,12 +119,10 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < Math.min(10, vxse51Events.length); i++) {
       const meta = vxse51Events[i];
       if (!meta.url) {
-        console.log(`⚠️ URLなし: ${meta.id}`);
         continue;
       }
 
       try {
-        console.log(`📡 詳細取得中: ${meta.url}`);
         const detailResponse = await axios.get(meta.url, {
           params: {
             key: DMDATA_API_KEY,
@@ -138,13 +132,11 @@ export async function POST(request: NextRequest) {
         });
 
         const xmlString = detailResponse.data;
-        console.log(`📄 XML取得成功: ${meta.head.type}`);
 
         // XMLをパースしてTelegramItem形式に変換
         const telegramItem = await parseXmlToTelegramItem(xmlString, meta);
 
         if (!telegramItem) {
-          console.log(`⚠️ XMLパース失敗: ${meta.id}`);
           continue;
         }
 
@@ -155,7 +147,6 @@ export async function POST(request: NextRequest) {
           // 震度3以上のみ処理
           const intensityNum = parseInt(info.maxIntensity.replace(/[^0-9]/g, ''));
           if (intensityNum >= 3) {
-            console.log(`✅ VXSE51抽出成功: ${info.title} 震度${info.maxIntensity} (eventId: ${info.eventId})`);
 
             // 対応するVXSE53を探す
             const matchingVxse53 = vxse53Events.find(v53 => {
@@ -169,7 +160,6 @@ export async function POST(request: NextRequest) {
             });
 
             if (matchingVxse53) {
-              console.log(`🔗 対応するVXSE53を発見: ${matchingVxse53.id}`);
               try {
                 // VXSE53の詳細を取得
                 const vxse53Response = await axios.get(matchingVxse53.url, {
@@ -186,28 +176,22 @@ export async function POST(request: NextRequest) {
                     info.magnitude = vxse53Info.magnitude;
                     info.depth = vxse53Info.depth;
                     info.prefectureObservations = vxse53Info.prefectureObservations;
-                    console.log(`✅ 詳細情報マージ: 震源=${info.epicenter}, M=${info.magnitude}`);
                   }
                 }
               } catch (err: any) {
-                console.log(`⚠️ VXSE53取得エラー: ${err.message}`);
               }
             }
 
             processedEventIds.add(info.eventId);
             earthquakes.push(info);
           } else {
-            console.log(`⏭️ スキップ（震度3未満）: 震度${info.maxIntensity}`);
           }
         } else {
-          console.log(`⚠️ 地震情報抽出失敗または震度情報なし`);
         }
       } catch (error: any) {
-        console.error(`❌ 詳細取得エラー: ${error.message}`);
       }
     }
 
-    console.log(`📋 抽出された地震情報: ${earthquakes.length}件`);
 
     // 発生時刻でソート（新しい順）
     earthquakes.sort((a, b) => {
@@ -234,7 +218,6 @@ export async function POST(request: NextRequest) {
       })),
     });
   } catch (error: any) {
-    console.error("Failed to fetch earthquakes:", error);
     return NextResponse.json(
       {
         error: "地震情報の取得に失敗しました",

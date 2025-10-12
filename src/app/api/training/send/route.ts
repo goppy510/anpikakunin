@@ -91,7 +91,6 @@ export async function POST(request: NextRequest) {
             data: { cronJobId: cronJobId.toString() },
           });
 
-          console.log(`✅ Created cron job for training: ${trainingNotification.id} (cronJobId: ${cronJobId})`);
 
           return NextResponse.json({
             success: true,
@@ -100,7 +99,6 @@ export async function POST(request: NextRequest) {
             message: "訓練通知をスケジュールしました",
           });
         } catch (cronError: any) {
-          console.error("❌ Failed to create cron job:", cronError);
 
           // cron登録失敗時はレコードを削除
           await prisma.trainingNotification.delete({
@@ -117,7 +115,6 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // 開発環境: CRONJOB_API_KEYが未設定の場合はスキップ
-        console.log("⚠️ CRONJOB_API_KEY not configured. Skipping cron-job.org registration (development mode)");
 
         return NextResponse.json({
           success: true,
@@ -205,7 +202,6 @@ export async function POST(request: NextRequest) {
         message: "訓練通知を送信しました",
       });
     } catch (slackError: any) {
-      console.error("Slack送信エラー:", slackError);
 
       // エラーステータスを更新
       await prisma.trainingNotification.update({
@@ -225,7 +221,6 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error: any) {
-    console.error("訓練通知APIエラー:", error);
     return NextResponse.json(
       { error: "訓練通知の処理に失敗しました", details: error.message },
       { status: 500 }

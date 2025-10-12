@@ -20,7 +20,6 @@ function isAuthorized(request: NextRequest): boolean {
   const cronSecret = env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.warn(
       "⚠️ CRON_SECRET is not configured. This endpoint is unprotected!"
     );
     return process.env.NODE_ENV === "development";
@@ -38,7 +37,6 @@ export async function GET(request: NextRequest) {
   try {
     // 認証チェック
     if (!isAuthorized(request)) {
-      console.error("❌ Unauthorized access to /api/cron/training-send");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -53,7 +51,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`🎓 [Cron Training] Executing training: ${trainingId}`);
 
     // 訓練通知レコードを取得
     const trainingNotification = await prisma.trainingNotification.findUnique({
@@ -61,7 +58,6 @@ export async function GET(request: NextRequest) {
     });
 
     if (!trainingNotification) {
-      console.error(`❌ Training notification not found: ${trainingId}`);
       return NextResponse.json(
         { error: "Training notification not found" },
         { status: 404 }
@@ -70,7 +66,6 @@ export async function GET(request: NextRequest) {
 
     // 既に送信済みの場合はスキップ
     if (trainingNotification.notificationStatus === "sent") {
-      console.log(`⚠️ Training already sent: ${trainingId}`);
       return NextResponse.json({
         success: true,
         message: "Training notification already sent",
@@ -178,7 +173,6 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log(`✅ [Cron Training] Successfully sent: ${trainingId}`);
 
     return NextResponse.json({
       success: true,
@@ -187,7 +181,6 @@ export async function GET(request: NextRequest) {
       messageTs: slackResponse.data.ts,
     });
   } catch (error: any) {
-    console.error("❌ [Cron Training] Error:", error);
 
     // エラーステータスを更新（trainingIdがある場合）
     const { searchParams } = new URL(request.url);
@@ -203,7 +196,6 @@ export async function GET(request: NextRequest) {
           },
         });
       } catch (updateError) {
-        console.error("Failed to update error status:", updateError);
       }
     }
 

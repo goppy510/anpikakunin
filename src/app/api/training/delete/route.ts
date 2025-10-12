@@ -34,11 +34,9 @@ export async function DELETE(request: NextRequest) {
       try {
         const cronClient = new CronJobOrgClient();
         await cronClient.deleteJob(parseInt(trainingNotification.cronJobId));
-        console.log(
           `✅ Deleted cron job: ${trainingNotification.cronJobId}`
         );
       } catch (cronError: any) {
-        console.error("❌ Failed to delete cron job:", cronError);
         // cronジョブ削除失敗してもDB削除は続行
       }
     }
@@ -48,7 +46,6 @@ export async function DELETE(request: NextRequest) {
       where: { id: trainingId },
     });
 
-    console.log(`✅ Deleted training notification: ${trainingId}`);
 
     return NextResponse.json({
       success: true,
@@ -56,7 +53,6 @@ export async function DELETE(request: NextRequest) {
       trainingId,
     });
   } catch (error: any) {
-    console.error("❌ Training delete API error:", error);
     return NextResponse.json(
       {
         error: "Failed to delete training notification",
