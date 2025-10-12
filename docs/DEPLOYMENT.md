@@ -83,6 +83,9 @@ NEXT_PUBLIC_OAUTH_REDIRECT_URI=https://anpikakunin.xyz/oauth
 # ※ 通常は管理画面から設定するため不要。環境変数は設定されていない場合のみ使用されます
 # DMDATA_API_KEY=your_api_key_here
 
+# Cron Secret（外部cronサービス認証用）
+CRON_SECRET=生成したランダム文字列（openssl rand -base64 32で生成）
+
 # 基本設定
 NEXT_PUBLIC_BASE_URL=https://anpikakunin.xyz
 
@@ -259,17 +262,37 @@ APIキーはデータベースに暗号化保存されます。
 
 ##### サーバーサイドcron（常時実行）
 
-APIキー設定後、Vercel Cron Jobsが1分ごとに自動実行されます：
-- `/api/cron/fetch-earthquakes` が自動実行
-- DMData.jp APIから最新20件の地震情報を取得
-- データベースに保存（重複は自動スキップ）
+APIキー設定後、外部cronサービス（cron-job.org）で1分ごとに地震情報を自動取得します。
+
+**cron-job.org設定手順**:
+
+1. [cron-job.org](https://cron-job.org/) にアクセス・ログイン
+2. **Create Cron Job** をクリック
+3. 以下のように設定：
+   ```
+   Title: Earthquake Fetch
+   URL: https://anpikakunin.xyz/api/cron/fetch-earthquakes
+   Schedule: Every minute (*/1 * * * *)
+   Request method: GET
+   ```
+4. **Custom request headers** セクションで認証ヘッダーを追加：
+   ```
+   Header name: Authorization
+   Header value: Bearer <CRON_SECRET>
+   ```
+   ※ `<CRON_SECRET>` はVercel環境変数に設定した値と同じものを使用
+5. **Create** をクリックして保存
+
+**CRON_SECRET生成方法**:
+```bash
+openssl rand -base64 32
+```
+生成された文字列をVercel環境変数 `CRON_SECRET` に設定し、cron-job.orgのAuthorizationヘッダーにも同じ値を設定してください。
 
 **動作確認**:
-1. Vercel Dashboard → プロジェクト → **Cron Jobs** タブ
-   - スケジュールが表示されることを確認
-2. Vercel Dashboard → **Logs** タブ
-   - `/api/cron/fetch-earthquakes` のログが1分ごとに表示されることを確認
-3. システム管理画面 `https://anpikakunin.xyz/admin`
+1. cron-job.org のダッシュボードで実行履歴を確認
+   - Status: 200 OK が表示されることを確認
+2. システム管理画面 `https://anpikakunin.xyz/admin`
    - 「サーバーサイドcron - 1分ごと」セクションで最終実行時刻を確認
 
 ##### WebSocket接続（リアルタイム監視）

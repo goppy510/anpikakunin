@@ -1,6 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
 import { getDmdataApiKey } from "@/app/lib/dmdata/credentials";
+import { env } from "@/app/lib/env";
+
+// 認証ヘルパー関数
+function isAuthorized(request: NextRequest): boolean {
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = env.CRON_SECRET;
+
+  // CRON_SECRETが設定されていない場合は警告を出すが、開発環境では許可
+  if (!cronSecret) {
+    console.warn("⚠️ CRON_SECRET is not configured. This endpoint is unprotected!");
+    return process.env.NODE_ENV === "development";
+  }
+
+  // Authorization: Bearer <secret> の形式をチェック
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.substring(7); // "Bearer " を除去
+  return token === cronSecret;
+}
 
 // DMData.jp APIから地震情報を取得する関数
 async function fetchEarthquakesFromDMData() {
@@ -55,6 +76,15 @@ async function saveEarthquakeEventLog(telegram: any) {
 }
 
 export async function GET(request: NextRequest) {
+  // 認証チェック
+  if (!isAuthorized(request)) {
+    console.error("❌ Unauthorized cron request");
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   try {
     console.log("=== Cron: Fetching earthquakes from DMData.jp ===");
 

@@ -12,7 +12,17 @@ export function startEarthquakeFetchCron() {
   cronJob = cron.schedule("*/1 * * * *", async () => {
     try {
       console.log("🔄 [Cron] Fetching earthquakes...");
-      const response = await fetch("http://localhost:8080/api/cron/fetch-earthquakes");
+
+      // 認証ヘッダーを追加（開発環境では空でも許可される）
+      const headers: HeadersInit = {};
+      const cronSecret = process.env.CRON_SECRET;
+      if (cronSecret) {
+        headers["Authorization"] = `Bearer ${cronSecret}`;
+      }
+
+      const response = await fetch("http://localhost:8080/api/cron/fetch-earthquakes", {
+        headers,
+      });
       const data = await response.json();
 
       if (data.success) {
