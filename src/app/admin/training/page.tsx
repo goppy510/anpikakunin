@@ -402,12 +402,12 @@ export default function TrainingModePage() {
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">訓練用メッセージテンプレート</h2>
-              {!editingTemplate && template && (
+              {!editingTemplate && (
                 <button
                   onClick={() => setEditingTemplate(true)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
                 >
-                  編集
+                  {template ? "編集" : "作成"}
                 </button>
               )}
             </div>
@@ -466,13 +466,16 @@ export default function TrainingModePage() {
                   </button>
                 </div>
               </div>
+            ) : template ? (
+              <div className="bg-gray-900 rounded-lg p-4">
+                <h3 className="text-white font-bold mb-2">{template.title}</h3>
+                <p className="text-gray-300 whitespace-pre-wrap">{template.body}</p>
+              </div>
             ) : (
-              template && (
-                <div className="bg-gray-900 rounded-lg p-4">
-                  <h3 className="text-white font-bold mb-2">{template.title}</h3>
-                  <p className="text-gray-300 whitespace-pre-wrap">{template.body}</p>
-                </div>
-              )
+              <div className="bg-gray-700 rounded-lg p-4 text-center">
+                <p className="text-gray-400">テンプレートが設定されていません</p>
+                <p className="text-gray-500 text-sm mt-1">「作成」ボタンから設定してください</p>
+              </div>
             )}
           </div>
         )}
