@@ -74,10 +74,6 @@ export class ApiService {
           const jwt = await (oauth2Instance as any).getDPoPProofJWT(method, uri, nonce);
           return jwt || "";
         } catch (error) {
-            name: error instanceof Error ? error.name : 'Unknown',
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
-          });
           return "";
         }
       },

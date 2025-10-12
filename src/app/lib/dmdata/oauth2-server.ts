@@ -83,13 +83,6 @@ export class DmdataOAuth2ServerService {
       orderBy: { createdAt: "desc" },
     });
 
-      "Stored refresh token:",
-      tokenRecord?.refreshToken ? "EXISTS" : "NULL"
-    );
-      "Stored DPoP keypair:",
-      tokenRecord?.dpopKeypair ? "EXISTS" : "NULL"
-    );
-
     if (this.oauth2) {
       try {
         const auth = await this.oauth2.getAuthorization();

@@ -195,10 +195,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       EventDatabase.cleanupOldEvents(30).catch((error) => {
       });
     } catch (error) {
-        "🚨 Connection cleanup failed (continuing anyway):",
-        error.message
-      );
-
       // クリーンアップに失敗した場合は長めの待機
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
