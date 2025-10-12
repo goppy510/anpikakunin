@@ -83,6 +83,13 @@ SLACK_SIGNING_SECRET=本番Slackアプリのsigning secret
 # Slack Bot Token暗号化キー（openssl rand -base64 32 で生成）
 SLACK_TOKEN_ENCRYPTION_KEY=生成した32バイトキー
 
+# SMTP設定（お名前.com）- パスワードリセット・招待メール送信に必要
+SMTP_HOST=mail1042.onamae.ne.jp
+SMTP_PORT=465
+SMTP_USER=noreply@anpikakunin.xyz
+SMTP_PASSWORD=[お名前.comメールパスワード]
+SMTP_FROM_EMAIL=noreply@anpikakunin.xyz
+
 # Node環境
 NODE_ENV=production
 ```
