@@ -322,9 +322,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           // 解除された警報を除去
           return updatedWarnings.filter((w) => !w.isCancel);
         });
-
-          "✅ WebSocketProvider: Tsunami warning processing completed"
-        );
       };
 
       // WebSocketマネージャーを初期化（既存のものがあれば再利用）
