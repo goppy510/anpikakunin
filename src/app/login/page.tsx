@@ -101,6 +101,15 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div className="mt-4 text-center">
+          <a
+            href="/forgot-password"
+            className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
+          >
+            パスワードをお忘れの方
+          </a>
+        </div>
+
         <div className="mt-6 text-center text-sm text-gray-400">
           認証コードがメールで送信されます
         </div>
