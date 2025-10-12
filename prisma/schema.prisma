@@ -509,6 +509,19 @@ model DmdataApiKey {
   @@index([isActive])
 }
 
+// cron-job.org API Key管理
+model CronJobApiKey {
+  id          String   @id @default(uuid())
+  apiKey      String   @map("api_key") // APIキー（暗号化保存）
+  description String?  // キーの説明（例: "cron-job.org APIキー"）
+  isActive    Boolean  @default(true) @map("is_active") // 有効/無効
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("cronjob_api_keys")
+  @@index([isActive])
+}
+
 // 訓練通知履歴
 model TrainingNotification {
   id                  String           @id @default(uuid())

@@ -1,5 +1,6 @@
 // cron-job.org REST API Client
 import { env } from "@/app/lib/env";
+import { getCronJobApiKey } from "./cronjobApiKey";
 
 const CRONJOB_API_BASE = "https://api.cron-job.org";
 
@@ -50,30 +51,54 @@ interface CronJobResponse {
 }
 
 export class CronJobOrgClient {
-  private apiKey: string;
+  private apiKey: string | null = null;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || env.CRONJOB_API_KEY;
-    if (!this.apiKey) {
-      console.warn("⚠️ CRONJOB_API_KEY is not configured");
+    if (apiKey) {
+      this.apiKey = apiKey;
     }
+  }
+
+  /**
+   * APIキーを取得（DB優先、環境変数フォールバック）
+   */
+  private async getApiKey(): Promise<string | null> {
+    if (this.apiKey) {
+      return this.apiKey;
+    }
+
+    // DBから取得
+    const dbKey = await getCronJobApiKey();
+    if (dbKey) {
+      this.apiKey = dbKey;
+      return dbKey;
+    }
+
+    console.warn("⚠️ CRONJOB_API_KEY is not configured");
+    return null;
   }
 
   /**
    * APIキーが設定されているかチェック
    */
-  isConfigured(): boolean {
-    return !!this.apiKey && this.apiKey.length > 0;
+  async isConfigured(): Promise<boolean> {
+    const apiKey = await this.getApiKey();
+    return !!apiKey && apiKey.length > 0;
   }
 
   /**
    * cron-job.org にジョブを作成
    */
   async createJob(request: CreateCronJobRequest): Promise<CronJobResponse> {
+    const apiKey = await this.getApiKey();
+    if (!apiKey) {
+      throw new Error("CRONJOB_API_KEY is not configured");
+    }
+
     const response = await fetch(`${CRONJOB_API_BASE}/jobs`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -97,10 +122,15 @@ export class CronJobOrgClient {
     jobId: number,
     updates: Partial<CreateCronJobRequest>
   ): Promise<CronJobResponse> {
+    const apiKey = await this.getApiKey();
+    if (!apiKey) {
+      throw new Error("CRONJOB_API_KEY is not configured");
+    }
+
     const response = await fetch(`${CRONJOB_API_BASE}/jobs/${jobId}`, {
       method: "PATCH",
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -123,10 +153,15 @@ export class CronJobOrgClient {
    * cron-job.org のジョブを削除
    */
   async deleteJob(jobId: number): Promise<void> {
+    const apiKey = await this.getApiKey();
+    if (!apiKey) {
+      throw new Error("CRONJOB_API_KEY is not configured");
+    }
+
     const response = await fetch(`${CRONJOB_API_BASE}/jobs/${jobId}`, {
       method: "DELETE",
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     });
 
@@ -142,10 +177,15 @@ export class CronJobOrgClient {
    * cron-job.org のジョブ情報を取得
    */
   async getJob(jobId: number): Promise<CronJobResponse> {
+    const apiKey = await this.getApiKey();
+    if (!apiKey) {
+      throw new Error("CRONJOB_API_KEY is not configured");
+    }
+
     const response = await fetch(`${CRONJOB_API_BASE}/jobs/${jobId}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     });
 

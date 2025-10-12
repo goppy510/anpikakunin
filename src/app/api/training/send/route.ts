@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       // CRONJOB_API_KEYが設定されている場合のみcron-job.orgに登録
       const cronClient = new CronJobOrgClient();
 
-      if (cronClient.isConfigured()) {
+      if (await cronClient.isConfigured()) {
         try {
           const cronJobId = await cronClient.createTrainingJob({
             trainingId: trainingNotification.id,
