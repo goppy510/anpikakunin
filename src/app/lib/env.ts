@@ -2,6 +2,9 @@
 export const env = {
   NEXT_PUBLIC_OAUTH_REDIRECT_URI:
     process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI ?? "http://localhost:3000/oauth",
+  NEXT_PUBLIC_APP_URL:
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:8080",
   DATABASE_URL:
     process.env.SUPABASE_DB_URL ??
     process.env.DATABASE_URL ??
@@ -16,4 +19,6 @@ export const env = {
     process.env.CRON_SECRET ?? "",
   DMDATA_API_KEY:
     process.env.DMDATA_API_KEY ?? "",
+  CRONJOB_API_KEY:
+    process.env.CRONJOB_API_KEY ?? "",
 };

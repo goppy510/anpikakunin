@@ -86,6 +86,10 @@ NEXT_PUBLIC_OAUTH_REDIRECT_URI=https://anpikakunin.xyz/oauth
 # Cron Secret（外部cronサービス認証用）
 CRON_SECRET=生成したランダム文字列（openssl rand -base64 32で生成）
 
+# cron-job.org API設定（訓練モード時刻指定に必須）
+CRONJOB_API_KEY=cron-job.orgのAPIキー
+NEXT_PUBLIC_APP_URL=https://anpikakunin.xyz
+
 # 基本設定
 NEXT_PUBLIC_BASE_URL=https://anpikakunin.xyz
 

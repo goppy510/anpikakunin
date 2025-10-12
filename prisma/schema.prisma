@@ -520,6 +520,7 @@ model TrainingNotification {
   errorMessage        String?          @map("error_message") @db.Text
   scheduledAt         DateTime?        @map("scheduled_at") // スケジュール送信時刻（nullの場合は即時送信）
   notifiedAt          DateTime?        @map("notified_at")
+  cronJobId           String?          @map("cron_job_id") // cron-job.org のジョブID
   createdAt           DateTime         @default(now()) @map("created_at")
   updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at")
 
@@ -531,6 +532,7 @@ model TrainingNotification {
   @@index([notificationStatus])
   @@index([scheduledAt(sort: Asc)])
   @@index([createdAt(sort: Desc)])
+  @@index([cronJobId])
 }
 
 // 訓練安否確認回答

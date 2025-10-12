@@ -6,6 +6,7 @@ import {
   type Department,
   type MessageTemplate,
 } from "@/app/lib/slack/messageBuilder";
+import { CronJobOrgClient } from "@/app/lib/cron/cronjobOrgClient";
 import axios from "axios";
 
 export async function POST(request: NextRequest) {
@@ -71,13 +72,46 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // スケジュール送信の場合はここで終了（別途cronで処理）
+    // スケジュール送信の場合: cron-job.org にジョブを登録
     if (scheduledAt) {
-      return NextResponse.json({
-        success: true,
-        notificationId: trainingNotification.id,
-        message: "訓練通知をスケジュールしました",
-      });
+      try {
+        const cronClient = new CronJobOrgClient();
+        const cronJobId = await cronClient.createTrainingJob({
+          trainingId: trainingNotification.id,
+          scheduledTime: new Date(scheduledAt),
+          title: `訓練通知 - ${workspace.name}`,
+        });
+
+        // cronJobId をDBに保存
+        await prisma.trainingNotification.update({
+          where: { id: trainingNotification.id },
+          data: { cronJobId: cronJobId.toString() },
+        });
+
+        console.log(`✅ Created cron job for training: ${trainingNotification.id} (cronJobId: ${cronJobId})`);
+
+        return NextResponse.json({
+          success: true,
+          notificationId: trainingNotification.id,
+          cronJobId,
+          message: "訓練通知をスケジュールしました",
+        });
+      } catch (cronError: any) {
+        console.error("❌ Failed to create cron job:", cronError);
+
+        // cron登録失敗時はレコードを削除
+        await prisma.trainingNotification.delete({
+          where: { id: trainingNotification.id },
+        });
+
+        return NextResponse.json(
+          {
+            error: "cronジョブの登録に失敗しました",
+            details: cronError.message,
+          },
+          { status: 500 }
+        );
+      }
     }
 
     // 即座に送信する場合

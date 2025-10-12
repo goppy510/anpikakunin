@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import cn from "classnames";
+import toast, { Toaster } from "react-hot-toast";
 import {
   SafetyConfirmationConfig,
   SlackNotificationSettings,
@@ -17,7 +18,6 @@ import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettin
 import { TrainingScheduler } from "../components/TrainingScheduler";
 import { NotificationConditionsSettings } from "../components/NotificationConditionsSettings";
 import { Settings } from "../../../lib/db/settings";
-import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 import { SafetySettingsDatabase } from "../utils/settingsDatabase";
 // EarthquakeNotificationService は動的インポートで読み込み
 
@@ -213,9 +213,13 @@ export function SafetyConfirmationDashboard() {
         return;
       }
 
-      const scheduler = TrainingScheduleExecutor.getInstance();
-      await scheduler.executeImmediateTraining(config.training.testMessage);
-      alert("✅ テスト通知を訓練用チャンネルに送信しました！");
+      // APIエンドポイント経由でテスト送信
+      // TODO: まだAPIエンドポイントが存在しない場合は実装が必要
+      // 暫定的にトースト表示のみ
+      toast.success("⚠️ テスト送信機能は現在開発中です。\n実際の訓練通知は時刻指定で自動送信されます。", {
+        duration: 5000,
+        position: "top-center",
+      });
     } catch (error) {
       console.error("テスト通知送信エラー:", error);
       const errorMessage =
@@ -258,6 +262,7 @@ export function SafetyConfirmationDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      <Toaster />
       <div className="container mx-auto px-6 py-8">
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-8">

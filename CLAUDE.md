@@ -95,6 +95,10 @@ model SlackNotificationSetting {
 
 ## アーキテクチャ
 
+### システムアーキテクチャ図
+
+![アーキテクチャ図](docs/architecture.png)
+
 ### データフロー
 
 ```
