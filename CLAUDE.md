@@ -142,13 +142,18 @@ DATABASE_SSL=disable  # ローカル開発時
 SUPABASE_DB_URL=postgresql://...  # 本番環境（優先）
 SUPABASE_DB_SSL=require
 
-# DMData.jp API
-DMDATA_API_KEY=your_api_key_here
+# Slack設定
 NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:3000/oauth
+SLACK_SIGNING_SECRET=your_slack_signing_secret_here
 
 # Slack トークン暗号化キー（32バイト base64）
 SLACK_TOKEN_ENCRYPTION_KEY=openssl rand -base64 32で生成
+
+# 開発環境用（オプション）
+SLACK_SKIP_SIGNATURE_VERIFICATION=true  # Slack署名検証をスキップ
 ```
+
+**注:** DMData.jp APIキーは環境変数不要。管理画面（`/admin/dmdata-settings`）からデータベースに暗号化保存します。
 
 ## 開発ワークフロー
 

@@ -54,15 +54,14 @@ openssl rand -base64 32
 `.env` ファイルを編集して以下を設定:
 
 ```bash
-# DMData.jp API（必須）
-DMDATA_API_KEY=your_dmdata_api_key_here
-
 # Slack トークン暗号化キー（必須）
 # openssl rand -base64 32 で生成した値を設定
 SLACK_TOKEN_ENCRYPTION_KEY=生成した32バイトキー
 
 # その他の設定は .env.example のデフォルト値でOK
 ```
+
+**注:** DMData.jp APIキーは、起動後に管理画面（`/admin/dmdata-settings`）から設定できます。
 
 **重要:** Docker Compose使用時は、`DATABASE_URL` などの環境変数は `docker-compose.yml` で自動設定されます。
 

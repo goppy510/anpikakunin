@@ -15,7 +15,6 @@ import {
 } from "../types/SafetyConfirmationTypes";
 import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettings";
 import { TrainingScheduler } from "../components/TrainingScheduler";
-import { SetupTab } from "../components/SetupTab";
 import { NotificationConditionsSettings } from "../components/NotificationConditionsSettings";
 import { Settings } from "../../../lib/db/settings";
 import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
@@ -280,7 +279,6 @@ export function SafetyConfirmationDashboard() {
             { key: "conditions", label: "通知条件" },
             { key: "message", label: "メッセージ設定" },
             { key: "training", label: "訓練モード" },
-            { key: "setup", label: "集計設定" },
           ].map((tab) => {
             // Slack設定が完了しているかチェック
             const hasSlackConfig =
@@ -367,15 +365,6 @@ export function SafetyConfirmationDashboard() {
               ) : (
                 <div className="text-gray-400">設定を読み込み中...</div>
               )}
-            </div>
-          )}
-
-          {activeTab === "setup" && (
-            <div className="p-6">
-              <h3 className="text-xl font-semibold mb-4">
-                Google Apps Script設定
-              </h3>
-              <SetupTab />
             </div>
           )}
         </div>
