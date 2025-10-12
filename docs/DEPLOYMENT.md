@@ -108,11 +108,18 @@ NODE_ENV=production
 
 #### OAuth & Permissions
 **Bot Token Scopes** を追加：
-- `channels:history` - チャンネル履歴の読み取り
+- `app_mentions:read` - アプリへのメンションの読み取り
+- `channels:history` - パブリックチャンネル履歴の読み取り
 - `channels:read` - パブリックチャンネル情報の読み取り
 - `chat:write` - メッセージの投稿
-- `chat:write.public` - ボットが参加していないパブリックチャンネルへの投稿
-- `emoji:read` - 絵文字情報の読み取り
+- `emoji:read` - カスタム絵文字情報の読み取り
+- `groups:history` - プライベートチャンネル履歴の読み取り
+- `im:history` - ダイレクトメッセージ履歴の読み取り
+- `mpim:history` - グループダイレクトメッセージ履歴の読み取り
+- `reactions:read` - リアクション情報の読み取り
+
+**オプション（必要に応じて追加）:**
+- `chat:write.public` - ボットが参加していないチャンネルへの投稿
 - `groups:read` - プライベートチャンネル情報の読み取り
 - `users:read` - ユーザー情報の読み取り
 
