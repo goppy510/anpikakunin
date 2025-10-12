@@ -107,12 +107,14 @@ NODE_ENV=production
    - Workspace: 本番用ワークスペース
 
 #### OAuth & Permissions
-**Scopes** を追加：
-- `chat:write`
-- `channels:read`
-- `groups:read`
-- `users:read`
-- `emoji:read`
+**Bot Token Scopes** を追加：
+- `channels:history` - チャンネル履歴の読み取り
+- `channels:read` - パブリックチャンネル情報の読み取り
+- `chat:write` - メッセージの投稿
+- `chat:write.public` - ボットが参加していないパブリックチャンネルへの投稿
+- `emoji:read` - 絵文字情報の読み取り
+- `groups:read` - プライベートチャンネル情報の読み取り
+- `users:read` - ユーザー情報の読み取り
 
 **Redirect URLs**:
 ```
