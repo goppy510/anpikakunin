@@ -203,6 +203,7 @@ model User {
   groupMemberships UserGroupMembership[]
   permissionAttachments UserPermissionAttachment[]
   activityLogs  ActivityLog[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -550,4 +551,23 @@ model TrainingConfirmationResponse {
   @@index([slackUserId])
   @@index([departmentId])
   @@index([respondedAt(sort: Desc)])
+}
+
+// パスワードリセットトークン
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  used      Boolean  @default(false)
+  usedAt    DateTime? @map("used_at")
+
+  // リレーション
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
 }
