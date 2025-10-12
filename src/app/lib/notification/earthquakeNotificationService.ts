@@ -27,20 +27,14 @@ export class EarthquakeNotificationService {
    */
   public async processEarthquakeEvent(event: EventItem): Promise<void> {
     try {
-      console.log("=== 地震通知サービス: イベント処理開始 ===");
-      console.log("Event ID:", event.eventId);
-      console.log("Event maxInt:", event.maxInt);
-      console.log("Event isTest:", event.isTest);
 
       // テストイベントは除外
       if (event.isTest) {
-        console.log("地震通知サービス: テストイベントのためスキップ");
         return;
       }
 
       // 同じイベントIDで既に通知済みの場合はスキップ
       if (this.lastNotifiedEventId === event.eventId) {
-        console.log("地震通知サービス: 既に通知済みのイベントのためスキップ");
         return;
       }
 
@@ -48,11 +42,9 @@ export class EarthquakeNotificationService {
       const workspaces = await this.fetchWorkspaceSettings();
 
       if (!workspaces || workspaces.length === 0) {
-        console.log("地震通知サービス: ワークスペース設定が未登録");
         return;
       }
 
-      console.log(`地震通知サービス: ${workspaces.length}件のワークスペースを確認`);
 
       // 各ワークスペースの設定を確認して通知判定
       for (const workspace of workspaces) {
@@ -62,9 +54,7 @@ export class EarthquakeNotificationService {
       // 通知完了後、最終通知イベントIDを更新
       this.lastNotifiedEventId = event.eventId;
 
-      console.log("=== 地震通知サービス: イベント処理完了 ===");
     } catch (error) {
-      console.error("地震通知サービス: イベント処理中にエラー:", error);
     }
   }
 
@@ -81,7 +71,6 @@ export class EarthquakeNotificationService {
       const data = await response.json();
       return data.items || [];
     } catch (error) {
-      console.error("ワークスペース設定の取得に失敗:", error);
       return [];
     }
   }
@@ -93,17 +82,14 @@ export class EarthquakeNotificationService {
     event: EventItem,
     workspace: SlackWorkspaceSummary
   ): Promise<void> {
-    console.log(`=== ワークスペース処理: ${workspace.name} ===`);
 
     // 無効なワークスペースはスキップ
     if (!workspace.isEnabled) {
-      console.log(`ワークスペース ${workspace.name}: 無効のためスキップ`);
       return;
     }
 
     // 通知設定がない場合はスキップ
     if (!workspace.notificationSettings) {
-      console.log(`ワークスペース ${workspace.name}: 通知設定未登録のためスキップ`);
       return;
     }
 
@@ -116,11 +102,9 @@ export class EarthquakeNotificationService {
     });
 
     if (!notify) {
-      console.log(`ワークスペース ${workspace.name}: 通知条件に一致せず`);
       return;
     }
 
-    console.log(`ワークスペース ${workspace.name}: 通知条件に一致、Slack通知を送信`);
 
     // Slack通知を送信
     await this.sendSlackNotification(event, workspace);
@@ -134,13 +118,11 @@ export class EarthquakeNotificationService {
     workspace: SlackWorkspaceSummary
   ): Promise<void> {
     try {
-      console.log(`Slack通知送信開始: ワークスペース=${workspace.name}`);
 
       // 通知チャンネル情報を取得
       const channels = this.getNotificationChannels(workspace);
 
       if (channels.length === 0) {
-        console.log("通知チャンネルが設定されていないためスキップ");
         return;
       }
 
@@ -149,7 +131,6 @@ export class EarthquakeNotificationService {
 
       // 各チャンネルに送信
       for (const channel of channels) {
-        console.log(`チャンネル ${channel.channelId} に通知送信`);
 
         const response = await fetch("/api/slack/send-message", {
           method: "POST",
@@ -166,17 +147,13 @@ export class EarthquakeNotificationService {
         const result = await response.json();
 
         if (result.success) {
-          console.log(`✅ Slack通知送信成功: チャンネル=${channel.channelId}`);
         } else {
-          console.error(
             `❌ Slack通知送信失敗: チャンネル=${channel.channelId}, エラー=${result.error}`
           );
         }
       }
 
-      console.log("Slack通知送信完了");
     } catch (error) {
-      console.error("Slack通知送信中にエラー:", error);
     }
   }
 

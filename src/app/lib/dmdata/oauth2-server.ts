@@ -63,10 +63,8 @@ export class DmdataOAuth2ServerService {
       if (this.oauth2) {
         try {
           const auth = await this.oauth2.getAuthorization();
-          console.log("refreshTokenCheck: Authorization test successful");
           return !!auth;
         } catch (error) {
-          console.log(
             "refreshTokenCheck: Authorization test failed, returning false"
           );
           return false;
@@ -75,7 +73,6 @@ export class DmdataOAuth2ServerService {
 
       return false;
     } catch (error) {
-      console.error("Refresh token check failed:", error);
       return false;
     }
   }
@@ -88,26 +85,19 @@ export class DmdataOAuth2ServerService {
       orderBy: { createdAt: "desc" },
     });
 
-    console.log("=== OAuth Debug ===");
-    console.log(
       "Stored refresh token:",
       tokenRecord?.refreshToken ? "EXISTS" : "NULL"
     );
-    console.log(
       "Stored DPoP keypair:",
       tokenRecord?.dpopKeypair ? "EXISTS" : "NULL"
     );
-    console.log("OAuth2 instance:", this.oauth2 ? "EXISTS" : "NULL");
 
     if (this.oauth2) {
       try {
         const auth = await this.oauth2.getAuthorization();
-        console.log("getAuthorization result:", auth ? "EXISTS" : "NULL");
       } catch (error) {
-        console.log("getAuthorization error:", error);
       }
     }
-    console.log("==================");
   }
 
   /**
@@ -127,9 +117,7 @@ export class DmdataOAuth2ServerService {
       this.oauth2 = null;
       this.initPromise = null;
 
-      console.log("All OAuth data cleared from database");
     } catch (error) {
-      console.error("Failed to delete refresh token:", error);
       throw error;
     }
   }
@@ -146,9 +134,6 @@ export class DmdataOAuth2ServerService {
       orderBy: { createdAt: "desc" },
     });
 
-    console.log("Exchange - code verifier found:", !!tokenRecord?.codeVerifier);
-    console.log("Exchange - state found:", !!tokenRecord?.state);
-    console.log("Exchange - state match:", tokenRecord?.state === state);
 
     if (!tokenRecord?.codeVerifier)
       throw new Error("Code verifier not found");
@@ -164,7 +149,6 @@ export class DmdataOAuth2ServerService {
       code_verifier: tokenRecord.codeVerifier,
     });
 
-    console.log("Token request params:", {
       grant_type: "authorization_code",
       client_id: CLIENT_ID,
       code: code,
@@ -185,17 +169,14 @@ export class DmdataOAuth2ServerService {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error("Token exchange failed:", tokenResponse.status, errorText);
       throw new Error(
         `Token exchange failed: ${tokenResponse.status} ${errorText}`
       );
     }
 
     const tokens = await tokenResponse.json();
-    console.log("Token response:", tokens);
 
     if (tokens.refresh_token) {
-      console.log("Storing refresh token in database");
 
       // 既存レコードを更新または新規作成
       if (tokenRecord) {
@@ -224,9 +205,7 @@ export class DmdataOAuth2ServerService {
       // OAuth2インスタンスを再初期化
       this.oauth2 = null;
       await this.init();
-      console.log("OAuth2 reinitialized with new refresh token from database");
     } else {
-      console.error("No refresh_token in response");
     }
   }
 
@@ -287,7 +266,6 @@ export class DmdataOAuth2ServerService {
       },
     });
 
-    console.log("Auth URL - code verifier and state stored in database");
 
     const qp = new URLSearchParams({
       response_type: "code",
@@ -316,8 +294,6 @@ export class DmdataOAuth2ServerService {
       orderBy: { createdAt: "desc" },
     });
 
-    console.log("Init - refresh token exists:", !!tokenRecord?.refreshToken);
-    console.log("Init - dpop keypair exists:", !!tokenRecord?.dpopKeypair);
 
     this.oauth2 = new OAuth2Code({
       endpoint: {
@@ -338,7 +314,6 @@ export class DmdataOAuth2ServerService {
 
     this.oauth2
       .on("refresh_token", async (t) => {
-        console.log("Saving new refresh token to database");
         // 最新のレコードを更新
         const latest = await prisma.dmdataOAuthToken.findFirst({
           where: {
@@ -356,7 +331,6 @@ export class DmdataOAuth2ServerService {
         }
       })
       .on("dpop_keypair", async (k) => {
-        console.log("Saving new DPoP keypair to database");
         const latest = await prisma.dmdataOAuthToken.findFirst({
           where: {
             refreshToken: {
@@ -373,8 +347,6 @@ export class DmdataOAuth2ServerService {
         }
       });
 
-    console.log("OAuth2 instance initialized with database storage");
-    console.log("DPoP is disabled to avoid Web Crypto API errors");
   }
 }
 

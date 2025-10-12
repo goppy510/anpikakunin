@@ -36,11 +36,6 @@ export async function sendInvitationEmail({
   const invitationLink = `${BASE_URL}/accept-invitation?token=${invitationToken}`;
 
   // コンソールにも出力（開発環境用バックアップ）
-  console.log("=== 📧 招待メール ===");
-  console.log(`宛先: ${toEmail}`);
-  console.log(`招待者: ${inviterName}`);
-  console.log(`招待リンク: ${invitationLink}`);
-  console.log("=====================\n");
 
   const result = await transporter.sendMail({
     from: FROM_EMAIL,
@@ -87,7 +82,6 @@ ${invitationLink}
     `.trim(),
   });
 
-  console.log("📬 SMTP送信結果:", {
     messageId: result.messageId,
     accepted: result.accepted,
     rejected: result.rejected,
@@ -108,11 +102,6 @@ export async function sendOtpEmail({
   otpCode,
 }: SendOtpEmailParams): Promise<void> {
   // コンソールにも出力（開発環境用バックアップ）
-  console.log("=== 🔐 OTPコード ===");
-  console.log(`宛先: ${toEmail}`);
-  console.log(`認証コード: ${otpCode}`);
-  console.log(`有効期限: 5分`);
-  console.log("====================\n");
 
   const result = await transporter.sendMail({
     from: FROM_EMAIL,
@@ -156,7 +145,6 @@ ${otpCode}
     `.trim(),
   });
 
-  console.log("📬 OTP SMTP送信結果:", {
     messageId: result.messageId,
     accepted: result.accepted,
     rejected: result.rejected,

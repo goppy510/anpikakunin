@@ -43,7 +43,6 @@ export function compareIntensity(
 
   // どちらかが不正な震度の場合は false
   if (scale1 === -1 || scale2 === -1) {
-    console.warn(`Invalid intensity values: ${intensity1}, ${intensity2}`);
     return false;
   }
 
@@ -116,7 +115,6 @@ export function matchesPrefecture(
   // ここでは一旦 true を返す（後続で詳細実装）
 
   // TODO: WebSocketMessageから都道府県情報を抽出してマッチング
-  console.warn("Prefecture matching not fully implemented yet");
   return true;
 }
 
@@ -135,7 +133,6 @@ export function shouldNotify(
     const maxIntensity = getMaxIntensityFromEvent(event);
 
     if (!compareIntensity(maxIntensity, settings.minIntensity)) {
-      console.log(
         `Intensity check failed: event=${maxIntensity}, min=${settings.minIntensity}`
       );
       return false;
@@ -144,18 +141,15 @@ export function shouldNotify(
 
   // 2. 都道府県条件チェック
   if (!matchesPrefecture(event, settings.targetPrefectures ?? [])) {
-    console.log("Prefecture check failed");
     return false;
   }
 
   // 3. その他の条件（将来拡張用）
   // - テストイベントを除外
   if (event.isTest) {
-    console.log("Test event, skipping notification");
     return false;
   }
 
-  console.log("Notification conditions met");
   return true;
 }
 
@@ -177,7 +171,6 @@ export function shouldNotifyWithDetails(
     const maxIntensity = getMaxIntensityFromEvent(event);
 
     if (!compareIntensity(maxIntensity, settings.minIntensity)) {
-      console.log(
         `Intensity check failed: event=${maxIntensity}, min=${settings.minIntensity}`
       );
       return false;
@@ -191,7 +184,6 @@ export function shouldNotifyWithDetails(
     );
 
     if (matchingPrefectures.length === 0) {
-      console.log("No matching prefectures found");
       return false;
     }
 
@@ -202,7 +194,6 @@ export function shouldNotifyWithDetails(
       );
 
       if (!hasIntensityMatch) {
-        console.log("Matching prefectures but intensity too low");
         return false;
       }
     }
@@ -210,10 +201,8 @@ export function shouldNotifyWithDetails(
 
   // 3. テストイベント除外
   if (event.isTest) {
-    console.log("Test event, skipping notification");
     return false;
   }
 
-  console.log("Notification conditions met (with details)");
   return true;
 }
