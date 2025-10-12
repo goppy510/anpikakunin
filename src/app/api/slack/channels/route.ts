@@ -14,14 +14,19 @@ export async function GET(request: NextRequest) {
     const workspaceId = searchParams.get("workspaceId");
     const botToken = searchParams.get("botToken");
 
+    console.log("[/api/slack/channels] workspaceId:", workspaceId, "botToken:", botToken ? "provided" : "not provided");
+
     let token = botToken;
 
     // workspaceIdが指定されている場合はDBから取得
     if (workspaceId && !botToken) {
+      console.log("[/api/slack/channels] Fetching bot token from DB for workspaceId:", workspaceId);
       token = await getSlackBotToken(workspaceId);
+      console.log("[/api/slack/channels] Bot token retrieved:", token ? "yes" : "no");
     }
 
     if (!token) {
+      console.log("[/api/slack/channels] No token available, returning 400");
       return NextResponse.json(
         { error: "botTokenまたはworkspaceIdが必要です" },
         { status: 400 }
@@ -87,8 +92,12 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("チャンネル取得エラー:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "Unknown error");
     return NextResponse.json(
-      { error: "チャンネルの取得に失敗しました" },
+      {
+        error: "チャンネルの取得に失敗しました",
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

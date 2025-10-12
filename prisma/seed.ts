@@ -576,6 +576,14 @@ async function main() {
       description: "訓練環境での安否確認応答履歴の閲覧",
       category: "training",
     },
+
+    // システム管理
+    {
+      name: "system:admin",
+      displayName: "システム管理",
+      description: "システム全体の管理権限（Cron設定など）",
+      category: "system",
+    },
   ];
 
   for (const perm of permissions) {
@@ -790,6 +798,14 @@ async function main() {
       displayOrder: 12,
       isActive: true,
       categoryPermission: "training:response:read",
+    },
+    {
+      name: "Cron設定",
+      path: "/admin/cronjob-settings",
+      icon: "fa-solid fa-clock",
+      displayOrder: 13,
+      isActive: true,
+      categoryPermission: "system:admin",
     },
   ];
 

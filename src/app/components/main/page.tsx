@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { ApiService } from "@/app/api/ApiService";
 import { oauth2 } from "@/app/api/Oauth2Service";
+import { WebSocketProvider } from "@/app/components/providers/WebSocketProvider";
 import pack from "@/../package.json";
 
 const Monitor = dynamic(() => import("@/app/components/monitor/Monitor"), {
@@ -160,5 +161,9 @@ export default function MainPage() {
 
   /* 通常モニタ画面 */
   console.log("Rendering Monitor component, status:", status, "initMode:", initMode);
-  return <Monitor />;
+  return (
+    <WebSocketProvider>
+      <Monitor />
+    </WebSocketProvider>
+  );
 }

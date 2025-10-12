@@ -11,6 +11,7 @@ interface CronJobSchedule {
   months: number[]; // 1-12, -1 for all
   wdays: number[]; // 0-6 (0=Sunday), -1 for all
   timezone: string; // e.g., "Asia/Tokyo"
+  expiresAt?: number; // YYYYMMDDhhmmss format for one-time execution
 }
 
 interface CreateCronJobRequest {
@@ -31,7 +32,7 @@ interface CreateCronJobRequest {
     onDisable: boolean;
   };
   extendedData?: {
-    headers?: Array<{ key: string; value: string }>;
+    headers?: Record<string, string>; // Dictionary形式
     body?: string;
   };
 }
@@ -95,6 +96,9 @@ export class CronJobOrgClient {
       throw new Error("CRONJOB_API_KEY is not configured");
     }
 
+    // リクエスト内容をログ出力
+    console.log("📤 cron-job.org API request:", JSON.stringify({ job: request }, null, 2));
+
     const response = await fetch(`${CRONJOB_API_BASE}/jobs`, {
       method: "PUT",
       headers: {
@@ -108,11 +112,28 @@ export class CronJobOrgClient {
 
     if (!response.ok) {
       const error = await response.text();
+      console.error("❌ cron-job.org API error response:", error);
+      console.error("❌ Request body:", JSON.stringify({ job: request }, null, 2));
       throw new Error(`cron-job.org API error: ${response.status} ${error}`);
     }
 
     const data = await response.json();
-    return data.jobDetails as CronJobResponse;
+    console.log("✅ cron-job.org API response:", JSON.stringify(data, null, 2));
+
+    // APIレスポンスは { jobId: number } 形式
+    if (!data.jobId) {
+      console.error("❌ Unexpected response structure:", data);
+      throw new Error(`Unexpected response structure from cron-job.org: ${JSON.stringify(data)}`);
+    }
+
+    // jobIdだけ返されるので、リクエスト情報と組み合わせて返す
+    return {
+      jobId: data.jobId,
+      enabled: request.enabled,
+      title: request.title,
+      url: request.url,
+      schedule: request.schedule,
+    } as CronJobResponse;
   }
 
   /**
@@ -202,8 +223,46 @@ export class CronJobOrgClient {
 
   /**
    * Date オブジェクトから cron-job.org のスケジュール形式に変換
+   * 1回だけ実行する場合は expiresAt を使用
    */
-  static dateToSchedule(date: Date, timezone = "Asia/Tokyo"): CronJobSchedule {
+  static dateToSchedule(date: Date, timezone = "Asia/Tokyo", oneTime = false): CronJobSchedule {
+    if (oneTime) {
+      // 1回だけ実行: 具体的な日時を指定し、expiresAtで1分後に期限切れにする
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+
+      // 実行時刻の1分後を期限にする（1回だけ実行されるように）
+      const expiresDate = new Date(date.getTime() + 60000); // +1分
+      const expYear = expiresDate.getFullYear();
+      const expMonth = String(expiresDate.getMonth() + 1).padStart(2, '0');
+      const expDay = String(expiresDate.getDate()).padStart(2, '0');
+      const expHours = String(expiresDate.getHours()).padStart(2, '0');
+      const expMinutes = String(expiresDate.getMinutes()).padStart(2, '0');
+      const expSeconds = String(expiresDate.getSeconds()).padStart(2, '0');
+      const expiresAt = parseInt(`${expYear}${expMonth}${expDay}${expHours}${expMinutes}${expSeconds}`);
+
+      console.log(`📅 One-time schedule for ${date.toISOString()}:`);
+      console.log(`   Execution: ${year}/${month}/${day} ${hours}:${minutes}:${seconds}`);
+      console.log(`   Expires:   ${expYear}/${expMonth}/${expDay} ${expHours}:${expMinutes}:${expSeconds}`);
+      console.log(`   Schedule: hours=[${date.getHours()}], minutes=[${date.getMinutes()}], mdays=[${date.getDate()}], months=[${date.getMonth() + 1}], wdays=[${date.getDay()}]`);
+      console.log(`   expiresAt: ${expiresAt}`);
+
+      return {
+        hours: [date.getHours()],
+        minutes: [date.getMinutes()],
+        mdays: [date.getDate()],
+        months: [date.getMonth() + 1], // JavaScript は 0-indexed
+        wdays: [-1], // すべての曜日（expiresAtで1回限りにする）
+        timezone,
+        expiresAt,
+      };
+    }
+
+    // 繰り返し実行: 指定した日時で繰り返す
     return {
       hours: [date.getHours()],
       mdays: [date.getDate()],
@@ -224,6 +283,14 @@ export class CronJobOrgClient {
   }): Promise<number> {
     const { trainingId, scheduledTime, title } = params;
 
+    // scheduledTimeはUTC時刻で渡されるため、JSTに変換
+    // UTCからJSTは+9時間
+    const jstTime = new Date(scheduledTime.getTime() + (9 * 60 * 60 * 1000));
+
+    console.log(`🕐 Scheduled time conversion:`);
+    console.log(`   Input (UTC):  ${scheduledTime.toISOString()}`);
+    console.log(`   Converted (JST): ${jstTime.toISOString()} (will use local values for cron)`);
+
     const callbackUrl = `${env.NEXT_PUBLIC_APP_URL}/api/cron/training-send?trainingId=${trainingId}`;
 
     const jobRequest: CreateCronJobRequest = {
@@ -231,15 +298,12 @@ export class CronJobOrgClient {
       enabled: true,
       title: `[訓練] ${title}`,
       saveResponses: true,
-      schedule: CronJobOrgClient.dateToSchedule(scheduledTime),
+      schedule: CronJobOrgClient.dateToSchedule(jstTime, "Asia/Tokyo", true), // 1回だけ実行
       requestMethod: 0, // GET
       extendedData: {
-        headers: [
-          {
-            key: "Authorization",
-            value: `Bearer ${env.CRON_SECRET}`,
-          },
-        ],
+        headers: {
+          Authorization: `Bearer ${env.CRON_SECRET || ""}`,
+        },
       },
       notification: {
         onFailure: true,
