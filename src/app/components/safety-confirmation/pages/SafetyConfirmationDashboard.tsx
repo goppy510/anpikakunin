@@ -270,6 +270,7 @@ export function SafetyConfirmationDashboard() {
             { key: "conditions", label: "通知条件" },
             { key: "message", label: "メッセージ設定" },
             { key: "training", label: "訓練モード" },
+            { key: "setup", label: "Cron設定" },
           ].map((tab) => {
             // Slack設定が完了しているかチェック
             const hasSlackConfig =
