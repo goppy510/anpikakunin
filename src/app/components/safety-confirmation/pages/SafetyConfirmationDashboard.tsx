@@ -37,9 +37,19 @@ export function SafetyConfirmationDashboard() {
   });
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "slack" | "departments" | "conditions" | "message" | "training" | "setup"
   >("slack");
+
+  // 管理者チェック
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const adminPassword = localStorage.getItem("adminPassword");
+      setIsAdmin(adminPassword === "admin123"); // 簡易的な管理者チェック
+    };
+    checkAdmin();
+  }, []);
 
   // 設定読み込み
   useEffect(() => {
@@ -270,7 +280,7 @@ export function SafetyConfirmationDashboard() {
             { key: "conditions", label: "通知条件" },
             { key: "message", label: "メッセージ設定" },
             { key: "training", label: "訓練モード" },
-            { key: "setup", label: "Cron設定" },
+            ...(isAdmin ? [{ key: "setup", label: "Cron設定" }] : []),
           ].map((tab) => {
             // Slack設定が完了しているかチェック
             const hasSlackConfig =
