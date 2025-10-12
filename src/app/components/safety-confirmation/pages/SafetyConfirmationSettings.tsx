@@ -9,7 +9,6 @@ import {
 } from "../types/SafetyConfirmationTypes";
 import { SlackMultiChannelSettings } from "../components/SlackMultiChannelSettings";
 import { TrainingScheduler } from "../components/TrainingScheduler";
-import { SetupTab } from "../components/SetupTab";
 import { Settings } from "../../../lib/db/settings";
 import { TrainingScheduleExecutor } from "../utils/trainingScheduler";
 import { SafetySettingsDatabase } from "../utils/settingsDatabase";
@@ -195,7 +194,6 @@ export function SafetyConfirmationSettings({
             { key: "slack", label: "Slack設定" },
             { key: "message", label: "メッセージ設定" },
             { key: "training", label: "訓練モード" },
-            { key: "setup", label: "集計設定" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -232,7 +230,6 @@ export function SafetyConfirmationSettings({
               onSendTest={sendTestNotification}
             />
           )}
-          {activeTab === "setup" && <SetupTab />}
         </div>
 
         {/* フッター */}

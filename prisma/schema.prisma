@@ -36,7 +36,6 @@ model SlackWorkspace {
   notificationCondition EarthquakeNotificationCondition?
   notificationChannels NotificationChannel[]
   messageTemplates   MessageTemplate[]
-  spreadsheetConfig  SpreadsheetConfig?
   users              UserWorkspace[]
   earthquakeNotifications EarthquakeNotification[]
   trainingNotifications TrainingNotification[]
@@ -139,20 +138,6 @@ model MessageTemplate {
   @@map("message_templates")
   @@index([workspaceRef, type])
   @@unique([workspaceRef, type], name: "unique_workspace_type")
-}
-
-// スプレッドシートURL管理
-model SpreadsheetConfig {
-  id           String         @id @default(uuid())
-  workspaceRef String         @unique @map("workspace_ref")
-  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
-  spreadsheetUrl String       @map("spreadsheet_url") // Google SpreadsheetのURL
-  isEnabled    Boolean        @default(true) @map("is_enabled")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
-
-  @@map("spreadsheet_configs")
-  @@index([workspaceRef])
 }
 
 // ===== マスターテーブル =====
