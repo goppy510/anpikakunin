@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   },
   // External packages configuration
   serverExternalPackages: [],
+  // Enable instrumentation for cron jobs
+  experimental: {
+    instrumentationHook: true,
+  },
   // Provide fallback env vars for build
   env: {
     NEXT_PUBLIC_OAUTH_REDIRECT_URI: process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || "http://localhost:8080/oauth",

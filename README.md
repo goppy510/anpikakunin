@@ -5,25 +5,31 @@ DMData.jp の地震情報APIを利用して、設定したエリア・震度の�
 ## 主要機能
 
 - **地震情報取得**
-  - DMData.jp API から1分間隔で自動取得（バッチ処理）
-  - WebSocket接続によるリアルタイム監視（オプション）
+  - サーバーサイドcron（外部cronサービス）で1分間隔自動取得
+  - WebSocket接続によるリアルタイム監視（ブラウザ起動時）
 - **通知機能**
   - エリア・震度による通知条件フィルタリング
   - Slackワークスペース・チャンネルへの自動通知
+  - 訓練モード（安否確認訓練）
 - **データ管理**
   - 地震イベントログの永続化（PostgreSQL）
   - 重複検知機能（eventId + payloadHash）
+  - DMData.jp APIキー暗号化保存
 - **管理UI**
   - メンバー管理・権限管理
   - グループ管理
   - 通知設定の管理
+  - DMData.jp設定画面
 
 ## 技術スタック
 
 - **Frontend**: Next.js 15.3, React 19, TypeScript, Tailwind CSS
 - **Backend**: Next.js API Routes, PostgreSQL, Prisma ORM
-- **Infrastructure**: Docker Compose (ローカル), Supabase (本番)
+- **Infrastructure**:
+  - ローカル: Docker Compose, node-cron
+  - 本番: Vercel, Supabase, cron-job.org（外部cronサービス）
 - **External API**: DMData.jp API v2, Slack Web API
+- **Security**: AES-256-GCM暗号化（Slack Token, DMData APIキー）
 
 ## 開発環境セットアップ
 
@@ -58,10 +64,15 @@ openssl rand -base64 32
 # openssl rand -base64 32 で生成した値を設定
 SLACK_TOKEN_ENCRYPTION_KEY=生成した32バイトキー
 
+# Cron Secret（ローカルnode-cron用、オプション）
+CRON_SECRET=生成した32バイトキー
+
 # その他の設定は .env.example のデフォルト値でOK
 ```
 
-**注:** DMData.jp APIキーは、起動後に管理画面（`/admin/dmdata-settings`）から設定できます。
+**注:**
+- **DMData.jp APIキー**: 起動後に管理画面（`/admin/dmdata-settings`）から設定
+- **CRON_SECRET**: ローカル開発では設定不要（開発環境は認証スキップ）
 
 **重要:** Docker Compose使用時は、`DATABASE_URL` などの環境変数は `docker-compose.yml` で自動設定されます。
 
@@ -77,7 +88,8 @@ docker-compose up -d
 
 **起動されるコンテナ:**
 - `anpikakunin`: Next.jsアプリケーション (http://localhost:8080)
-- `earthquake-batch`: 地震情報取得バッチ処理（1分間隔）
+  - node-cronでサーバーサイド地震情報取得（1分間隔）
+  - Next.js instrumentation hookで自動起動
 - `postgres`: PostgreSQLデータベース (port 5433)
 
 ### 4. データベースのセットアップ
@@ -101,10 +113,11 @@ docker-compose exec anpikakunin npx prisma migrate deploy
     ```bash
     docker-compose exec anpikakunin yarn tsx scripts/create-admin.ts
     ```
+  - DMData.jp APIキー設定: http://localhost:8080/admin/dmdata-settings
 - **リアルタイムモニタリング**: http://localhost:8080/monitor
-- **バッチ処理ログ確認**:
+- **cron実行ログ確認**:
   ```bash
-  docker-compose logs -f earthquake-batch
+  docker-compose logs -f anpikakunin | grep Cron
   ```
 
 ## 停止方法
@@ -136,21 +149,28 @@ docker-compose down -v
 ```
 /src/app
   /api                      # Next.js APIルート
+    /cron
+      /fetch-earthquakes    # サーバーサイドcronエンドポイント（認証付き）
     /earthquake-events      # 地震イベントAPI
+    /admin                  # 管理API
+      /dmdata-api-keys      # DMData APIキー管理
+      /rest-poller-health   # cron実行監視
     /slack                  # Slack連携API
     /auth                   # 認証API
   /admin                    # 管理画面
+    /dmdata-settings        # DMData設定画面
+    /training               # 訓練モード画面
   /components
     /monitor                # リアルタイム監視UI
     /providers              # Context Providers
   /lib
     /db                     # データベース操作
+    /dmdata                 # DMData認証情報取得
     /notification           # 通知ロジック
     /security               # 暗号化
     /auth                   # 認証ロジック
-
-/scripts
-  fetch-earthquakes-batch.ts  # 地震情報取得バッチ処理
+    /cron                   # ローカルnode-cron実装
+/src/instrumentation.ts     # Next.js起動時フック（cron開始）
 
 /prisma
   schema.prisma             # データベーススキーマ
@@ -162,17 +182,22 @@ docker-compose down -v
 
 ## データベーススキーマ
 
-### テーブル一覧
+### 主要テーブル
 
-- **earthquake_event_logs**: 地震イベントログ（重複検知用）
+- **earthquake_event_logs**: 地震イベントログ（重複検知用、source='cron'/'websocket'）
+- **dmdata_api_keys**: DMData.jp APIキー（暗号化保存）
+- **dmdata_oauth_tokens**: DMData.jp OAuth2トークン（WebSocket用）
 - **slack_workspaces**: Slackワークスペース情報（暗号化トークン保存）
-- **slack_notification_settings**: 通知条件設定
+- **earthquake_notification_conditions**: 通知条件設定
+- **earthquake_records**: 地震情報記録（震度3以上）
+- **training_notifications**: 訓練通知履歴
 
-詳細は [docs/database-setup.md](docs/database-setup.md) を参照してください。
+詳細は [prisma/schema.prisma](prisma/schema.prisma) を参照してください。
 
 ## ドキュメント
 
-- [CLAUDE.md](CLAUDE.md) - プロジェクト全体概要
+- [CLAUDE.md](CLAUDE.md) - プロジェクト全体概要（アーキテクチャ、データフロー）
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 本番デプロイガイド（Vercel, Supabase, cron-job.org）
 - [docs/database-setup.md](docs/database-setup.md) - データベースセットアップ手順
 - [docs/2025_10_08-earthquake-notification-system-design.md](docs/2025_10_08-earthquake-notification-system-design.md) - システム設計書
 - [.claude/task.md](.claude/task.md) - タスク管理
