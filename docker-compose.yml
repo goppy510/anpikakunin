@@ -1,0 +1,56 @@
+services:
+  anpikakunin:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    working_dir: /app
+    command: yarn dev --port 8080
+    env_file:
+      - .env.local
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
+      - DATABASE_SSL=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  earthquake-batch:
+    build: .
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    working_dir: /app
+    command: sh -c "yarn build:batch && node dist/scripts/fetch-earthquakes-batch.js"
+    env_file:
+      - .env.local
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/anpikakunin
+      - DATABASE_SSL=disable
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: anpikakunin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: anpikakunin
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./backups:/app/backups
+      - ./scripts/backup-database.sh:/usr/local/bin/backup-database.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anpikakunin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

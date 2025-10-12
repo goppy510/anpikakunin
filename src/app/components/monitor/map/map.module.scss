@@ -1,0 +1,12 @@
+.map {
+  width: 100%;
+  height: 100%;
+  background-color: #2d3748; /* 濃いグレー */
+}
+
+/* 地名ラベルを隠す */
+:global(.leaflet-container) {
+  .leaflet-control-attribution {
+    display: none;
+  }
+}

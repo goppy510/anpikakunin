@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>IndexedDB Migration Test</title>
+</head>
+<body>
+    <h1>IndexedDB → PostgreSQL Migration Test</h1>
+    <button onclick="checkIndexedDB()">1. IndexedDBデータを確認</button>
+    <button onclick="migrateToPostgres()">2. PostgreSQLに移行</button>
+    <button onclick="checkPostgres()">3. PostgreSQL確認</button>
+
+    <pre id="output"></pre>
+
+    <script type="module">
+        import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@7/+esm';
+
+        const DB_NAME = "@dmdata/app-etcm";
+        const SCHEMA_VERSION = 6554;
+
+        window.checkIndexedDB = async function() {
+            const output = document.getElementById('output');
+            try {
+                output.textContent = 'IndexedDBを確認中...\n';
+
+                const db = await openDB(DB_NAME, SCHEMA_VERSION);
+                const settings = await db.get('safetySettings', 'default');
+
+                if (settings) {
+                    output.textContent = 'IndexedDBデータ:\n' + JSON.stringify(settings, null, 2);
+                } else {
+                    output.textContent = 'IndexedDBに設定が見つかりませんでした';
+                }
+            } catch (error) {
+                output.textContent = 'エラー: ' + error.message;
+                console.error(error);
+            }
+        };
+
+        window.migrateToPostgres = async function() {
+            const output = document.getElementById('output');
+            try {
+                output.textContent = 'IndexedDBから設定を読み込み中...\n';
+
+                const db = await openDB(DB_NAME, SCHEMA_VERSION);
+                const settings = await db.get('safetySettings', 'default');
+
+                if (!settings) {
+                    output.textContent = 'IndexedDBに設定が見つかりません';
+                    return;
+                }
+
+                // DB固有フィールドを除去
+                const { id, createdAt, updatedAt, ...config } = settings;
+
+                output.textContent += 'PostgreSQLに移行中...\n';
+                output.textContent += '設定内容:\n' + JSON.stringify(config, null, 2) + '\n\n';
+
+                const response = await fetch('http://localhost:8080/api/migrate/indexeddb-to-postgres', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ config }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Migration failed');
+                }
+
+                const result = await response.json();
+                output.textContent += '\n移行成功!\n' + JSON.stringify(result, null, 2);
+            } catch (error) {
+                output.textContent += '\nエラー: ' + error.message;
+                console.error(error);
+            }
+        };
+
+        window.checkPostgres = async function() {
+            const output = document.getElementById('output');
+            try {
+                output.textContent = 'PostgreSQLデータを確認中...\n';
+
+                const response = await fetch('http://localhost:8080/api/slack/workspaces');
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch workspaces');
+                }
+
+                const data = await response.json();
+                output.textContent = 'PostgreSQLデータ:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                output.textContent = 'エラー: ' + error.message;
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+</html>

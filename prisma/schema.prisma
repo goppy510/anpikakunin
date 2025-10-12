@@ -1,0 +1,552 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EarthquakeEventLog {
+  id          Int      @id @default(autoincrement())
+  eventId     String   @map("event_id")
+  payloadHash String   @map("payload_hash")
+  source      String
+  payload     Json
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+
+  @@map("earthquake_event_logs")
+  @@unique([eventId, payloadHash], map: "earthquake_event_logs_event_id_payload_hash_key")
+  @@index([eventId], map: "idx_earthquake_event_logs_event_id")
+}
+
+model SlackWorkspace {
+  id                 String                     @id @default(uuid())
+  workspaceId        String                     @unique @map("workspace_id")
+  name               String
+  botTokenCiphertext String                     @map("bot_token_ciphertext") // base64 encoded
+  botTokenIv         String                     @map("bot_token_iv")         // base64 encoded
+  botTokenTag        String                     @map("bot_token_tag")        // base64 encoded
+  isEnabled          Boolean                    @default(true) @map("is_enabled")
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  updatedAt          DateTime                   @updatedAt @map("updated_at")
+
+  // リレーション
+  departments        Department[]
+  notificationCondition EarthquakeNotificationCondition?
+  notificationChannels NotificationChannel[]
+  messageTemplates   MessageTemplate[]
+  users              UserWorkspace[]
+  earthquakeNotifications EarthquakeNotification[]
+  trainingNotifications TrainingNotification[]
+
+  @@map("slack_workspaces")
+  @@index([workspaceId], map: "idx_slack_workspaces_workspace_id")
+}
+
+// 通知チャンネル設定（新設計）
+model NotificationChannel {
+  id           String         @id @default(uuid())
+  workspaceRef String         @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  channelId    String         @map("channel_id") // SlackチャンネルID
+  channelName  String         @map("channel_name") // チャンネル名（表示用）
+  purpose      String         // "earthquake" | "safety_confirmation" | "general"
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@map("notification_channels")
+  @@index([workspaceRef, purpose])
+  @@unique([workspaceRef, channelId, purpose])
+}
+
+// 部署スタンプ設定
+model Department {
+  id           String         @id @default(uuid())
+  workspaceRef String         @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  name         String         // 部署名（例: "開発", "マーケ"）
+  slackEmoji   String         @map("slack_emoji") // Slack絵文字形式（例: ":dev:"）
+  buttonColor  String         @map("button_color") // ボタンの色（例: "#5B8FF9"）
+  displayOrder Int            @default(0) @map("display_order") // 表示順序
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  // リレーション
+  safetyResponses SafetyConfirmationResponse[]
+  trainingResponses TrainingConfirmationResponse[]
+
+  @@map("departments")
+  @@index([workspaceRef])
+  @@index([workspaceRef, displayOrder])
+}
+
+// 地震情報種別マスター
+model EarthquakeInfoType {
+  code        String                            @id // VXSE51, VXSE53
+  name        String                            // 震度速報, 震源・震度情報
+  description String                            @db.Text
+  displayOrder Int                              @map("display_order")
+  isActive    Boolean                           @default(true) @map("is_active")
+  createdAt   DateTime                          @default(now()) @map("created_at")
+  updatedAt   DateTime                          @default(now()) @updatedAt @map("updated_at")
+
+  // リレーション
+  conditions  EarthquakeNotificationCondition[]
+
+  @@map("earthquake_info_types")
+}
+
+// 地震通知条件設定
+model EarthquakeNotificationCondition {
+  id                   String              @id @default(uuid())
+  workspaceRef         String              @unique @map("workspace_ref")
+  workspace            SlackWorkspace      @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  earthquakeInfoType   String              @default("VXSE53") @map("earthquake_info_type") // VXSE51 or VXSE53
+  infoType             EarthquakeInfoType  @relation(fields: [earthquakeInfoType], references: [code])
+  minIntensity         String              @map("min_intensity") // 最小震度（例: "5-"）
+  targetPrefectures    String[]            @map("target_prefectures") // 対象都道府県リスト
+  channelId            String              @map("channel_id") // SlackチャンネルID
+  isEnabled            Boolean             @default(true) @map("is_enabled")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  @@map("earthquake_notification_conditions")
+  @@index([workspaceRef])
+  @@index([earthquakeInfoType])
+}
+
+// メッセージテンプレート
+enum MessageTemplateType {
+  PRODUCTION // 本番用
+  TRAINING   // 訓練用
+}
+
+model MessageTemplate {
+  id           String              @id @default(uuid())
+  workspaceRef String              @map("workspace_ref")
+  workspace    SlackWorkspace      @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  type         MessageTemplateType // 本番 or 訓練
+  title        String              // メッセージタイトル
+  body         String              @db.Text // メッセージ本文
+  isActive     Boolean             @default(true) @map("is_active")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@map("message_templates")
+  @@index([workspaceRef, type])
+  @@unique([workspaceRef, type], name: "unique_workspace_type")
+}
+
+// ===== マスターテーブル =====
+
+// 都道府県マスター
+model Prefecture {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // JIS都道府県コード（例: "13" = 東京都）
+  name        String   @unique // 都道府県名（例: "東京都"）
+  nameKana    String   @map("name_kana") // ふりがな（例: "とうきょうと"）
+  region      String   // 地域区分（例: "関東"）
+  displayOrder Int     @default(0) @map("display_order") // 表示順序
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  earthquakeObservations EarthquakePrefectureObservation[]
+
+  @@map("prefectures")
+  @@index([code])
+  @@index([region])
+}
+
+// 震度マスター
+model IntensityScale {
+  id          Int      @id @default(autoincrement())
+  value       String   @unique // API値（例: "5-", "5+", "6-", "6+", "7"）
+  displayName String   @map("display_name") // 表示名（例: "震度5弱以上"）
+  shortName   String   @map("short_name") // 短縮名（例: "5弱"）
+  numericValue Decimal @map("numeric_value") @db.Decimal(3, 1) // 数値化した値（比較用: 5.0, 5.5, 6.0, 6.5, 7.0）
+  displayOrder Int     @default(0) @map("display_order") // 表示順序
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("intensity_scales")
+  @@index([value])
+  @@index([numericValue])
+}
+
+// 認証・認可システム
+
+enum UserRole {
+  ADMIN  // 管理者権限: すべての設定可能
+  EDITOR // 設定権限: 地震通知設定のみ
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?   @map("password_hash") // null = 未設定（招待中）
+  role          UserRole  @default(EDITOR)
+  isActive      Boolean   @default(true) @map("is_active")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // リレーション
+  sessions      Session[]
+  otpCodes      OtpCode[]
+  invitationsSent UserInvitation[] @relation("InviterRelation")
+  workspaces    UserWorkspace[]
+  groupMemberships UserGroupMembership[]
+  permissionAttachments UserPermissionAttachment[]
+  activityLogs  ActivityLog[]
+
+  @@map("users")
+}
+
+// グループ（AWS IAMスタイル）
+model Group {
+  id          String   @id @default(uuid())
+  name        String   @unique // グループ名（例: "管理者グループ", "閲覧者グループ"）
+  description String?  @db.Text // グループの説明
+  isActive    Boolean  @default(true) @map("is_active")
+  isSystem    Boolean  @default(false) @map("is_system") // システムグループ（管理者グループなど）は削除不可
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  members     UserGroupMembership[]
+  permissions GroupPermissionAttachment[]
+
+  @@map("groups")
+  @@index([name])
+  @@index([isSystem])
+}
+
+// ユーザー・グループの中間テーブル
+model UserGroupMembership {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId   String   @map("group_id")
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("user_group_memberships")
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+// 権限マスター
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique // 権限名（例: "slack:workspace:write", "earthquake:condition:read"）
+  displayName String   @map("display_name") // 表示名（例: "Slackワークスペース編集"）
+  description String?  @db.Text // 権限の説明
+  category    String   // カテゴリ（例: "slack", "earthquake", "user"）
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  groupAttachments GroupPermissionAttachment[]
+  userAttachments  UserPermissionAttachment[]
+
+  @@map("permissions")
+  @@index([category])
+  @@index([name])
+}
+
+// グループ・権限のアタッチメント
+model GroupPermissionAttachment {
+  id           String     @id @default(uuid())
+  groupId      String     @map("group_id")
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@map("group_permission_attachments")
+  @@unique([groupId, permissionId])
+  @@index([groupId])
+  @@index([permissionId])
+}
+
+// ユーザー・権限の直接アタッチメント
+model UserPermissionAttachment {
+  id           String     @id @default(uuid())
+  userId       String     @map("user_id")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@map("user_permission_attachments")
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+}
+
+// メニューマスター
+model Menu {
+  id                 String   @id @default(uuid())
+  name               String   // メニュー名（例: "ワークスペース"）
+  path               String   @unique // パス（例: "/admin/workspaces"）
+  icon               String   // アイコン（例: "🔗"）
+  displayOrder       Int      @map("display_order") // 表示順序
+  isActive           Boolean  @default(true) @map("is_active")
+  categoryPermission String   @map("category_permission") // このメニュー閲覧に必要な権限（例: "workspace:read"）
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("menus")
+  @@index([displayOrder])
+  @@index([isActive])
+}
+
+// ユーザーとワークスペースの中間テーブル
+model UserWorkspace {
+  id           String         @id @default(uuid())
+  userId       String         @map("user_id")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceRef String         @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@map("user_workspaces")
+  @@unique([userId, workspaceRef])
+  @@index([userId])
+  @@index([workspaceRef])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+  @@index([userId])
+  @@index([token])
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  code      String   // 6桁数字
+  expiresAt DateTime @map("expires_at") // 5分後
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("otp_codes")
+  @@index([userId])
+  @@index([code, expiresAt])
+}
+
+model UserInvitation {
+  id         String    @id @default(uuid())
+  email      String
+  invitedBy  String    @map("invited_by")
+  token      String    @unique
+  role       UserRole  @default(EDITOR)
+  expiresAt  DateTime  @map("expires_at") // 7日後
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  inviter    User      @relation("InviterRelation", fields: [invitedBy], references: [id])
+
+  @@map("user_invitations")
+  @@index([email])
+  @@index([token])
+}
+
+// 地震情報記録（震度3以上）
+model EarthquakeRecord {
+  id              String                             @id @default(uuid())
+  eventId         String                             @map("event_id")
+  infoType        String                             @map("info_type") // VXSE51 or VXSE53
+  title           String
+  epicenter       String?                            // 震源地
+  magnitude       Float?                             // マグニチュード
+  depth           String?                            // 震源の深さ
+  maxIntensity    String                             @map("max_intensity") // 最大震度
+  occurrenceTime  DateTime?                          @map("occurrence_time")
+  arrivalTime     DateTime?                          @map("arrival_time")
+  rawData         Json                               @map("raw_data")
+  createdAt       DateTime                           @default(now()) @map("created_at")
+  updatedAt       DateTime                           @default(now()) @updatedAt @map("updated_at")
+
+  // リレーション
+  prefectureObservations EarthquakePrefectureObservation[]
+  notifications          EarthquakeNotification[]
+
+  @@map("earthquake_records")
+  @@index([eventId])
+  @@index([infoType])
+  @@index([maxIntensity])
+  @@index([occurrenceTime(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// 都道府県別震度記録
+model EarthquakePrefectureObservation {
+  id                  String           @id @default(uuid())
+  earthquakeRecordId  String           @map("earthquake_record_id")
+  earthquakeRecord    EarthquakeRecord @relation(fields: [earthquakeRecordId], references: [id], onDelete: Cascade)
+  prefectureCode      String           @map("prefecture_code")
+  prefecture          Prefecture       @relation(fields: [prefectureCode], references: [code])
+  prefectureName      String           @map("prefecture_name")
+  maxIntensity        String           @map("max_intensity")
+  createdAt           DateTime         @default(now()) @map("created_at")
+
+  @@map("earthquake_prefecture_observations")
+  @@unique([earthquakeRecordId, prefectureCode])
+  @@index([prefectureCode])
+  @@index([maxIntensity])
+}
+
+// 地震通知履歴
+model EarthquakeNotification {
+  id                  String           @id @default(uuid())
+  earthquakeRecordId  String           @map("earthquake_record_id")
+  earthquakeRecord    EarthquakeRecord @relation(fields: [earthquakeRecordId], references: [id], onDelete: Cascade)
+  workspaceId         String           @map("workspace_id")
+  workspace           SlackWorkspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channelId           String           @map("channel_id")
+  messageTs           String?          @map("message_ts")
+  notificationStatus  String           @default("pending") @map("notification_status") // pending, sent, failed
+  errorMessage        String?          @map("error_message") @db.Text
+  notifiedAt          DateTime?        @map("notified_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  // リレーション
+  safetyResponses     SafetyConfirmationResponse[]
+
+  @@map("earthquake_notifications")
+  @@index([workspaceId])
+  @@index([notificationStatus])
+  @@index([createdAt(sort: Desc)])
+}
+
+// 安否確認回答
+model SafetyConfirmationResponse {
+  id                     String                 @id @default(uuid())
+  notificationId         String                 @map("notification_id")
+  notification           EarthquakeNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  slackUserId            String                 @map("slack_user_id") // Slackユーザー ID
+  slackUserName          String                 @map("slack_user_name") // Slackユーザー名（表示用）
+  departmentId           String                 @map("department_id")
+  department             Department             @relation(fields: [departmentId], references: [id])
+  respondedAt            DateTime               @default(now()) @map("responded_at")
+  createdAt              DateTime               @default(now()) @map("created_at")
+
+  @@map("safety_confirmation_responses")
+  @@unique([notificationId, slackUserId])
+  @@index([notificationId])
+  @@index([slackUserId])
+  @@index([departmentId])
+  @@index([respondedAt(sort: Desc)])
+}
+
+// アクティビティログ
+model ActivityLog {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userEmail    String   @map("user_email") // ユーザー削除後も記録を残すため
+  action       String   // created, updated, deleted, connected, etc.
+  resourceType String   @map("resource_type") // workspace, department, user, condition, etc.
+  resourceId   String?  @map("resource_id")
+  resourceName String?  @map("resource_name")
+  details      String?  @db.Text // 追加情報（JSON形式）
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("activity_logs")
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt(sort: Desc)])
+}
+
+// DMData.jp OAuth2トークン管理
+model DmdataOAuthToken {
+  id              String   @id @default(uuid())
+  refreshToken    String   @unique @map("refresh_token") // リフレッシュトークン
+  dpopKeypair     Json?    @map("dpop_keypair") // DPoP鍵ペア（JSON形式）
+  codeVerifier    String?  @map("code_verifier") // PKCE Code Verifier（一時保存）
+  state           String?  @map("state") // OAuth state（一時保存）
+  expiresAt       DateTime? @map("expires_at") // トークン有効期限
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("dmdata_oauth_tokens")
+  @@index([refreshToken])
+  @@index([expiresAt])
+}
+
+// DMData.jp API Key管理
+model DmdataApiKey {
+  id          String   @id @default(uuid())
+  apiKey      String   @map("api_key") // APIキー（暗号化保存）
+  description String?  // キーの説明（例: "本番用APIキー"）
+  isActive    Boolean  @default(true) @map("is_active") // 有効/無効
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("dmdata_api_keys")
+  @@index([isActive])
+}
+
+// 訓練通知履歴
+model TrainingNotification {
+  id                  String           @id @default(uuid())
+  workspaceId         String           @map("workspace_id")
+  workspace           SlackWorkspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channelId           String           @map("channel_id")
+  messageTs           String?          @map("message_ts")
+  notificationStatus  String           @default("pending") @map("notification_status") // pending, sent, failed
+  errorMessage        String?          @map("error_message") @db.Text
+  scheduledAt         DateTime?        @map("scheduled_at") // スケジュール送信時刻（nullの場合は即時送信）
+  notifiedAt          DateTime?        @map("notified_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  // リレーション
+  trainingResponses   TrainingConfirmationResponse[]
+
+  @@map("training_notifications")
+  @@index([workspaceId])
+  @@index([notificationStatus])
+  @@index([scheduledAt(sort: Asc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// 訓練安否確認回答
+model TrainingConfirmationResponse {
+  id                     String                 @id @default(uuid())
+  trainingNotificationId String                 @map("training_notification_id")
+  trainingNotification   TrainingNotification   @relation(fields: [trainingNotificationId], references: [id], onDelete: Cascade)
+  slackUserId            String                 @map("slack_user_id") // Slackユーザー ID
+  slackUserName          String                 @map("slack_user_name") // Slackユーザー名（表示用）
+  departmentId           String                 @map("department_id")
+  department             Department             @relation(fields: [departmentId], references: [id])
+  respondedAt            DateTime               @default(now()) @map("responded_at")
+  createdAt              DateTime               @default(now()) @map("created_at")
+
+  @@map("training_confirmation_responses")
+  @@unique([trainingNotificationId, slackUserId])
+  @@index([trainingNotificationId])
+  @@index([slackUserId])
+  @@index([departmentId])
+  @@index([respondedAt(sort: Desc)])
+}
