@@ -19,6 +19,7 @@ Slack本番アプリ → anpikakunin.xyz → Vercel → Supabase PostgreSQL
 - GitHub アカウント
 - Vercel アカウント
 - Supabase アカウント
+- **DMData.jp アカウント**（地震情報取得に必須。デプロイ後に画面からOAuth認証）
 - Slack 本番用ワークスペース
 - `anpikakunin.xyz` ドメインの管理権限
 
@@ -75,9 +76,14 @@ DIRECT_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-1-ap-northeast-1.p
 SUPABASE_DB_URL=${DATABASE_URL}
 SUPABASE_DB_SSL=require
 
-# Slack設定
+# DMData.jp OAuth設定（地震情報取得）
+# ※ APIキーは不要。ユーザーが画面からOAuth認証します
 NEXT_PUBLIC_OAUTH_REDIRECT_URI=https://anpikakunin.xyz/oauth
+
+# 基本設定
 NEXT_PUBLIC_BASE_URL=https://anpikakunin.xyz
+
+# Slack設定
 SLACK_SIGNING_SECRET=本番Slackアプリのsigning secret
 
 # Slack Bot Token暗号化キー（openssl rand -base64 32 で生成）
@@ -220,6 +226,47 @@ VERCEL_PROJECT_ID=上記で取得した projectId
 ```
 
 **重要**: GitHub Actionsでは`SUPABASE_DB_URL`にSession mode（ポート5432）を使用してください。Connection Pooling（ポート6543）ではマイグレーションが失敗します。
+
+### 8. 初回ログイン後の設定
+
+デプロイ完了後、システム管理者が以下の初期設定を行ってください：
+
+#### 8.1. 管理者アカウント作成
+
+1. `https://anpikakunin.xyz/register` にアクセス
+2. 管理者アカウントを作成
+3. `https://anpikakunin.xyz/login` でログイン
+
+#### 8.2. DMData.jp OAuth認証（地震情報取得）
+
+**重要**: この設定をしないと地震情報が一切取得できません。
+
+1. ログイン後、`https://anpikakunin.xyz/monitor` にアクセス
+2. **DMData.jp OAuth認証**を実行：
+   - 画面上の **Login to DMData** ボタンをクリック
+   - DMData.jp OAuth認証画面でログイン
+   - 契約を選択（地震情報が含まれる契約を選択）
+   - 認証を許可
+   - リダイレクト後、「認証成功」と表示されることを確認
+3. リアルタイム地震情報の受信を確認：
+   - 画面右上の WebSocket ステータスが **接続中**（緑）になることを確認
+   - 地震発生時に自動的にイベントが表示されることを確認
+   - REST APIポーリング（60秒ごと）も自動実行される
+
+**トラブルシューティング**:
+- WebSocket接続エラー → ブラウザのコンソールログを確認
+- 認証失敗 → DMData.jpアカウントの契約状態を確認
+
+#### 8.3. Slackワークスペース連携
+
+1. **Slack連携** セクションで **Connect to Slack** をクリック
+2. Slack OAuth認証画面で権限を承認
+3. 通知先チャンネルを選択
+4. 通知条件（最低震度、対象地域）を設定
+5. **保存** をクリック
+
+**確認方法**:
+- テスト通知を送信して、指定チャンネルに届くことを確認
 
 ## デプロイフロー
 

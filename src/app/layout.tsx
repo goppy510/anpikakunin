@@ -27,13 +27,11 @@ export default function RootLayout({
       <body className="antialiased" suppressHydrationWarning={true}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <RouterProvider>
-            {/* WebSocket接続を一時的に無効化（開発中） */}
-            {/* <WebSocketProvider>
+            <WebSocketProvider>
               <WebSocketResponseMarker />
+              <ApiHealthMonitor />
               {children}
-            </WebSocketProvider> */}
-            <ApiHealthMonitor />
-            {children}
+            </WebSocketProvider>
           </RouterProvider>
         </ThemeProvider>
       </body>
