@@ -409,9 +409,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           const apiService = new ApiService();
           await apiService.contractList();
         } catch (apiError) {
-            "Manual API access failed despite authentication:",
-            apiError
-          );
           setAuthStatus("not_authenticated");
         }
       }
