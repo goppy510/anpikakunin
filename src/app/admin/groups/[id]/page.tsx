@@ -64,6 +64,12 @@ export default function GroupDetailPage({
   const [selectedUserId, setSelectedUserId] = useState("");
   const [addingMember, setAddingMember] = useState(false);
 
+  // グループ名編集モーダル
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingName, setEditingName] = useState("");
+  const [editingDescription, setEditingDescription] = useState("");
+  const [updating, setUpdating] = useState(false);
+
   useEffect(() => {
     fetchGroup();
     fetchAllPermissions();
@@ -201,6 +207,38 @@ export default function GroupDetailPage({
     }
   };
 
+  const handleEditGroup = () => {
+    setEditingName(group?.name || "");
+    setEditingDescription(group?.description || "");
+    setShowEditModal(true);
+  };
+
+  const handleUpdateGroup = async () => {
+    if (!editingName.trim()) {
+      toast.error("グループ名を入力してください");
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      await axios.patch(`/api/groups/${id}`, {
+        name: editingName.trim(),
+        description: editingDescription.trim() || null,
+      });
+
+      toast.success("グループ情報を更新しました");
+      setShowEditModal(false);
+      fetchGroup();
+    } catch (error: any) {
+      console.error("グループ更新エラー:", error);
+      const errorMsg =
+        error.response?.data?.error || "グループ情報の更新に失敗しました";
+      toast.error(errorMsg);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -246,9 +284,19 @@ export default function GroupDetailPage({
               <p className="text-gray-400 mt-1">{group.description}</p>
             )}
           </div>
-          <div className="flex items-center space-x-4 text-sm text-gray-400">
-            <div>👥 {group.memberCount} メンバー</div>
-            <div>🔑 {group.permissionCount} 権限</div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 text-sm text-gray-400">
+              <div>👥 {group.memberCount} メンバー</div>
+              <div>🔑 {group.permissionCount} 権限</div>
+            </div>
+            {!(group as any).isSystem && hasPermission("group:write") && (
+              <button
+                onClick={handleEditGroup}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              >
+                編集
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -418,6 +466,66 @@ export default function GroupDetailPage({
                 {addingPermission
                   ? "追加中..."
                   : `アタッチ (${selectedPermissionIds.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* グループ編集モーダル */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4">グループ情報を編集</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  グループ名 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  className="w-full bg-gray-700 p-2 rounded"
+                  disabled={updating}
+                  placeholder="グループ名を入力"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  説明
+                </label>
+                <textarea
+                  value={editingDescription}
+                  onChange={(e) => setEditingDescription(e.target.value)}
+                  className="w-full bg-gray-700 p-2 rounded"
+                  disabled={updating}
+                  placeholder="グループの説明を入力（任意）"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingName("");
+                  setEditingDescription("");
+                }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+                disabled={updating}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleUpdateGroup}
+                disabled={updating || !editingName.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50"
+              >
+                {updating ? "更新中..." : "更新"}
               </button>
             </div>
           </div>

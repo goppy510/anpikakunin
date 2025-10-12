@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 /**
  * PATCH /api/groups/:id
- * グループ更新
+ * グループ更新（管理者以外のグループのみ）
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const authCheck = await requireAdmin(request);
@@ -53,6 +53,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const body = (await request.json()) as Partial<GroupInput>;
+
+    // システムグループは編集不可
+    const existingGroup = await getGroupById(id);
+    if (!existingGroup) {
+      return NextResponse.json(
+        { error: "グループが見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    const groupWithSystem = existingGroup as any;
+    if (groupWithSystem.isSystem) {
+      return NextResponse.json(
+        { error: "システムグループは編集できません" },
+        { status: 403 }
+      );
+    }
 
     const group = await updateGroup(id, body);
     return NextResponse.json(group);
