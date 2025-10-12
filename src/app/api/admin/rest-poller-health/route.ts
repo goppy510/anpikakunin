@@ -3,23 +3,23 @@ import { prisma } from "@/app/lib/db/prisma";
 
 export async function GET() {
   try {
-    // 最新の地震イベントログ（RESTソース）を取得
-    const latestRestEvent = await prisma.earthquakeEventLog.findFirst({
-      where: { source: "rest" },
+    // 最新の地震イベントログ（cronソース）を取得
+    const latestCronEvent = await prisma.earthquakeEventLog.findFirst({
+      where: { source: "cron" },
       orderBy: { fetchedAt: "desc" },
     });
 
-    if (!latestRestEvent) {
+    if (!latestCronEvent) {
       return NextResponse.json({
         status: "warning",
         lastRunAt: null,
         elapsedMinutes: null,
-        message: "RESTポーリングがまだ実行されていません",
+        message: "地震情報取得cronがまだ実行されていません",
       });
     }
 
     const now = new Date();
-    const lastRun = new Date(latestRestEvent.fetchedAt);
+    const lastRun = new Date(latestCronEvent.fetchedAt);
     const elapsedMinutes = Math.floor((now.getTime() - lastRun.getTime()) / 60000);
 
     let status: "healthy" | "warning" | "error";
@@ -38,7 +38,7 @@ export async function GET() {
 
     return NextResponse.json({
       status,
-      lastRunAt: latestRestEvent.fetchedAt.toISOString(),
+      lastRunAt: latestCronEvent.fetchedAt.toISOString(),
       elapsedMinutes,
       message,
     });

@@ -249,7 +249,7 @@ export default function AdminDashboard() {
                 }`}
               />
               <div>
-                <h3 className="font-semibold">地震情報取得（REST APIポーリング - 60秒ごと）</h3>
+                <h3 className="font-semibold">地震情報取得（サーバーサイドcron - 1分ごと）</h3>
                 <p className="text-sm text-gray-400">{restPollerHealth.message}</p>
               </div>
             </div>

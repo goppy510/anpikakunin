@@ -15,8 +15,6 @@ import { oauth2 } from "@/app/api/Oauth2Service";
 import { ApiService } from "@/app/api/ApiService";
 import { EventDatabase } from "@/app/components/monitor/utils/eventDatabase";
 import { logEarthquakeEvent } from "@/app/components/monitor/utils/eventLogService";
-import { EarthquakeRestPoller } from "@/app/components/monitor/utils/restEarthquakePoller";
-import { EarthquakeNotificationService } from "@/app/lib/notification/earthquakeNotificationService";
 
 interface WebSocketContextType {
   status: "open" | "connecting" | "closed" | "error";
@@ -62,7 +60,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     "checking" | "authenticated" | "not_authenticated"
   >("checking");
   const wsManagerRef = useRef<WebSocketManager | null>(null);
-  const restPollerRef = useRef<EarthquakeRestPoller | null>(null);
   const notificationServiceRef = useRef<any>(null);
   const [responseCount, setResponseCount] = useState(0);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
@@ -305,70 +302,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     },
     [setIsInitialized]
   );
-
-  const notifySlack = useCallback(
-    (event: EventItem) => {
-      void (async () => {
-        try {
-          if (!notificationServiceRef.current) {
-            notificationServiceRef.current =
-              EarthquakeNotificationService.getInstance();
-          }
-          await notificationServiceRef.current.processEarthquakeEvent(event);
-        } catch (error) {
-          console.error("地震通知サービス処理エラー:", error);
-        }
-      })();
-    },
-    []
-  );
-
-  const handleRestEvents = useCallback(
-    async (events: EventItem[], context: { isInitial: boolean }) => {
-      if (!events.length) return;
-
-      for (const event of events) {
-        upsertEvent(event);
-        const isNewLog = await logEarthquakeEvent(event, "rest");
-        if (!context.isInitial && isNewLog) {
-          notifySlack(event);
-        }
-      }
-
-      setLastMessageType("rest");
-      setServerTime(new Date().toISOString());
-      setResponseCount((prev) => prev + 1);
-    },
-    [notifySlack, upsertEvent]
-  );
-
-  useEffect(() => {
-    if (authStatus !== "authenticated") {
-      if (restPollerRef.current) {
-        restPollerRef.current.stop();
-        restPollerRef.current = null;
-      }
-      return;
-    }
-
-    const apiService = new ApiService();
-    const poller = new EarthquakeRestPoller(
-      apiService,
-      handleRestEvents,
-      (error) => {
-        console.error("RESTポーリング中にエラーが発生しました:", error);
-      },
-      { intervalMs: 60_000, limit: 10 }
-    );
-
-    restPollerRef.current = poller;
-    poller.start();
-
-    return () => {
-      poller.stop();
-      restPollerRef.current = null;
-    };
-  }, [authStatus, handleRestEvents]);
 
   // WebSocket接続を初期化（認証済みの場合のみ）
   useEffect(() => {
