@@ -65,8 +65,6 @@ export class DmdataOAuth2ServerService {
           const auth = await this.oauth2.getAuthorization();
           return !!auth;
         } catch (error) {
-            "refreshTokenCheck: Authorization test failed, returning false"
-          );
           return false;
         }
       }
@@ -84,13 +82,6 @@ export class DmdataOAuth2ServerService {
     const tokenRecord = await prisma.dmdataOAuthToken.findFirst({
       orderBy: { createdAt: "desc" },
     });
-
-      "Stored refresh token:",
-      tokenRecord?.refreshToken ? "EXISTS" : "NULL"
-    );
-      "Stored DPoP keypair:",
-      tokenRecord?.dpopKeypair ? "EXISTS" : "NULL"
-    );
 
     if (this.oauth2) {
       try {
@@ -147,13 +138,6 @@ export class DmdataOAuth2ServerService {
       code: code,
       redirect_uri: REDIRECT_URI,
       code_verifier: tokenRecord.codeVerifier,
-    });
-
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code: code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: tokenRecord.codeVerifier ? "***EXISTS***" : "NULL",
     });
 
     const tokenResponse = await fetch(

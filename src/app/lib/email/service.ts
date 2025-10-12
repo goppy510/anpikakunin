@@ -81,12 +81,6 @@ ${invitationLink}
 </html>
     `.trim(),
   });
-
-    messageId: result.messageId,
-    accepted: result.accepted,
-    rejected: result.rejected,
-    response: result.response,
-  });
 }
 
 export interface SendOtpEmailParams {
@@ -143,11 +137,5 @@ ${otpCode}
 </body>
 </html>
     `.trim(),
-  });
-
-    messageId: result.messageId,
-    accepted: result.accepted,
-    rejected: result.rejected,
-    response: result.response,
   });
 }

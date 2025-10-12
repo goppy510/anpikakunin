@@ -140,14 +140,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             await apiService.contractList();
 
             // リロード時は必ず全接続をクリーンアップしてから認証状態を設定
-              "=== Page Load: Cleaning up ALL existing connections ==="
-            );
             await cleanupOldConnections(apiService);
             setAuthStatus("authenticated");
           } catch (apiError) {
-              "API access failed despite authentication:",
-              apiError
-            );
             setAuthStatus("not_authenticated");
           }
         } else {
@@ -200,10 +195,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       EventDatabase.cleanupOldEvents(30).catch((error) => {
       });
     } catch (error) {
-        "🚨 Connection cleanup failed (continuing anyway):",
-        error.message
-      );
-
       // クリーンアップに失敗した場合は長めの待機
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
@@ -286,10 +277,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   useEffect(() => {
     if (authStatus === "authenticated") {
       const handleNewEvent = (event: EventItem) => {
-
         const maxIntensity = getIntensityValue(event.maxInt);
-          `地震データ受信: 震度"${event.maxInt}" (数値: ${maxIntensity})`
-        );
 
         const normalizedEvent: EventItem = {
           ...event,
@@ -316,10 +304,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       };
 
       const handleTsunamiWarning = (warning: TsunamiWarning) => {
-          "Tsunami warning details:",
-          JSON.stringify(warning, null, 2)
-        );
-
         setTsunamiWarnings((prevWarnings) => {
           const existingIndex = prevWarnings.findIndex(
             (w) => w.id === warning.id
@@ -338,9 +322,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           // 解除された警報を除去
           return updatedWarnings.filter((w) => !w.isCancel);
         });
-
-          "✅ WebSocketProvider: Tsunami warning processing completed"
-        );
       };
 
       // WebSocketマネージャーを初期化（既存のものがあれば再利用）
@@ -428,9 +409,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           const apiService = new ApiService();
           await apiService.contractList();
         } catch (apiError) {
-            "Manual API access failed despite authentication:",
-            apiError
-          );
           setAuthStatus("not_authenticated");
         }
       }
