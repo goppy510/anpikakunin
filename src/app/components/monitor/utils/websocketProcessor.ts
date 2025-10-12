@@ -49,9 +49,6 @@ const decodeMessageBody = (message: any): any => {
       if (message.compression === "gzip") {
         const decompressed = pako.inflate(uint8Array, { to: "string" });
         decodedBody = decompressed;
-          "Gzip decompression successful, length:",
-          decompressed.length
-        );
       } else {
         decodedBody = new TextDecoder().decode(uint8Array);
       }
