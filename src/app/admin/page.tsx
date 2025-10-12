@@ -63,6 +63,13 @@ function getResourceTypeText(resourceType: string): string {
   return map[resourceType] || resourceType;
 }
 
+interface RestPollerHealth {
+  status: "healthy" | "warning" | "error";
+  lastRunAt: string | null;
+  elapsedMinutes: number | null;
+  message: string;
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
     workspaces: 0,
@@ -74,6 +81,7 @@ export default function AdminDashboard() {
   const [earthquakes, setEarthquakes] = useState<EarthquakeRecord[]>([]);
   const [fetchedEarthquakes, setFetchedEarthquakes] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [restPollerHealth, setRestPollerHealth] = useState<RestPollerHealth | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<{
     fetched: number;
@@ -118,9 +126,26 @@ export default function AdminDashboard() {
       }
     };
 
+    const fetchRestPollerHealth = async () => {
+      try {
+        const response = await fetch("/api/admin/rest-poller-health");
+        if (response.ok) {
+          const data = await response.json();
+          setRestPollerHealth(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch rest poller health:", error);
+      }
+    };
+
     fetchStats();
     fetchEarthquakes();
     fetchActivityLogs();
+    fetchRestPollerHealth();
+
+    // 30秒ごとにヘルスチェックを更新
+    const interval = setInterval(fetchRestPollerHealth, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleFetchNow = async () => {
@@ -201,6 +226,45 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* REST APIポーリングヘルスチェック */}
+      {restPollerHealth && (
+        <div
+          className={`p-4 rounded-lg border ${
+            restPollerHealth.status === "healthy"
+              ? "bg-green-900/30 border-green-700"
+              : restPollerHealth.status === "warning"
+              ? "bg-yellow-900/30 border-yellow-700"
+              : "bg-red-900/30 border-red-700"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  restPollerHealth.status === "healthy"
+                    ? "bg-green-500"
+                    : restPollerHealth.status === "warning"
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
+                }`}
+              />
+              <div>
+                <h3 className="font-semibold">地震情報取得（REST APIポーリング - 60秒ごと）</h3>
+                <p className="text-sm text-gray-400">{restPollerHealth.message}</p>
+              </div>
+            </div>
+            {restPollerHealth.lastRunAt && (
+              <div className="text-sm text-gray-400">
+                最終実行: {new Date(restPollerHealth.lastRunAt).toLocaleString("ja-JP")}
+                {restPollerHealth.elapsedMinutes !== null && (
+                  <span className="ml-2">({restPollerHealth.elapsedMinutes}分前)</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 統計カード */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card) => (
