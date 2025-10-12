@@ -34,8 +34,6 @@ export async function DELETE(request: NextRequest) {
       try {
         const cronClient = new CronJobOrgClient();
         await cronClient.deleteJob(parseInt(trainingNotification.cronJobId));
-          `✅ Deleted cron job: ${trainingNotification.cronJobId}`
-        );
       } catch (cronError: any) {
         // cronジョブ削除失敗してもDB削除は続行
       }
