@@ -238,10 +238,6 @@ export const processWebSocketMessage = (
         };
       } else if (decodedData.xmlReport) {
         xmlReport = decodedData.xmlReport;
-      } else {
-          "Decoded data contents:",
-          JSON.stringify(decodedData, null, 2)
-        );
       }
     }
 
