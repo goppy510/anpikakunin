@@ -1,0 +1,179 @@
+name: Deploy to Production
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      skip_migration:
+        description: 'Skip database migration'
+        required: false
+        default: 'false'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # マイグレーション差分を確認
+  check-migration:
+    name: Check Database Migration
+    runs-on: ubuntu-latest
+    outputs:
+      has_migration: ${{ steps.check.outputs.has_migration }}
+      migration_diff: ${{ steps.diff.outputs.diff }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Check for new migrations
+        id: check
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -q "prisma/migrations/"; then
+            echo "has_migration=true" >> $GITHUB_OUTPUT
+            echo "✅ 新しいマイグレーションが検出されました"
+          else
+            echo "has_migration=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ マイグレーションの変更はありません"
+          fi
+
+      - name: Get migration diff
+        id: diff
+        if: steps.check.outputs.has_migration == 'true'
+        run: |
+          echo "## 📋 マイグレーション差分" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "以下のマイグレーションファイルが追加されています：" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only origin/main...HEAD | grep "prisma/migrations/" | while read file; do
+            echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### マイグレーション内容" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only origin/main...HEAD | grep "prisma/migrations/.*\.sql$" | while read file; do
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary><code>$file</code></summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`sql" >> $GITHUB_STEP_SUMMARY
+            cat "$file" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+  # 手動承認待ち（マイグレーションがある場合）
+  approve-migration:
+    name: Approve Migration
+    runs-on: ubuntu-latest
+    needs: check-migration
+    if: needs.check-migration.outputs.has_migration == 'true'
+    environment:
+      name: production-migration
+
+    steps:
+      - name: Wait for approval
+        run: |
+          echo "⏳ マイグレーション実行の承認待ちです"
+          echo "GitHub Actions の Environment で承認してください"
+
+  # データベースマイグレーション実行
+  migrate-database:
+    name: Run Database Migration
+    runs-on: ubuntu-latest
+    needs: [check-migration, approve-migration]
+    if: |
+      always() &&
+      needs.check-migration.outputs.has_migration == 'true' &&
+      (needs.approve-migration.result == 'success' || github.event.inputs.skip_migration == 'true')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run Prisma migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DATABASE_SSL: require
+        run: |
+          echo "🔄 マイグレーションを実行中..."
+          npx prisma migrate deploy
+          echo "✅ マイグレーション完了"
+
+      - name: Migration success
+        run: |
+          echo "## ✅ マイグレーション成功" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "データベースマイグレーションが正常に完了しました。" >> $GITHUB_STEP_SUMMARY
+
+  # Vercelデプロイ
+  deploy-vercel:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: [check-migration, migrate-database]
+    if: |
+      always() &&
+      (needs.check-migration.outputs.has_migration == 'false' ||
+       needs.migrate-database.result == 'success')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+
+      - name: Deployment success
+        run: |
+          echo "## 🚀 デプロイ成功" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "本番環境へのデプロイが完了しました。" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "URL: https://anpikakunin.xyz" >> $GITHUB_STEP_SUMMARY
+
+  # デプロイ完了通知
+  notify-completion:
+    name: Notify Completion
+    runs-on: ubuntu-latest
+    needs: [deploy-vercel]
+    if: always()
+
+    steps:
+      - name: Check deployment status
+        run: |
+          if [ "${{ needs.deploy-vercel.result }}" == "success" ]; then
+            echo "## ✅ デプロイフロー完了" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "すべてのステップが正常に完了しました。" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ デプロイ失敗" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "デプロイ中にエラーが発生しました。ログを確認してください。" >> $GITHUB_STEP_SUMMARY
+          fi
