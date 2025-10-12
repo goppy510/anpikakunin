@@ -95,24 +95,30 @@ NODE_ENV=production
 ### 4. ドメイン設定
 
 #### Vercel でドメイン追加
-1. Vercel ダッシュボード → **Settings** → **Domains**
-2. `anpikakunin.xyz` を追加
-3. Vercel が提供する DNS レコードをメモ
+1. Vercel ダッシュボード → プロジェクト → **Settings** → **Domains**
+2. `anpikakunin.xyz` を入力して **Add** をクリック
+3. Vercelが表示する **DNS設定の指示を確認**
+   - 例: "Set the following record on your DNS provider to continue"
+   - Aレコードの値（例: `216.198.79.1`）をメモ
+
+**重要**: IPアドレスはプロジェクトごとに異なります。必ずVercelが表示する値を使用してください。
 
 #### お名前.com でDNS設定
 1. [お名前.com](https://www.onamae.com/) にログイン
 2. ドメイン設定 → `anpikakunin.xyz` → DNS設定
-3. Aレコードを追加：
+3. **Vercelが指示した通り**にレコードを追加：
    ```
    Type: A
-   Name: @
-   Value: 76.76.21.21 (Vercel IP)
+   Name: @ (または anpikakunin.xyz)
+   Value: [Vercelが表示したIPアドレス]  # 例: 216.198.79.1
 
    Type: CNAME
    Name: www
    Value: cname.vercel-dns.com
    ```
-4. 反映を待つ（最大48時間、通常は数分）
+4. DNS設定を保存
+5. Vercelダッシュボードに戻り、ドメインのステータスが「Valid Configuration」になるまで待つ（通常1〜10分）
+6. SSL証明書の自動発行を待つ（数分〜1時間）
 
 ### 5. Slack 本番アプリ作成
 
