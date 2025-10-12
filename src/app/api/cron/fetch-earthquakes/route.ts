@@ -97,6 +97,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // cron実行記録として、新規データがなくても必ず1件保存（ダミーレコード）
+    if (savedCount === 0 && telegrams.length > 0) {
+      try {
+        await prisma.earthquakeEventLog.create({
+          data: {
+            eventId: `cron-heartbeat-${Date.now()}`,
+            payloadHash: `heartbeat`,
+            source: "cron",
+            payload: { type: "heartbeat", executedAt: new Date().toISOString(), fetchedCount: telegrams.length },
+          },
+        });
+        console.log("✅ Cron heartbeat record saved");
+      } catch (error) {
+        console.log("⚠️ Heartbeat save failed (not critical):", error);
+      }
+    }
+
     console.log(`=== Cron: Saved ${savedCount} new earthquake events ===`);
 
     return NextResponse.json({
