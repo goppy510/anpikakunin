@@ -12,4 +12,8 @@ export const env = {
     "require",
   SLACK_TOKEN_ENCRYPTION_KEY:
     process.env.SLACK_TOKEN_ENCRYPTION_KEY ?? "",
+  CRON_SECRET:
+    process.env.CRON_SECRET ?? "",
+  DMDATA_API_KEY:
+    process.env.DMDATA_API_KEY ?? "",
 };
