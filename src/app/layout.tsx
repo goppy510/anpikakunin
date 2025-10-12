@@ -5,7 +5,6 @@ import { ThemeProvider } from "@/app/components/ThemeProvider";
 import { WebSocketProvider } from "@/app/components/providers/WebSocketProvider";
 import { RouterProvider } from "@/app/components/providers/RouterProvider";
 import { WebSocketResponseMarker } from "@/app/components/monitor/WebSocketResponseMarker";
-import { ApiHealthMonitor } from "@/app/components/monitor/ApiHealthMonitor";
 import React from "react";
 
 export default function RootLayout({
@@ -29,7 +28,6 @@ export default function RootLayout({
           <RouterProvider>
             <WebSocketProvider>
               <WebSocketResponseMarker />
-              <ApiHealthMonitor />
               {children}
             </WebSocketProvider>
           </RouterProvider>
