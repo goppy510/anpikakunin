@@ -33,7 +33,9 @@ DMData.jp の地震情報API（VXSE53）を利用して、設定したエリア�
 - **Docker Compose** (ローカル開発環境)
 - **Supabase** (本番PostgreSQL)
 - **Vercel** (本番ホスティング)
-- **cron-job.org** (外部cronサービス、無料)
+- **AWS EventBridge Rules** (定期実行スケジューラー、無料枠内)
+  - 地震情報定期取得（1分ごと）
+  - 訓練モード通知（指定日時に1回）
 
 ### 外部API
 - **DMData.jp API v2** (地震情報取得)
@@ -110,11 +112,19 @@ DMData.jp API
   │       └─> 通知条件チェック → Slack通知
   │
   └─ REST API (サーバーサイドcron、常時実行)
-      └─> cron-job.org (外部cronサービス、1分ごと)
-          └─> GET /api/cron/fetch-earthquakes (Bearer Token認証)
-              └─> DMData.jp REST API (最新20件取得)
-              └─> PostgreSQL保存 (source='cron')
-              └─> 通知条件チェック → Slack通知
+      └─> AWS EventBridge Rules (1分ごと)
+          └─> EventBridge API Destination
+              └─> GET /api/cron/fetch-earthquakes (Bearer Token認証)
+                  └─> DMData.jp REST API (最新20件取得)
+                  └─> PostgreSQL保存 (source='cron')
+                  └─> 通知条件チェック → Slack通知
+
+訓練モード
+  └─> 管理画面で訓練通知作成
+      └─> 自動的にEventBridge Rule作成
+          └─> 指定日時にAPI Destination経由で実行
+              └─> POST /api/training/trigger (Bearer Token認証)
+                  └─> Slack訓練通知送信
 ```
 
 ### 認証フロー
@@ -132,13 +142,16 @@ DMData.jp API
    - /monitorページでリアルタイム監視
 ```
 
-#### cronエンドポイント認証
+#### EventBridgeエンドポイント認証
 ```
-外部cronサービス (cron-job.org)
-  └─> Authorization: Bearer <CRON_SECRET>
-      └─> /api/cron/fetch-earthquakes
-          - CRON_SECRET検証
-          - 不正アクセス防止
+AWS EventBridge Rules
+  └─> EventBridge API Destination (Connection with Bearer Token)
+      └─> Authorization: Bearer <EVENTBRIDGE_SECRET_TOKEN>
+          └─> /api/cron/fetch-earthquakes (地震情報取得)
+          └─> /api/training/trigger (訓練モード実行)
+              - EVENTBRIDGE_SECRET_TOKEN検証
+              - 不正アクセス防止
+              - 後方互換性のためCRON_SECRETもサポート
 ```
 
 ### ディレクトリ構成
@@ -198,8 +211,14 @@ SLACK_SIGNING_SECRET=your_slack_signing_secret_here
 # Slack トークン暗号化キー（32バイト base64）
 SLACK_TOKEN_ENCRYPTION_KEY=openssl rand -base64 32で生成
 
-# Cron認証（外部cronサービス用、本番必須）
-CRON_SECRET=openssl rand -base64 32で生成
+# EventBridge認証（本番必須）
+EVENTBRIDGE_SECRET_TOKEN=openssl rand -base64 32で生成
+CRON_SECRET=openssl rand -base64 32で生成  # 後方互換性のため残す
+
+# EventBridge設定（訓練モード自動スケジューリング用）
+EVENTBRIDGE_API_DESTINATION_ARN=arn:aws:events:ap-northeast-1:123456789012:api-destination/anpikakunin-training-trigger/...
+EVENTBRIDGE_ROLE_ARN=arn:aws:iam::123456789012:role/EventBridgeRuleExecutionRole
+# AWS認証情報は管理画面から設定（DB暗号化保存）
 
 # SMTP設定（パスワードリセット・招待メール）
 SMTP_HOST=mail1042.onamae.ne.jp
@@ -213,9 +232,12 @@ SLACK_SKIP_SIGNATURE_VERIFICATION=true  # Slack署名検証をスキップ
 ```
 
 **重要な環境変数:**
-- **CRON_SECRET**: 外部cronサービス（cron-job.org）からのリクエスト認証に必須
+- **EVENTBRIDGE_SECRET_TOKEN**: AWS EventBridgeからのリクエスト認証に必須
+- **EVENTBRIDGE_API_DESTINATION_ARN**: 訓練モード自動スケジューリングに必須
+- **EVENTBRIDGE_ROLE_ARN**: EventBridge Rule実行ロールARNに必須
 - **SLACK_TOKEN_ENCRYPTION_KEY**: Slack Bot Tokenの暗号化に使用
 - **DMDATA_API_KEY**: 管理画面から設定（DB暗号化保存）。環境変数はフォールバック用
+- **CRON_SECRET**: 後方互換性のため残す（EventBridge移行後は非推奨）
 
 ## 開発ワークフロー
 
