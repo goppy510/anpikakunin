@@ -24,6 +24,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-scheduler": "^3.908.0",
     "@dmdata/oauth2-client": "^1.2.11",
     "@dmdata/sdk-js": "^0.2.6",
     "@intentui/icons": "^1.10.32",
