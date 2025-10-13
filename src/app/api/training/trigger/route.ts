@@ -4,31 +4,28 @@ import { prisma } from "@/app/lib/db/prisma";
 import { decrypt } from "@/app/lib/security/encryption";
 import {
   buildTrainingNotificationMessage,
-  type Department,
-  type MessageTemplate,
 } from "@/app/lib/slack/messageBuilder";
 import axios from "axios";
 
 /**
- * @deprecated cron-job.org から呼ばれるエンドポイント（非推奨）
- *
- * このエンドポイントは cron-job.org 用に残していますが、
- * 新規実装では /api/training/trigger (EventBridge用) を使用してください。
- *
- * 理由:
- * - cron-job.org のサービス停止リスク
- * - EventBridge は AWS の高信頼性サービス
- * - EventBridge は月1400万回まで無料
- *
+ * EventBridge Scheduler から呼ばれるエンドポイント
  * 訓練通知を指定時刻に送信する
  */
 
-// Bearer Token認証チェック
-function isAuthorized(request: NextRequest): boolean {
+// EventBridge認証チェック
+function isAuthorizedFromEventBridge(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
+
+  // EventBridge用の認証トークン
+  const eventBridgeSecret = process.env.EVENTBRIDGE_SECRET_TOKEN;
+
+  // 後方互換性のため、CRON_SECRETもサポート
   const cronSecret = env.CRON_SECRET;
 
-  if (!cronSecret) {
+  const acceptedToken = eventBridgeSecret || cronSecret;
+
+  if (!acceptedToken) {
+    console.warn("⚠️ EVENTBRIDGE_SECRET_TOKEN or CRON_SECRET is not set");
     return process.env.NODE_ENV === "development";
   }
 
@@ -37,19 +34,20 @@ function isAuthorized(request: NextRequest): boolean {
   }
 
   const token = authHeader.substring(7);
-  return token === cronSecret;
+  return token === acceptedToken;
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // 認証チェック
-    if (!isAuthorized(request)) {
+    if (!isAuthorizedFromEventBridge(request)) {
+      console.error("❌ Unauthorized request to /api/training/trigger");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // trainingId をクエリパラメータから取得
-    const { searchParams } = new URL(request.url);
-    const trainingId = searchParams.get("trainingId");
+    // リクエストボディから trainingId を取得
+    const body = await request.json();
+    const trainingId = body.trainingId;
 
     if (!trainingId) {
       return NextResponse.json(
@@ -58,6 +56,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log(`🚀 Training trigger received: trainingId=${trainingId}`);
 
     // 訓練通知レコードを取得
     const trainingNotification = await prisma.trainingNotification.findUnique({
@@ -73,6 +72,7 @@ export async function GET(request: NextRequest) {
 
     // 既に送信済みの場合はスキップ
     if (trainingNotification.notificationStatus === "sent") {
+      console.log(`⏭️ Training notification already sent: trainingId=${trainingId}`);
       return NextResponse.json({
         success: true,
         message: "Training notification already sent",
@@ -180,6 +180,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    console.log(`✅ Training notification sent successfully: trainingId=${trainingId}`);
 
     return NextResponse.json({
       success: true,
@@ -188,13 +189,14 @@ export async function GET(request: NextRequest) {
       messageTs: slackResponse.data.ts,
     });
   } catch (error: any) {
+    console.error("❌ Training notification error:", error);
 
     // エラーステータスを更新（trainingIdがある場合）
-    const { searchParams } = new URL(request.url);
-    const trainingId = searchParams.get("trainingId");
+    try {
+      const body = await request.json();
+      const trainingId = body.trainingId;
 
-    if (trainingId) {
-      try {
+      if (trainingId) {
         await prisma.trainingNotification.update({
           where: { id: trainingId },
           data: {
@@ -202,8 +204,9 @@ export async function GET(request: NextRequest) {
             errorMessage: error.message || "送信に失敗しました",
           },
         });
-      } catch (updateError) {
       }
+    } catch (updateError) {
+      console.error("Failed to update error status:", updateError);
     }
 
     return NextResponse.json(

@@ -586,3 +586,19 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
 }
+
+// AWS認証情報（EventBridge Scheduler用）
+model AwsCredential {
+  id                   String   @id @default(uuid())
+  accessKeyId          String   @map("access_key_id")          // 暗号化保存
+  secretAccessKey      String   @map("secret_access_key")      // 暗号化保存
+  region               String   @default("ap-northeast-1")     // デフォルト: 東京リージョン
+  eventBridgeRoleArn   String?  @map("eventbridge_role_arn")   // EventBridge実行ロールARN（オプション）
+  apiDestinationArn    String?  @map("api_destination_arn")    // API Destination ARN（作成後に保存）
+  connectionArn        String?  @map("connection_arn")         // Connection ARN（作成後に保存）
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("aws_credentials")
+}
