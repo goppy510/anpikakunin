@@ -318,17 +318,6 @@ export default function AdminDashboard() {
             </div>
             <p className="text-sm text-purple-100">地震通知条件を設定する</p>
           </Link>
-
-          <Link
-            href="/admin/aws-settings"
-            className="p-4 bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors"
-          >
-            <div className="text-lg font-bold mb-2 flex items-center gap-2">
-              <i className="fa-brands fa-aws"></i>
-              <span>AWS設定</span>
-            </div>
-            <p className="text-sm text-orange-100">EventBridge認証情報を設定</p>
-          </Link>
         </div>
       </div>
 
