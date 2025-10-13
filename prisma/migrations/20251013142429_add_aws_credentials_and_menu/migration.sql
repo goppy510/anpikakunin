@@ -23,4 +23,4 @@ ON CONFLICT ("path") DO NOTHING;
 UPDATE "menus" SET "display_order" = 11, "updated_at" = NOW() WHERE "name" = '訓練モード';
 UPDATE "menus" SET "display_order" = 12, "updated_at" = NOW() WHERE "name" = '本番応答履歴';
 UPDATE "menus" SET "display_order" = 13, "updated_at" = NOW() WHERE "name" = '訓練応答履歴';
-UPDATE "menus" SET "display_order" = 14, "updated_at" = NOW() WHERE "name" = 'Cron設定';
+UPDATE "menus" SET "display_order" = 14, "updated_at" = NOW() WHERE "name" IN ('Cron設定', 'EventBridge設定');
