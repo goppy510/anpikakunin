@@ -88,41 +88,47 @@ openssl rand -base64 32
 
 3. **「Create」** をクリック
 
-### 3. EventBridge Scheduler の作成
+### 3. EventBridge Rule の作成
 
-#### 3-1. Scheduler にアクセス
+API Destination を定期実行するには **EventBridge Rules** を使用します。
 
-[EventBridge Scheduler Console](https://ap-northeast-1.console.aws.amazon.com/scheduler/home?region=ap-northeast-1#schedules) にアクセス
+#### 3-1. EventBridge Rules にアクセス
 
-#### 3-2. Schedule の作成
+[EventBridge Rules Console](https://ap-northeast-1.console.aws.amazon.com/events/home?region=ap-northeast-1#/rules) にアクセス
 
-1. **「Create schedule」** をクリック
-2. **Schedule name and description**:
-   - **Schedule name**: `anpikakunin-earthquake-fetch-every-minute`
+#### 3-2. Rule の作成
+
+1. **「Create rule」** をクリック
+
+2. **Define rule detail**:
+   - **Name**: `anpikakunin-earthquake-fetch-every-minute`
    - **Description**: `地震情報定期取得 (1分ごと)`
+   - **Event bus**: `default` (デフォルトのまま)
+   - **Rule type**: `Schedule` を選択
+   - **重要**: 「EventBridge Scheduler で続行」ボタンが表示されますが、**「続行してルールを作成する」** をクリック
 
-3. **Schedule pattern**:
-   - **Schedule type**: `Recurring schedule`
-   - **Schedule pattern**: `Rate-based schedule`
-   - **Rate expression**: `1 minute`
-     - 1分ごとに実行
-   - **Flexible time window**: `Off`
+3. **Define schedule**:
+   - **Schedule pattern**: `A schedule that runs at a regular rate, such as every 10 minutes.` を選択
+   - **Rate expression**:
+     - Value: `1`
+     - Unit: `Minute` を選択
+   - **「Next」** をクリック
 
-4. **Target**:
-   - **Target API**: `EventBridge API destination`
-   - **API destination**: `anpikakunin-earthquake-fetch` (先ほど作成したもの)
-   - **HTTP method**: `GET`
-   - **Input**: 空欄のまま（GETメソッドなのでボディ不要）
+4. **Select target(s)**:
+   - **ターゲットタイプ**: `EventBridge API の宛先` を選択
+   - **API 送信先**: `既存の API 送信先を使用` を選択
+   - ドロップダウンから `anpikakunin-earthquake-fetch` を選択
+   - **実行ロール**: `この特定のリソースについて新しいロールを作成` を選択
+     - EventBridge が自動的に必要な権限を持つ IAM ロールを作成します
+   - **「Next」** をクリック
 
-5. **Settings**:
-   - **Maximum age of event**: `60` (1分)
-   - **Retry policy**: `0` (リトライなし、次の1分後実行があるため)
-   - **Dead-letter queue**: `None` (任意)
+5. **Configure tags (optional)**:
+   - タグは任意（スキップ可能）
+   - **「Next」** をクリック
 
-6. **Permissions**:
-   - **Execution role**: `Create new role for this schedule` (自動作成)
-
-7. **「Create schedule」** をクリック
+6. **Review and create**:
+   - 設定内容を確認
+   - **「Create rule」** をクリック
 
 ---
 

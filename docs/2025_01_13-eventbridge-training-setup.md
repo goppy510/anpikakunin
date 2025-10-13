@@ -1,8 +1,10 @@
-# EventBridge Scheduler 設定ガイド（訓練モード）
+# EventBridge Rules 設定ガイド（訓練モード）
 
 ## 概要
 
-訓練モードの定期実行を AWS EventBridge Scheduler で実現するための設定ガイドです。
+訓練モードの定期実行を AWS EventBridge Rules で実現するための設定ガイドです。
+
+**重要:** 訓練通知を管理画面から作成すると、自動的にEventBridge Ruleが作成されます。このドキュメントは初回セットアップ（API DestinationとConnectionの作成）とトラブルシューティング用です。
 
 cron-job.org からの移行により、以下のメリットがあります：
 - **完全無料** (月1400万回まで無料、訓練モード実行なら完全に無料枠内)
@@ -39,7 +41,7 @@ cron-job.org からの移行により、以下のメリットがあります：
 
 ### 1. 環境変数の設定 (Vercel)
 
-Vercelの環境変数に以下を追加：
+Vercelの環境変数に以下を追加（未設定の場合）：
 
 ```bash
 EVENTBRIDGE_SECRET_TOKEN=yp5CJgxbk60tSYmzIKqtTNiaX8g0/JrjKs+4XtVc2+s=
@@ -52,26 +54,64 @@ EVENTBRIDGE_SECRET_TOKEN=yp5CJgxbk60tSYmzIKqtTNiaX8g0/JrjKs+4XtVc2+s=
 openssl rand -base64 32
 ```
 
-**注意:** APIは後方互換性のため `CRON_SECRET` もサポートしていますが、EventBridge使用時は `EVENTBRIDGE_SECRET_TOKEN` を推奨します。
+### 2. AWS認証情報の設定
 
-### 2. 訓練通知IDの取得
+管理画面（`/admin/aws-settings`）でAWS認証情報を設定：
 
-訓練モード設定画面で訓練通知を作成し、IDを取得してください。
+- **AWS Access Key ID**: IAMユーザーのアクセスキー
+- **AWS Secret Access Key**: IAMユーザーのシークレットキー
+- **Region**: `ap-northeast-1`（東京リージョン）
 
-または、Prisma Studioで `TrainingNotification` テーブルから確認：
-```sql
-SELECT id, "workspaceId", "channelId", "scheduledAt"
-FROM "TrainingNotification"
-WHERE "notificationStatus" = 'pending';
+**IAMユーザーに必要な権限:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule",
+        "events:PutTargets",
+        "events:DeleteRule",
+        "events:RemoveTargets",
+        "iam:PassRole"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
 ```
 
-### 3. EventBridge API Destination の作成
+### 3. EventBridge実行ロールの作成（初回のみ）
 
-#### 3-1. AWS Consoleにログイン
+EventBridge RuleがAPI Destinationを呼び出すためのIAMロールを作成します。
+
+#### 3-1. IAM Consoleでロール作成
+
+1. [IAM Console - Roles](https://console.aws.amazon.com/iam/home#/roles) にアクセス
+2. **「Create role」** をクリック
+3. **Trusted entity**:
+   - **Trusted entity type**: `AWS service`
+   - **Service or use case**: `EventBridge` を選択
+4. **Permissions**:
+   - `AmazonEventBridgeApiDestinationsServiceRolePolicy` を選択
+5. **Role name**: `EventBridgeRuleExecutionRole`
+6. **「Create role」** をクリック
+7. 作成したロールのARNをコピー（例: `arn:aws:iam::123456789012:role/EventBridgeRuleExecutionRole`）
+8. `.env` ファイルまたはVercel環境変数に設定:
+   ```bash
+   EVENTBRIDGE_ROLE_ARN=arn:aws:iam::123456789012:role/EventBridgeRuleExecutionRole
+   ```
+
+### 4. EventBridge API Destination の作成（初回のみ）
+
+**既に作成済みの場合はスキップしてください。**
+
+#### 4-1. AWS Consoleにログイン
 
 [EventBridge Console](https://ap-northeast-1.console.aws.amazon.com/events/home?region=ap-northeast-1#/apidestinations) にアクセス
 
-#### 3-2. Connection の作成
+#### 4-2. Connection の作成
 
 1. 左メニューから **「API destinations」** → **「Connections」** → **「Create connection」**
 2. 設定値:
@@ -85,7 +125,7 @@ WHERE "notificationStatus" = 'pending';
 
 3. **「Create」** をクリック
 
-#### 3-3. API Destination の作成
+#### 4-3. API Destination の作成
 
 1. 左メニューから **「API destinations」** → **「Create API destination」**
 2. 設定値:
@@ -97,72 +137,121 @@ WHERE "notificationStatus" = 'pending';
    - **Connection**: `anpikakunin-training-connection` (先ほど作成したもの)
 
 3. **「Create」** をクリック
+4. 作成したAPI DestinationのARNをコピー（例: `arn:aws:events:ap-northeast-1:123456789012:api-destination/anpikakunin-training-trigger/...`）
+5. `.env` ファイルまたはVercel環境変数に設定:
+   ```bash
+   EVENTBRIDGE_API_DESTINATION_ARN=arn:aws:events:ap-northeast-1:123456789012:api-destination/anpikakunin-training-trigger/...
+   ```
 
-### 4. EventBridge Scheduler の作成
+### 5. 訓練通知の作成（自動的にEventBridge Ruleが作成されます）
 
-#### 4-1. Scheduler にアクセス
+管理画面（`/admin/training`）で訓練通知を作成すると、以下が自動的に実行されます：
 
-[EventBridge Scheduler Console](https://ap-northeast-1.console.aws.amazon.com/scheduler/home?region=ap-northeast-1#schedules) にアクセス
-
-#### 4-2. Schedule の作成
-
-1. **「Create schedule」** をクリック
-2. **Schedule name and description**:
-   - **Schedule name**: `anpikakunin-training-monthly`
-   - **Description**: `訓練モード定期実行 (毎月1日9時)`
-
-3. **Schedule pattern**:
-   - **Schedule type**: `Recurring schedule`
-   - **Schedule pattern**: `Cron-based schedule`
-   - **Cron expression**: `0 0 1 * ? *`
-     - 毎月1日9時(JST)に実行
-     - ⚠️ EventBridgeのCronはUTC基準なので、JST 9時 = UTC 0時
-   - **Flexible time window**: `Off`
-
-4. **Timezone**:
-   - `Asia/Tokyo` を選択
-
-5. **Target**:
-   - **Target API**: `EventBridge API destination`
-   - **API destination**: `anpikakunin-training-trigger` (先ほど作成したもの)
-   - **HTTP method**: `POST`
-   - **Input**: 以下のJSONを入力
-     ```json
-     {
-       "trainingId": "YOUR_TRAINING_NOTIFICATION_ID"
-     }
-     ```
-     - ⚠️ `YOUR_TRAINING_NOTIFICATION_ID` は実際の訓練通知IDに置き換える
-
-6. **Settings**:
-   - **Maximum age of event**: `3600` (1時間)
-   - **Retry policy**: `2` (2回リトライ)
-   - **Dead-letter queue**: `None` (任意)
-
-7. **Permissions**:
-   - **Execution role**: `Create new role for this schedule` (自動作成)
-
-8. **「Create schedule」** をクリック
+1. 訓練通知レコードがデータベースに保存
+2. AWS SDK経由でEventBridge Ruleが自動作成
+   - Rule名: `training-{訓練通知ID}`
+   - スケジュール: 管理画面で設定した日時（UTC変換済み）
+   - ターゲット: API Destination（`anpikakunin-training-trigger`）
+   - 本文: `{"trainingId": "訓練通知ID"}`
+3. 指定日時にSlack通知が自動送信
 
 ---
 
-## Cron式の例
+## 動作確認
 
-| 実行タイミング | Cron式 (JST) | Cron式 (UTC) |
-|--------------|-------------|-------------|
-| 毎日9時(JST) | 毎日9時 | `0 0 * * ? *` |
-| 毎週月曜9時(JST) | 毎週月曜9時 | `0 0 ? * MON *` |
-| 毎月1日9時(JST) | 毎月1日9時 | `0 0 1 * ? *` |
-| 毎月第1月曜9時(JST) | 毎月第1月曜9時 | `0 0 ? * MON#1 *` |
+### 1. ローカルでのテスト
 
-**EventBridgeのCron式フォーマット:**
-```
-分 時 日 月 曜日 年
-0  0  1  *  ?    *
+訓練通知APIを直接呼び出してテスト：
+
+```bash
+curl -X POST https://anpikakunin.xyz/api/training/trigger \
+  -H "Authorization: Bearer yp5CJgxbk60tSYmzIKqtTNiaX8g0/JrjKs+4XtVc2+s=" \
+  -H "Content-Type: application/json" \
+  -d '{"trainingId": "YOUR_TRAINING_NOTIFICATION_ID"}'
 ```
 
-**Timezone設定:**
-- `Asia/Tokyo` を選択すれば、Cron式はJST基準になります
+**期待される結果:**
+```json
+{
+  "success": true,
+  "message": "Training notification sent successfully",
+  "trainingId": "...",
+  "messageTs": "1234567890.123456"
+}
+```
+
+### 2. EventBridge のテスト実行
+
+1. EventBridge Rules Console で作成したRuleを選択
+2. **注意**: EventBridge Rule は手動実行機能がないため、以下のいずれかの方法でテスト：
+   - **方法A**: Cron式を数分後の時刻に設定して実際に実行を待つ
+   - **方法B**: APIを直接呼び出してテスト（上記curlコマンド）
+3. Slackに訓練通知が届くことを確認
+4. Prisma Studioで `TrainingNotification` の `notificationStatus` が `sent` になっているか確認
+
+---
+
+## トラブルシューティング
+
+### 401 Unauthorized
+
+**原因:**
+- `EVENTBRIDGE_SECRET_TOKEN` が設定されていない
+- Connectionの認証ヘッダーが誤っている
+
+**対処:**
+1. Vercel環境変数を確認: `EVENTBRIDGE_SECRET_TOKEN`
+2. ConnectionのAPI key valueが `Bearer {token}` の形式になっているか確認
+
+### 404 Not Found
+
+**原因:**
+- `trainingId` が存在しない
+- `TrainingNotification` レコードが削除されている
+
+**対処:**
+- Prisma Studioで `TrainingNotification` テーブルを確認
+- 有効な訓練通知IDを使用
+
+### 500 Internal Server Error
+
+**原因:**
+- ワークスペース情報が見つからない
+- 部署情報がない
+- テンプレートがない
+
+**対処:**
+- Prisma Studioで以下を確認:
+  - `SlackWorkspace` が存在するか
+  - `Department` が存在するか (isActive = true)
+  - `MessageTemplate` が存在するか (type = "TRAINING", isActive = true)
+
+### スケジュールが実行されない
+
+**原因:**
+- EventBridge実行ロールの権限不足
+- API Destinationの設定ミス
+
+**対処:**
+1. EventBridge Scheduler Consoleで実行履歴を確認
+2. CloudWatch Logsでエラーログを確認
+3. API Destinationのエンドポイントが正しいか確認
+
+---
+
+## cron-job.org からの移行
+
+### 移行手順
+
+1. EventBridge API Destination を作成 (初回のみ)
+2. 訓練通知を作成
+3. EventBridge Ruleを設定 (この手順書に従う)
+4. cron-job.org のジョブを削除
+
+### 既存エンドポイント
+
+- `/api/cron/training-send` (GET) - cron-job.org用（非推奨）
+- `/api/training/trigger` (POST) - EventBridge用（推奨）
 
 ---
 
@@ -172,7 +261,6 @@ WHERE "notificationStatus" = 'pending';
 
 **認証:**
 - `Authorization: Bearer {EVENTBRIDGE_SECRET_TOKEN}`
-- 後方互換性のため `CRON_SECRET` もサポート
 
 **リクエストボディ:**
 ```json
@@ -211,125 +299,21 @@ WHERE "notificationStatus" = 'pending';
 
 ---
 
-## 動作確認
-
-### 1. ローカルでのテスト
-
-```bash
-curl -X POST https://anpikakunin.xyz/api/training/trigger \
-  -H "Authorization: Bearer yp5CJgxbk60tSYmzIKqtTNiaX8g0/JrjKs+4XtVc2+s=" \
-  -H "Content-Type: application/json" \
-  -d '{"trainingId": "YOUR_TRAINING_NOTIFICATION_ID"}'
-```
-
-**期待される結果:**
-```json
-{
-  "success": true,
-  "message": "Training notification sent successfully",
-  "trainingId": "...",
-  "messageTs": "1234567890.123456"
-}
-```
-
-### 2. EventBridge のテスト実行
-
-1. EventBridge Scheduler Console で作成したScheduleを選択
-2. **「Actions」** → **「Run schedule now」** をクリック
-3. Slackに訓練通知が届くことを確認
-
----
-
-## トラブルシューティング
-
-### 401 Unauthorized
-
-**原因:**
-- `EVENTBRIDGE_SECRET_TOKEN` が設定されていない
-- Authorizationヘッダーの形式が誤っている
-
-**対処:**
-1. Vercel環境変数を確認: `EVENTBRIDGE_SECRET_TOKEN`
-2. ConnectionのAPI key valueが `Bearer {token}` の形式になっているか確認
-
-### 404 Not Found
-
-**原因:**
-- `trainingId` が存在しない
-- `TrainingNotification` レコードが削除されている
-
-**対処:**
-- Prisma Studioで `TrainingNotification` テーブルを確認
-- 有効な訓練通知IDを使用
-
-### 500 Internal Server Error
-
-**原因:**
-- ワークスペース情報が見つからない
-- 部署情報がない
-- テンプレートがない
-
-**対処:**
-- Prisma Studioで以下を確認:
-  - `SlackWorkspace` が存在するか
-  - `Department` が存在するか (isActive = true)
-  - `MessageTemplate` が存在するか (type = "TRAINING", isActive = true)
-
----
-
-## cron-job.org からの移行
-
-### 移行手順
-
-1. EventBridge Schedulerを設定 (上記手順)
-2. 動作確認（テスト実行）
-3. cron-job.org のジョブを無効化または削除
-4. 既存の `/api/cron/training-send` エンドポイントは残す（削除不要）
-
-### 既存エンドポイント
-
-- `/api/cron/training-send` (GET) - cron-job.org用（後方互換性のため残す）
-- `/api/training/trigger` (POST) - EventBridge用（推奨）
-
----
-
-## 監視・ログ確認
-
-### EventBridge 実行履歴
-
-1. EventBridge Scheduler Console
-2. 作成したScheduleを選択
-3. **「Monitoring」** タブで実行履歴を確認
-
-### アプリケーションログ
-
-Vercelのログで以下を確認:
-- 成功: `✅ Training notification sent successfully: trainingId=...`
-- エラー: `❌ Training notification error: ...`
-
-### データベース確認
-
-Prisma Studioで `TrainingNotification` テーブルを確認:
-- `notificationStatus`: `pending` → `sent` に変更されているか
-- `notifiedAt`: 送信日時が記録されているか
-- `messageTs`: Slackメッセージタイムスタンプが記録されているか
-
----
-
 ## まとめ
 
-✅ **EventBridge Scheduler のメリット:**
+✅ **EventBridge Rules のメリット:**
 - 完全無料 (月1400万回まで、訓練モード実行なら完全に無料枠内)
 - 高信頼性 (AWS SLA 99.99%)
 - サービス停止リスクなし
-- 設定が簡単
-- リトライ・エラーハンドリングが標準装備
+- API Destination経由でHTTPエンドポイントを呼び出し可能
 
-✅ **料金:**
-- 訓練モードの実行頻度なら完全無料
+✅ **運用フロー:**
+1. 管理画面で訓練通知を作成
+2. 訓練通知IDを取得
+3. AWS ConsoleでEventBridge Ruleを手動作成
+4. 指定日時に自動でSlack通知
 
-✅ **推奨構成:**
-- EventBridge API Destinations を使用
-- Lambda不要でコスト最小
-- Bearer Token認証でセキュリティ確保
-- Cron-based schedule でJST基準の日時指定
+✅ **注意事項:**
+- 訓練通知ごとにEventBridge Ruleを手動作成する必要があります
+- API DestinationとConnectionは初回のみ作成すれば再利用可能です
+- Cron式はUTC時刻で指定する必要があります（JSTから9時間引く）
