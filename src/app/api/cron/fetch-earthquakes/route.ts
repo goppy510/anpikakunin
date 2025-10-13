@@ -6,10 +6,18 @@ import { env } from "@/app/lib/env";
 // 認証ヘルパー関数
 function isAuthorized(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
+
+  // EventBridge用の認証トークン（推奨）
+  const eventBridgeSecret = process.env.EVENTBRIDGE_SECRET_TOKEN;
+
+  // 後方互換性のため、CRON_SECRETもサポート
   const cronSecret = env.CRON_SECRET;
 
-  // CRON_SECRETが設定されていない場合は警告を出すが、開発環境では許可
-  if (!cronSecret) {
+  const acceptedToken = eventBridgeSecret || cronSecret;
+
+  // トークンが設定されていない場合は警告を出すが、開発環境では許可
+  if (!acceptedToken) {
+    console.warn("⚠️ EVENTBRIDGE_SECRET_TOKEN or CRON_SECRET is not set");
     return process.env.NODE_ENV === "development";
   }
 
@@ -19,7 +27,7 @@ function isAuthorized(request: NextRequest): boolean {
   }
 
   const token = authHeader.substring(7); // "Bearer " を除去
-  return token === cronSecret;
+  return token === acceptedToken;
 }
 
 // DMData.jp APIから地震情報を取得する関数
