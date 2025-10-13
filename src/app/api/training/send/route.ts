@@ -72,56 +72,55 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // スケジュール送信の場合: cron-job.org にジョブを登録
+    // スケジュール送信の場合: EventBridge Scheduler にジョブを登録
     if (scheduledAt) {
-      // CRONJOB_API_KEYが設定されている場合のみcron-job.orgに登録
-      const cronClient = new CronJobOrgClient();
+      try {
+        // EventBridge Schedulerに登録
+        const scheduleDate = new Date(scheduledAt);
+        const scheduleExpression = `at(${scheduleDate.toISOString().slice(0, 19)})`;
+        const scheduleName = `training-${trainingNotification.id}`;
 
-      if (await cronClient.isConfigured()) {
-        try {
-          const cronJobId = await cronClient.createTrainingJob({
+        const scheduleResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8080'}/api/training/schedule`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-password": "admin123", // TODO: 実際の認証に置き換える
+          },
+          body: JSON.stringify({
             trainingId: trainingNotification.id,
-            scheduledTime: new Date(scheduledAt),
-            title: `訓練通知 - ${workspace.name}`,
-          });
+            scheduleExpression,
+            scheduleName,
+            timezone: "Asia/Tokyo",
+          }),
+        });
 
-          // cronJobId をDBに保存
-          await prisma.trainingNotification.update({
-            where: { id: trainingNotification.id },
-            data: { cronJobId: cronJobId.toString() },
-          });
-
-
-          return NextResponse.json({
-            success: true,
-            notificationId: trainingNotification.id,
-            cronJobId,
-            message: "訓練通知をスケジュールしました",
-          });
-        } catch (cronError: any) {
-
-          // cron登録失敗時はレコードを削除
-          await prisma.trainingNotification.delete({
-            where: { id: trainingNotification.id },
-          });
-
-          return NextResponse.json(
-            {
-              error: "cronジョブの登録に失敗しました",
-              details: cronError.message,
-            },
-            { status: 500 }
-          );
+        if (!scheduleResponse.ok) {
+          throw new Error("EventBridge Schedulerの登録に失敗しました");
         }
-      } else {
-        // 開発環境: CRONJOB_API_KEYが未設定の場合はスキップ
+
+        const scheduleData = await scheduleResponse.json();
 
         return NextResponse.json({
           success: true,
           notificationId: trainingNotification.id,
-          message: "訓練通知をスケジュールしました（開発環境: cronジョブ登録スキップ）",
-          warning: "本番環境ではCRONJOB_API_KEYを設定してください",
+          scheduleName: scheduleData.scheduleName,
+          message: "訓練通知をスケジュールしました（EventBridge Scheduler）",
         });
+      } catch (scheduleError: any) {
+        console.error("EventBridge Scheduler registration failed:", scheduleError);
+
+        // EventBridge登録失敗時はレコードを削除
+        await prisma.trainingNotification.delete({
+          where: { id: trainingNotification.id },
+        });
+
+        return NextResponse.json(
+          {
+            error: "EventBridge Schedulerの登録に失敗しました",
+            details: scheduleError.message,
+          },
+          { status: 500 }
+        );
       }
     }
 
