@@ -4,8 +4,6 @@ import { prisma } from "@/app/lib/db/prisma";
 import { decrypt } from "@/app/lib/security/encryption";
 import {
   buildTrainingNotificationMessage,
-  type Department,
-  type MessageTemplate,
 } from "@/app/lib/slack/messageBuilder";
 import axios from "axios";
 
@@ -17,10 +15,17 @@ import axios from "axios";
 // EventBridge認証チェック
 function isAuthorizedFromEventBridge(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
+
+  // EventBridge用の認証トークン
   const eventBridgeSecret = process.env.EVENTBRIDGE_SECRET_TOKEN;
 
-  if (!eventBridgeSecret) {
-    console.warn("⚠️ EVENTBRIDGE_SECRET_TOKEN is not set");
+  // 後方互換性のため、CRON_SECRETもサポート
+  const cronSecret = env.CRON_SECRET;
+
+  const acceptedToken = eventBridgeSecret || cronSecret;
+
+  if (!acceptedToken) {
+    console.warn("⚠️ EVENTBRIDGE_SECRET_TOKEN or CRON_SECRET is not set");
     return process.env.NODE_ENV === "development";
   }
 
@@ -29,7 +34,7 @@ function isAuthorizedFromEventBridge(request: NextRequest): boolean {
   }
 
   const token = authHeader.substring(7);
-  return token === eventBridgeSecret;
+  return token === acceptedToken;
 }
 
 export async function POST(request: NextRequest) {
