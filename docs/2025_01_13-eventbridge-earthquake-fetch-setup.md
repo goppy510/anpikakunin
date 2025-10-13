@@ -109,10 +109,13 @@ openssl rand -base64 32
    - **Flexible time window**: `Off`
 
 4. **Target**:
-   - **Target API**: `EventBridge API destination`
-   - **API destination**: `anpikakunin-earthquake-fetch` (先ほど作成したもの)
-   - **HTTP method**: `GET`
-   - **Input**: 空欄のまま（GETメソッドなのでボディ不要）
+   - **Templated target**: チェックしない
+   - **Target API**: `すべてのAPI` を選択
+   - 検索ボックスで「**api destination**」と入力
+   - **EventBridge** → **InvokeApiDestination** を選択
+   - **ApiDestination**: 作成済みの API Destination の ARN を入力
+     - ARN確認方法: API Destinations画面で `anpikakunin-earthquake-fetch` をクリックして詳細画面のARNをコピー
+     - ARN形式例: `arn:aws:events:ap-northeast-1:123456789012:api-destination/anpikakunin-earthquake-fetch/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
 5. **Settings**:
    - **Maximum age of event**: `60` (1分)
