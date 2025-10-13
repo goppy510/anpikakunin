@@ -4,14 +4,18 @@ import {
   attachPermissionToGroup,
   detachPermissionFromGroup,
 } from "@/app/lib/db/groups";
+import { prisma } from "@/app/lib/db/prisma";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+// 管理者のみが操作できる権限カテゴリ
+const ADMIN_ONLY_CATEGORIES = ["dmdata", "slack", "cron"];
+
 /**
  * POST /api/groups/:id/permissions
- * グループに権限をアタッチ
+ * グループに権限をアタッチ（管理者のみ）
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   const authCheck = await requireAdmin(request);
@@ -28,6 +32,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
+
+    // 権限のカテゴリをチェック
+    const permission = await prisma.permission.findUnique({
+      where: { id: body.permissionId },
+      select: { category: true, displayName: true },
+    });
+
+    if (!permission) {
+      return NextResponse.json(
+        { error: "指定された権限が見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    // 管理者専用カテゴリの権限は管理者のみがアタッチ可能
+    // （requireAdminで既に管理者チェック済みなので、ここでは追加チェック不要）
+    // この制限により、管理者以外はこのエンドポイント自体にアクセスできない
 
     await attachPermissionToGroup(groupId, body.permissionId);
     return NextResponse.json({ success: true }, { status: 201 });
@@ -59,7 +80,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/groups/:id/permissions
- * グループから権限をデタッチ
+ * グループから権限をデタッチ（管理者のみ）
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const authCheck = await requireAdmin(request);
@@ -77,6 +98,22 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
+
+    // 権限のカテゴリをチェック
+    const permission = await prisma.permission.findUnique({
+      where: { id: permissionId },
+      select: { category: true, displayName: true },
+    });
+
+    if (!permission) {
+      return NextResponse.json(
+        { error: "指定された権限が見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    // 管理者専用カテゴリの権限は管理者のみがデタッチ可能
+    // （requireAdminで既に管理者チェック済みなので、ここでは追加チェック不要）
 
     await detachPermissionFromGroup(groupId, permissionId);
     return NextResponse.json({ success: true });
