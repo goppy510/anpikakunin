@@ -10,7 +10,16 @@ import {
 import axios from "axios";
 
 /**
- * cron-job.org から呼ばれるエンドポイント
+ * @deprecated cron-job.org から呼ばれるエンドポイント（非推奨）
+ *
+ * このエンドポイントは cron-job.org 用に残していますが、
+ * 新規実装では /api/training/trigger (EventBridge用) を使用してください。
+ *
+ * 理由:
+ * - cron-job.org のサービス停止リスク
+ * - EventBridge は AWS の高信頼性サービス
+ * - EventBridge は月1400万回まで無料
+ *
  * 訓練通知を指定時刻に送信する
  */
 
