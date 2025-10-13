@@ -7,6 +7,8 @@ import {
   type MessageTemplate,
 } from "@/app/lib/slack/messageBuilder";
 import { CronJobOrgClient } from "@/app/lib/cron/cronjobOrgClient";
+import { createTrainingRule } from "@/app/lib/eventbridge/createTrainingRule";
+import { getDecryptedAwsCredentials } from "@/app/api/admin/aws-credentials/route";
 import axios from "axios";
 
 export async function POST(request: NextRequest) {
@@ -72,42 +74,56 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // スケジュール送信の場合: EventBridge Scheduler にジョブを登録
+    // スケジュール送信の場合: EventBridge Rule にジョブを登録
     if (scheduledAt) {
       try {
-        // EventBridge Schedulerに登録
-        const scheduleDate = new Date(scheduledAt);
-        const scheduleExpression = `at(${scheduleDate.toISOString().slice(0, 19)})`;
-        const scheduleName = `training-${trainingNotification.id}`;
-
-        const scheduleResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8080'}/api/training/schedule`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-password": "admin123", // TODO: 実際の認証に置き換える
-          },
-          body: JSON.stringify({
-            trainingId: trainingNotification.id,
-            scheduleExpression,
-            scheduleName,
-            timezone: "Asia/Tokyo",
-          }),
-        });
-
-        if (!scheduleResponse.ok) {
-          throw new Error("EventBridge Schedulerの登録に失敗しました");
+        // AWS認証情報を取得
+        const awsCredentials = await getDecryptedAwsCredentials();
+        if (!awsCredentials) {
+          throw new Error("AWS認証情報が設定されていません");
         }
 
-        const scheduleData = await scheduleResponse.json();
+        // 環境変数から必要な情報を取得
+        const apiDestinationArn = process.env.EVENTBRIDGE_API_DESTINATION_ARN;
+        const roleArn = process.env.EVENTBRIDGE_ROLE_ARN;
+
+        if (!apiDestinationArn) {
+          throw new Error("EVENTBRIDGE_API_DESTINATION_ARN が設定されていません");
+        }
+
+        if (!roleArn) {
+          throw new Error("EVENTBRIDGE_ROLE_ARN が設定されていません");
+        }
+
+        // EventBridge Ruleを作成
+        const scheduleDate = new Date(scheduledAt);
+        const result = await createTrainingRule({
+          trainingId: trainingNotification.id,
+          scheduledAt: scheduleDate,
+          accessKeyId: awsCredentials.accessKeyId,
+          secretAccessKey: awsCredentials.secretAccessKey,
+          region: awsCredentials.region,
+          apiDestinationArn,
+          roleArn,
+        });
+
+        // cronJobIdにruleName を保存
+        await prisma.trainingNotification.update({
+          where: { id: trainingNotification.id },
+          data: {
+            cronJobId: result.ruleName,
+          },
+        });
 
         return NextResponse.json({
           success: true,
           notificationId: trainingNotification.id,
-          scheduleName: scheduleData.scheduleName,
-          message: "訓練通知をスケジュールしました（EventBridge Scheduler）",
+          ruleName: result.ruleName,
+          ruleArn: result.ruleArn,
+          message: "訓練通知をスケジュールしました（EventBridge Rule）",
         });
       } catch (scheduleError: any) {
-        console.error("EventBridge Scheduler registration failed:", scheduleError);
+        console.error("EventBridge Rule registration failed:", scheduleError);
 
         // EventBridge登録失敗時はレコードを削除
         await prisma.trainingNotification.delete({
@@ -116,7 +132,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(
           {
-            error: "EventBridge Schedulerの登録に失敗しました",
+            error: "EventBridge Ruleの登録に失敗しました",
             details: scheduleError.message,
           },
           { status: 500 }
