@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/app/lib/env";
 import { prisma } from "@/app/lib/db/prisma";
 import { decrypt } from "@/app/lib/security/encryption";
-import {
-  buildTrainingNotificationMessage,
-} from "@/app/lib/slack/messageBuilder";
+import { buildTrainingNotificationMessage } from "@/app/lib/slack/messageBuilder";
 import axios from "axios";
 
 /**
@@ -56,8 +54,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🚀 Training trigger received: trainingId=${trainingId}`);
-
     // 訓練通知レコードを取得
     const trainingNotification = await prisma.trainingNotification.findUnique({
       where: { id: trainingId },
@@ -72,7 +68,6 @@ export async function POST(request: NextRequest) {
 
     // 既に送信済みの場合はスキップ
     if (trainingNotification.notificationStatus === "sent") {
-      console.log(`⏭️ Training notification already sent: trainingId=${trainingId}`);
       return NextResponse.json({
         success: true,
         message: "Training notification already sent",
@@ -179,8 +174,6 @@ export async function POST(request: NextRequest) {
         notifiedAt: new Date(),
       },
     });
-
-    console.log(`✅ Training notification sent successfully: trainingId=${trainingId}`);
 
     return NextResponse.json({
       success: true,
