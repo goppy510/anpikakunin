@@ -477,7 +477,6 @@ async function createNotificationRecord(earthquakeRecordId, condition) {
                     notificationStatus: "pending",
                 },
             });
-            console.log(`  ✅ 通知レコード作成: ${condition.workspace.name} -> #${channel.channelName}`);
         }
     }
     catch (error) {
