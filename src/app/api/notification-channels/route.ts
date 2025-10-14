@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
       do {
         const url = new URL("https://slack.com/api/conversations.list");
         url.searchParams.set("limit", "200"); // 1ページあたり最大200件
+        url.searchParams.set("types", "public_channel"); // パブリックチャンネルのみ
         if (cursor) {
           url.searchParams.set("cursor", cursor);
         }
