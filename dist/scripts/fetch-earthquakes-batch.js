@@ -201,15 +201,18 @@ async function fetchEarthquakes() {
     }
     catch (error) {
         if (axios_1.default.isAxiosError(error)) {
-                status: error.response?.status,
-                statusText: error.response?.statusText,
-                message: error.message,
-            });
+            status: error.response?.status,
+                statusText;
+            error.response?.statusText,
+                message;
+            error.message,
+            ;
         }
-        else {
-        }
-        return [];
+        ;
     }
+    {
+    }
+    return [];
 }
 /**
  * 震度を数値に変換（比較用）
@@ -451,6 +454,8 @@ async function createNotificationRecord(earthquakeRecordId, condition) {
             },
         });
         if (channels.length === 0) {
+            `  ⚠️  通知チャンネルが設定されていません: ${condition.workspace.name}`;
+            ;
             return;
         }
         // 各チャンネルに通知レコードを作成
@@ -474,6 +479,8 @@ async function createNotificationRecord(earthquakeRecordId, condition) {
                     notificationStatus: "pending",
                 },
             });
+            `  ✅ 通知レコード作成: ${condition.workspace.name} -> #${channel.channelName}`;
+            ;
         }
     }
     catch (error) {
