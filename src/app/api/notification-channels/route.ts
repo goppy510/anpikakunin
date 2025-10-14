@@ -40,9 +40,9 @@ export async function GET(request: NextRequest) {
     // フォールバック: テーブルが空の場合はSlack APIから取得して保存
     if (channels.length === 0) {
       const botToken = decrypt({
-        ciphertext: Buffer.from(workspace.botTokenCiphertext).toString("base64"),
-        iv: Buffer.from(workspace.botTokenIv).toString("base64"),
-        authTag: Buffer.from(workspace.botTokenTag).toString("base64"),
+        ciphertext: workspace.botTokenCiphertext,
+        iv: workspace.botTokenIv,
+        authTag: workspace.botTokenTag,
       });
 
       // Slack APIからチャンネル一覧取得
