@@ -111,12 +111,12 @@ async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null
     const record = await prisma.earthquakeRecord.create({
       data: {
         eventId: info.eventId,
-        infoType: info.infoType,
-        title: info.title,
+        infoType: info.infoType || "不明",
+        title: info.title || "地震情報",
         epicenter: info.epicenter || null,
         depth: info.depth || null,
         magnitude: info.magnitude || null,
-        maxIntensity: info.maxIntensity || null,
+        maxIntensity: info.maxIntensity || "不明", // 必須フィールドなのでデフォルト値設定
         occurrenceTime: info.occurrenceTime ? new Date(info.occurrenceTime) : null,
         arrivalTime: info.arrivalTime ? new Date(info.arrivalTime) : null,
         serialNo: info.serialNo,

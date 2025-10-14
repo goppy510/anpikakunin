@@ -170,8 +170,9 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
     }
 
     // 最大震度
-    if (body.intensity?.observation?.maxInt) {
-      info.maxIntensity = normalizeIntensity(body.intensity.observation.maxInt);
+    const maxInt = body.intensity?.observation?.MaxInt || body.intensity?.observation?.maxInt || body.Intensity?.Observation?.MaxInt;
+    if (maxInt) {
+      info.maxIntensity = normalizeIntensity(maxInt);
     }
 
     // 都道府県別震度
