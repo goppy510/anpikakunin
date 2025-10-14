@@ -53,23 +53,45 @@ function extractEarthquakeInfo(item) {
         if (hypocenter) {
             const area = hypocenter.Area || hypocenter.area;
             info.epicenter = area?.Name || area?.name || undefined;
-            const magnitude = earthquake?.Magnitude || earthquake?.magnitude;
+            // マグニチュード（jmx_eb:Magnitude または Magnitude）
+            const magnitude = earthquake?.['jmx_eb:Magnitude'] || earthquake?.Magnitude || earthquake?.magnitude;
             if (magnitude?._) {
                 info.magnitude = parseFloat(magnitude._);
             }
             else if (magnitude?.value) {
                 info.magnitude = parseFloat(magnitude.value);
             }
-            const depth = hypocenter.Depth || hypocenter.depth;
-            if (depth?.value) {
-                const depthValue = depth.value;
-                const condition = depth.condition;
-                if (condition === "ごく浅い") {
-                    info.depth = "ごく浅い";
+            // 深さ（jmx_eb:Coordinate または Depth）
+            const coordinate = area?.['jmx_eb:Coordinate'] || area?.coordinate;
+            if (coordinate?.description) {
+                // "北緯３４．９度　東経１３７．４度　深さ　４０ｋｍ" から深さを抽出
+                const depthMatch = coordinate.description.match(/深さ\s*([０-９ごく浅い]+)/);
+                if (depthMatch) {
+                    const depthStr = depthMatch[1];
+                    if (depthStr.includes('ごく浅い')) {
+                        info.depth = "ごく浅い";
+                    }
+                    else {
+                        // 全角数字を半角に変換
+                        const halfWidth = depthStr.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+                        const depthKm = halfWidth.replace(/[ｋｍkm]/g, '');
+                        info.depth = `約${depthKm}km`;
+                    }
                 }
-                else if (depthValue) {
-                    const depthKm = parseInt(depthValue) / 1000; // メートルをキロメートルに変換
-                    info.depth = `約${depthKm}km`;
+            }
+            else {
+                // 従来のDepthフィールドも確認
+                const depth = hypocenter.Depth || hypocenter.depth;
+                if (depth?.value) {
+                    const depthValue = depth.value;
+                    const condition = depth.condition;
+                    if (condition === "ごく浅い") {
+                        info.depth = "ごく浅い";
+                    }
+                    else if (depthValue) {
+                        const depthKm = parseInt(depthValue) / 1000; // メートルをキロメートルに変換
+                        info.depth = `約${depthKm}km`;
+                    }
                 }
             }
         }
