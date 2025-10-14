@@ -42,7 +42,9 @@ async function fetchEarthquakesFromDMData() {
   const DMDATA_API_KEY = await getDmdataApiKey();
 
   if (!DMDATA_API_KEY) {
-    throw new Error("DMDATA_API_KEY is not configured in database or environment");
+    throw new Error(
+      "DMDATA_API_KEY is not configured in database or environment"
+    );
   }
 
   const url = new URL("https://api.dmdata.jp/v2/telegram");
@@ -55,7 +57,9 @@ async function fetchEarthquakesFromDMData() {
   const response = await fetch(url.toString());
 
   if (!response.ok) {
-    throw new Error(`DMData API error: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `DMData API error: ${response.status} ${response.statusText}`
+    );
   }
 
   const data = await response.json();
@@ -63,7 +67,11 @@ async function fetchEarthquakesFromDMData() {
 }
 
 // XMLデータを取得してパース
-async function fetchAndParseXml(url: string, apiKey: string, meta: any): Promise<TelegramItem | null> {
+async function fetchAndParseXml(
+  url: string,
+  apiKey: string,
+  meta: any
+): Promise<TelegramItem | null> {
   try {
     const response = await fetch(`${url}?key=${apiKey}`);
     if (!response.ok) {
@@ -94,7 +102,9 @@ async function fetchAndParseXml(url: string, apiKey: string, meta: any): Promise
 }
 
 // 地震情報をearthquake_recordsに保存
-async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null> {
+async function saveEarthquakeRecord(
+  info: EarthquakeInfo
+): Promise<string | null> {
   try {
     // 重複チェック（event_idとserial_noの組み合わせ）
     const existing = await prisma.earthquakeRecord.findFirst({
@@ -117,7 +127,9 @@ async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null
         depth: info.depth || null,
         magnitude: info.magnitude || null,
         maxIntensity: info.maxIntensity || "不明", // 必須フィールドなのでデフォルト値設定
-        occurrenceTime: info.occurrenceTime ? new Date(info.occurrenceTime) : null,
+        occurrenceTime: info.occurrenceTime
+          ? new Date(info.occurrenceTime)
+          : null,
         arrivalTime: info.arrivalTime ? new Date(info.arrivalTime) : null,
         serialNo: info.serialNo,
         rawData: info.rawData, // 元のTelegramItem全体を保存
@@ -132,7 +144,10 @@ async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null
 }
 
 // 通知条件にマッチするかチェックして通知レコードを作成
-async function checkAndCreateNotifications(recordId: string, info: EarthquakeInfo): Promise<void> {
+async function checkAndCreateNotifications(
+  recordId: string,
+  info: EarthquakeInfo
+): Promise<void> {
   try {
     // 通知条件を取得
     const conditions = await prisma.earthquakeNotificationCondition.findMany({
@@ -147,7 +162,10 @@ async function checkAndCreateNotifications(recordId: string, info: EarthquakeInf
     for (const condition of conditions) {
       // 震度チェック
       const minIntensity = condition.minIntensity || "1";
-      if (info.maxIntensity && !matchesIntensity(info.maxIntensity, minIntensity)) {
+      if (
+        info.maxIntensity &&
+        !matchesIntensity(info.maxIntensity, minIntensity)
+      ) {
         continue;
       }
 
@@ -174,7 +192,9 @@ async function checkAndCreateNotifications(recordId: string, info: EarthquakeInf
       });
 
       if (channels.length === 0) {
-        console.warn(`⚠️  通知チャンネルが設定されていません: ${condition.workspace.name}`);
+        console.warn(
+          `⚠️  通知チャンネルが設定されていません: ${condition.workspace.name}`
+        );
         continue;
       }
 
@@ -200,8 +220,6 @@ async function checkAndCreateNotifications(recordId: string, info: EarthquakeInf
             notificationStatus: "pending",
           },
         });
-
-        console.log(`✅ 通知レコード作成: ${condition.workspace.name} -> #${channel.channelName}`);
       }
     }
   } catch (error: any) {
@@ -232,7 +250,9 @@ function matchesIntensity(maxIntensity: string, minIntensity: string): boolean {
 // 地震イベントログに保存（重複チェック付き）
 async function saveEarthquakeEventLog(telegram: any) {
   const eventId = telegram.head?.eventId || telegram.id;
-  const payloadHash = Buffer.from(JSON.stringify(telegram)).toString("base64").slice(0, 64);
+  const payloadHash = Buffer.from(JSON.stringify(telegram))
+    .toString("base64")
+    .slice(0, 64);
 
   try {
     await prisma.earthquakeEventLog.create({
@@ -300,7 +320,6 @@ export async function GET(request: NextRequest) {
             const recordId = await saveEarthquakeRecord(earthquakeInfo);
             if (recordId) {
               savedRecordCount++;
-              console.log(`✅ Saved earthquake record: ${earthquakeInfo.eventId}`);
 
               // 5. 通知条件チェックと通知レコード作成
               await checkAndCreateNotifications(recordId, earthquakeInfo);

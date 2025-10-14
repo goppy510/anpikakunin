@@ -74,8 +74,6 @@ export async function GET(request: NextRequest) {
         }
       } while (cursor);
 
-      console.log(`Fetched ${allChannels.length} public channels from Slack`);
-
       if (allChannels.length > 0) {
         // DBに保存（workspace.id = 内部UUIDを使用）
         await Promise.all(
