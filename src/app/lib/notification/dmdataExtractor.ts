@@ -5,17 +5,18 @@
 export interface EarthquakeInfo {
   eventId: string;
   type: string; // VXSE51 or VXSE53
+  infoType: string; // 情報タイプ
   title: string;
   epicenter?: string; // 震源地
   magnitude?: number; // マグニチュード
   depth?: string; // 震源の深さ
   maxIntensity?: string; // 最大震度
-  occurrenceTime?: string; // 発生時刻
+  occurredAt?: string; // 発生時刻
+  occurrenceTime?: string; // 発生時刻（後方互換）
   arrivalTime?: string; // 情報発表時刻
-  prefectureObservations?: Array<{
-    prefecture: string;
-    maxIntensity: string;
-  }>;
+  serialNo: number; // 電文番号
+  receivedAt: string; // 受信時刻
+  prefectureObservations?: Record<string, any>; // 都道府県別観測情報
 }
 
 /**
@@ -114,9 +115,13 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
     const info: EarthquakeInfo = {
       eventId: item.head?.eventID || item.xmlReport?.head?.eventID || item.id,
       type: item.head?.type || "",
+      infoType: item.xmlReport?.head?.infoType || "",
       title: item.xmlReport?.head?.headline?.text || item.xmlReport?.control?.title || item.xmlReport?.head?.title || "",
       occurrenceTime: item.xmlReport?.head?.targetDateTime || undefined,
+      occurredAt: item.xmlReport?.head?.targetDateTime || undefined,
       arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
+      serialNo: parseInt(item.xmlReport?.head?.serial || "1", 10),
+      receivedAt: item.receivedTime,
     };
 
     // VXSE51: 震度速報（震源情報なし）
@@ -154,6 +159,7 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
     // 発生時刻
     if (body.earthquake?.originTime) {
       info.occurrenceTime = body.earthquake.originTime;
+      info.occurredAt = body.earthquake.originTime;
     }
 
     // 到達時刻（震度速報の場合）
