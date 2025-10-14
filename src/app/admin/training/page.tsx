@@ -37,6 +37,7 @@ export default function TrainingModePage() {
   const [channels, setChannels] = useState<SlackChannel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string>("");
   const [channelSearch, setChannelSearch] = useState<string>("");
+  const [channelsLoading, setChannelsLoading] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
   const [sendType, setSendType] = useState<"immediate" | "scheduled">("immediate");
@@ -59,7 +60,6 @@ export default function TrainingModePage() {
 
   useEffect(() => {
     if (selectedWorkspaceId) {
-      loadChannels();
       loadDepartments();
       loadTemplate();
     }
@@ -79,13 +79,18 @@ export default function TrainingModePage() {
   };
 
   const loadChannels = async () => {
+    if (channelsLoading || !selectedWorkspaceId) return;
+
     try {
+      setChannelsLoading(true);
       // 保存済みのnotification_channelsから取得（高速）
       const response = await axios.get(`/api/notification-channels?workspaceId=${selectedWorkspaceId}`);
       setChannels(response.data.channels || []);
     } catch (error) {
       console.error("チャンネル取得エラー:", error);
       toast.error("チャンネルの取得に失敗しました");
+    } finally {
+      setChannelsLoading(false);
     }
   };
 
@@ -263,6 +268,7 @@ export default function TrainingModePage() {
                   type="text"
                   value={channelSearch}
                   onChange={(e) => setChannelSearch(e.target.value)}
+                  onFocus={loadChannels}
                   placeholder="チャンネル名で検索..."
                   className="w-full bg-gray-700 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none mb-2"
                 />
