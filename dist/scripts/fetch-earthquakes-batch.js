@@ -68,8 +68,7 @@ async function getDmdataApiKey() {
                     return decrypted;
                 }
             }
-            catch (error) {
-            }
+            catch (error) { }
         }
         const envKey = process.env.DMDATA_API_KEY;
         if (envKey) {
@@ -254,8 +253,10 @@ async function saveEarthquakeRecord(info) {
                 epicenter: info.epicenter,
                 magnitude: info.magnitude,
                 depth: info.depth,
-                maxIntensity: info.maxIntensity,
-                occurrenceTime: info.occurrenceTime ? new Date(info.occurrenceTime) : null,
+                maxIntensity: info.maxIntensity ?? "",
+                occurrenceTime: info.occurrenceTime
+                    ? new Date(info.occurrenceTime)
+                    : null,
                 arrivalTime: info.arrivalTime ? new Date(info.arrivalTime) : null,
                 rawData: info,
             },
@@ -300,8 +301,7 @@ async function savePrefectureObservations(earthquakeRecordId, observations) {
             });
         }
     }
-    catch (error) {
-    }
+    catch (error) { }
 }
 /**
  * 通知条件に合致する設定を検索
@@ -334,7 +334,8 @@ async function findMatchingNotificationConditions(earthquakeRecordId, earthquake
                 }
             }
             // 地震情報種別チェック
-            if (condition.earthquakeInfoType && condition.earthquakeInfoType !== earthquakeInfo.type) {
+            if (condition.earthquakeInfoType &&
+                condition.earthquakeInfoType !== earthquakeInfo.type) {
                 continue;
             }
             // 都道府県チェック
@@ -350,8 +351,7 @@ async function findMatchingNotificationConditions(earthquakeRecordId, earthquake
             await createNotificationRecord(earthquakeRecordId, condition);
         }
     }
-    catch (error) {
-    }
+    catch (error) { }
 }
 /**
  * バッチヘルスチェックを更新
@@ -378,8 +378,7 @@ async function updateBatchHealthCheck(status, errorMessage) {
             },
         });
     }
-    catch (error) {
-    }
+    catch (error) { }
 }
 /**
  * 最新のヘルスチェック状態を判定
@@ -509,8 +508,7 @@ async function processPendingNotifications() {
             await sendSlackNotification(notification);
         }
     }
-    catch (error) {
-    }
+    catch (error) { }
 }
 /**
  * Slack通知を送信
@@ -669,8 +667,7 @@ process.on("SIGTERM", async () => {
     process.exit(0);
 });
 // 未処理エラーのハンドリング
-process.on("unhandledRejection", (reason, promise) => {
-});
+process.on("unhandledRejection", (reason, promise) => { });
 // 実行
 main().catch((error) => {
     process.exit(1);

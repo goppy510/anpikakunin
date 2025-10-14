@@ -26,9 +26,13 @@ function extractEarthquakeInfo(item) {
         const info = {
             eventId: item.head?.eventID || item.xmlReport?.head?.eventID || item.id,
             type: item.head?.type || "",
+            infoType: item.xmlReport?.head?.infoType || "",
             title: item.xmlReport?.head?.headline?.text || item.xmlReport?.control?.title || item.xmlReport?.head?.title || "",
             occurrenceTime: item.xmlReport?.head?.targetDateTime || undefined,
+            occurredAt: item.xmlReport?.head?.targetDateTime || undefined,
             arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
+            serialNo: parseInt(item.xmlReport?.head?.serial || "1", 10),
+            receivedAt: item.receivedTime,
         };
         // VXSE51: 震度速報（震源情報なし）
         // VXSE53: 震源・震度に関する情報
@@ -58,6 +62,7 @@ function extractEarthquakeInfo(item) {
         // 発生時刻
         if (body.earthquake?.originTime) {
             info.occurrenceTime = body.earthquake.originTime;
+            info.occurredAt = body.earthquake.originTime;
         }
         // 到達時刻（震度速報の場合）
         if (body.earthquake?.arrivalTime) {

@@ -53,15 +53,17 @@ export async function GET(request: NextRequest) {
             slackData.channels.map((ch: any) =>
               prisma.notificationChannel.upsert({
                 where: {
-                  workspaceRef_channelId: {
+                  workspaceRef_channelId_purpose: {
                     workspaceRef: workspaceId,
                     channelId: ch.id,
+                    purpose: "general",
                   },
                 },
                 create: {
                   workspaceRef: workspaceId,
                   channelId: ch.id,
                   channelName: ch.name,
+                  purpose: "general",
                   isActive: true,
                 },
                 update: {
