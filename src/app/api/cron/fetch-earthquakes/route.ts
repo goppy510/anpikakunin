@@ -117,10 +117,10 @@ async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null
         depth: info.depth || null,
         magnitude: info.magnitude || null,
         maxIntensity: info.maxIntensity || null,
-        occurredAt: info.occurredAt ? new Date(info.occurredAt) : null,
-        prefectureObservations: info.prefectureObservations || null,
+        occurrenceTime: info.occurrenceTime ? new Date(info.occurrenceTime) : null,
+        arrivalTime: info.arrivalTime ? new Date(info.arrivalTime) : null,
         serialNo: info.serialNo,
-        receivedAt: new Date(info.receivedAt),
+        rawData: info.rawData, // 元のTelegramItem全体を保存
       },
     });
 
