@@ -80,8 +80,8 @@ export default function TrainingModePage() {
 
   const loadChannels = async () => {
     try {
-      // Slackから直接チャンネル一覧を取得
-      const response = await axios.get(`/api/slack/channels?workspaceId=${selectedWorkspaceId}`);
+      // 保存済みのnotification_channelsから取得（高速）
+      const response = await axios.get(`/api/notification-channels?workspaceId=${selectedWorkspaceId}`);
       setChannels(response.data.channels || []);
     } catch (error) {
       console.error("チャンネル取得エラー:", error);
