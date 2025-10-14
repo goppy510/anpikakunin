@@ -1,9 +1,13 @@
-"use client";
-
 import "./globals.css";
-import { ThemeProvider } from "@/app/components/ThemeProvider";
-import { RouterProvider } from "@/app/components/providers/RouterProvider";
+import { ClientProviders } from "@/app/components/providers/ClientProviders";
 import React from "react";
+import type { Metadata } from "next";
+import Script from "next/script";
+
+export const metadata: Metadata = {
+  title: "安否確認システム",
+  description: "地震発生時の安否確認システム",
+};
 
 export default function RootLayout({
   children,
@@ -13,6 +17,9 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
+        {/* Font Awesome は Script コンポーネント経由で読み込み */}
+      </head>
+      <body className="antialiased" suppressHydrationWarning={true}>
         <link
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -20,13 +27,9 @@ export default function RootLayout({
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
-      </head>
-      <body className="antialiased" suppressHydrationWarning={true}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <RouterProvider>
-            {children}
-          </RouterProvider>
-        </ThemeProvider>
+        <ClientProviders>
+          {children}
+        </ClientProviders>
       </body>
     </html>
   );
