@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
+import { decrypt } from "@/app/lib/security/encryption";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     // notification_channelsテーブルから取得
-    const channels = await prisma.notificationChannel.findMany({
+    let channels = await prisma.notificationChannel.findMany({
       where: {
         workspaceRef: workspaceId,
         isActive: true,
@@ -23,6 +24,67 @@ export async function GET(request: NextRequest) {
         channelName: "asc",
       },
     });
+
+    // フォールバック: テーブルが空の場合はSlack APIから取得して保存
+    if (channels.length === 0) {
+      const workspace = await prisma.slackWorkspace.findUnique({
+        where: { workspaceId },
+      });
+
+      if (workspace) {
+        const botToken = decrypt({
+          ciphertext: workspace.botTokenCiphertext.toString("base64"),
+          iv: workspace.botTokenIv.toString("base64"),
+          authTag: workspace.botTokenTag.toString("base64"),
+        });
+
+        // Slack APIからチャンネル一覧取得
+        const slackResponse = await fetch("https://slack.com/api/conversations.list", {
+          headers: {
+            Authorization: `Bearer ${botToken}`,
+          },
+        });
+
+        const slackData = await slackResponse.json();
+
+        if (slackData.ok && slackData.channels) {
+          // DBに保存
+          await Promise.all(
+            slackData.channels.map((ch: any) =>
+              prisma.notificationChannel.upsert({
+                where: {
+                  workspaceRef_channelId: {
+                    workspaceRef: workspaceId,
+                    channelId: ch.id,
+                  },
+                },
+                create: {
+                  workspaceRef: workspaceId,
+                  channelId: ch.id,
+                  channelName: ch.name,
+                  isActive: true,
+                },
+                update: {
+                  channelName: ch.name,
+                  isActive: true,
+                },
+              })
+            )
+          );
+
+          // 再取得
+          channels = await prisma.notificationChannel.findMany({
+            where: {
+              workspaceRef: workspaceId,
+              isActive: true,
+            },
+            orderBy: {
+              channelName: "asc",
+            },
+          });
+        }
+      }
+    }
 
     // フロントエンドが期待する形式に変換
     const formattedChannels = channels.map((ch) => ({
