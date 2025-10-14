@@ -69,9 +69,12 @@ export async function GET(request: NextRequest) {
           allChannels.push(...slackData.channels);
           cursor = slackData.response_metadata?.next_cursor;
         } else {
+          console.error("Slack API error:", slackData.error);
           break;
         }
       } while (cursor);
+
+      console.log(`Fetched ${allChannels.length} public channels from Slack`);
 
       if (allChannels.length > 0) {
         // DBに保存（workspace.id = 内部UUIDを使用）
