@@ -36,19 +36,17 @@ function isAuthorizedFromEventBridge(request: NextRequest): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  console.log("🔔 Training trigger endpoint called");
-  console.log("Headers:", Object.fromEntries(request.headers.entries()));
-
   try {
     // 認証チェック
     if (!isAuthorizedFromEventBridge(request)) {
       console.error("❌ Unauthorized request to /api/training/trigger");
       console.error("Auth header:", request.headers.get("authorization"));
-      console.error("Expected token:", process.env.EVENTBRIDGE_SECRET_TOKEN ? "SET" : "NOT SET");
+      console.error(
+        "Expected token:",
+        process.env.EVENTBRIDGE_SECRET_TOKEN ? "SET" : "NOT SET"
+      );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    console.log("✅ Authentication successful");
 
     // リクエストボディから trainingId を取得
     const body = await request.json();
