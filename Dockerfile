@@ -26,7 +26,8 @@ ENV NEXT_PUBLIC_BASE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_GAS_INTERACTIONS_URL=https://script.google.com/macros/s/placeholder/exec
 ENV SLACK_SIGNING_SECRET=placeholder_secret
 ENV NODE_ENV=production
-RUN yarn build
+# Docker build時はマイグレーション不要（起動時に実行）
+RUN yarn build:docker
 
 EXPOSE 8080
 ENV PORT=8080

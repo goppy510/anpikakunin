@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma migrate deploy && prisma generate && next build",
+    "build:docker": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "NODE_ENV=test jest",
