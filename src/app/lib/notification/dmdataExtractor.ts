@@ -161,7 +161,7 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
       const coordinate = area?.['jmx_eb:Coordinate'] || area?.coordinate;
       if (coordinate?.description) {
         // "北緯３４．９度　東経１３７．４度　深さ　４０ｋｍ" から深さを抽出
-        const depthMatch = coordinate.description.match(/深さ\s*([０-９ごく浅い]+)/);
+        const depthMatch = coordinate.description.match(/深さ\s*([０-９ごく浅いｋｍkm]+)/);
         if (depthMatch) {
           const depthStr = depthMatch[1];
           if (depthStr.includes('ごく浅い')) {
@@ -169,7 +169,7 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
           } else {
             // 全角数字を半角に変換
             const halfWidth = depthStr.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-            const depthKm = halfWidth.replace(/[ｋｍkm]/g, '');
+            const depthKm = halfWidth.replace(/[ｋｍkm]/g, '').trim();
             info.depth = `約${depthKm}km`;
           }
         }
