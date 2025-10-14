@@ -33,6 +33,7 @@ function extractEarthquakeInfo(item) {
             arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
             serialNo: parseInt(item.xmlReport?.head?.serial || "1", 10),
             receivedAt: item.receivedTime,
+            rawData: item, // 元のTelegramItem全体を保存
         };
         // VXSE51: 震度速報（震源情報なし）
         // VXSE53: 震源・震度に関する情報
