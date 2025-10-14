@@ -46,13 +46,13 @@ export async function createTrainingRule(
 
   const ruleName = `training-${trainingId}`;
 
-  // JSTからUTCに変換
-  const utcDate = new Date(scheduledAt.getTime() - 9 * 60 * 60 * 1000);
-  const minute = utcDate.getUTCMinutes();
-  const hour = utcDate.getUTCHours();
-  const dayOfMonth = utcDate.getUTCDate();
-  const month = utcDate.getUTCMonth() + 1; // 0-indexed
-  const year = utcDate.getUTCFullYear();
+  // scheduledAtは既にフロントエンドでUTC変換済み（toISOString()）
+  // そのままUTCとして使用
+  const minute = scheduledAt.getUTCMinutes();
+  const hour = scheduledAt.getUTCHours();
+  const dayOfMonth = scheduledAt.getUTCDate();
+  const month = scheduledAt.getUTCMonth() + 1; // 0-indexed
+  const year = scheduledAt.getUTCFullYear();
 
   // Cron式を生成（1回限りの実行）
   // 形式: cron(分 時 日 月 ? 年)

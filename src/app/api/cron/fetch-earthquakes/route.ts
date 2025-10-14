@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
 import { getDmdataApiKey } from "@/app/lib/dmdata/credentials";
 import { env } from "@/app/lib/env";
+import { parseStringPromise } from "xml2js";
+import crypto from "crypto";
+import {
+  extractEarthquakeInfo,
+  type TelegramItem,
+  type EarthquakeInfo,
+} from "@/app/lib/notification/dmdataExtractor";
 
 // 認証ヘルパー関数
 function isAuthorized(request: NextRequest): boolean {
@@ -55,6 +62,173 @@ async function fetchEarthquakesFromDMData() {
   return data.items || [];
 }
 
+// XMLデータを取得してパース
+async function fetchAndParseXml(url: string, apiKey: string, meta: any): Promise<TelegramItem | null> {
+  try {
+    const response = await fetch(`${url}?key=${apiKey}`);
+    if (!response.ok) {
+      console.error(`Failed to fetch XML from ${url}: ${response.status}`);
+      return null;
+    }
+
+    const xmlData = await response.text();
+
+    const parsed = await parseStringPromise(xmlData, {
+      explicitArray: false,
+      mergeAttrs: true,
+    });
+
+    const report = parsed?.Report;
+    if (!report) {
+      return null;
+    }
+
+    return {
+      ...meta,
+      xmlReport: report,
+    };
+  } catch (error) {
+    console.error(`Error parsing XML from ${url}:`, error);
+    return null;
+  }
+}
+
+// 地震情報をearthquake_recordsに保存
+async function saveEarthquakeRecord(info: EarthquakeInfo): Promise<string | null> {
+  try {
+    // 重複チェック（event_idとserial_noの組み合わせ）
+    const existing = await prisma.earthquakeRecord.findFirst({
+      where: {
+        eventId: info.eventId,
+        serialNo: info.serialNo,
+      },
+    });
+
+    if (existing) {
+      return null; // 既に保存済み
+    }
+
+    const record = await prisma.earthquakeRecord.create({
+      data: {
+        eventId: info.eventId,
+        infoType: info.infoType,
+        title: info.title,
+        epicenter: info.epicenter || null,
+        depth: info.depth || null,
+        magnitude: info.magnitude || null,
+        maxIntensity: info.maxIntensity || null,
+        occurredAt: info.occurredAt ? new Date(info.occurredAt) : null,
+        prefectureObservations: info.prefectureObservations || null,
+        serialNo: info.serialNo,
+        receivedAt: new Date(info.receivedAt),
+      },
+    });
+
+    return record.id; // レコードIDを返す
+  } catch (error: any) {
+    console.error("Error saving earthquake record:", error);
+    return null;
+  }
+}
+
+// 通知条件にマッチするかチェックして通知レコードを作成
+async function checkAndCreateNotifications(recordId: string, info: EarthquakeInfo): Promise<void> {
+  try {
+    // 通知条件を取得
+    const conditions = await prisma.earthquakeNotificationCondition.findMany({
+      where: {
+        isEnabled: true,
+      },
+      include: {
+        workspace: true,
+      },
+    });
+
+    for (const condition of conditions) {
+      // 震度チェック
+      const minIntensity = condition.minIntensity || "1";
+      if (info.maxIntensity && !matchesIntensity(info.maxIntensity, minIntensity)) {
+        continue;
+      }
+
+      // 都道府県チェック
+      const targetPrefectures = condition.targetPrefectures || [];
+      if (targetPrefectures.length > 0 && info.prefectureObservations) {
+        const observations = info.prefectureObservations as any;
+        const affectedPrefectures = Object.keys(observations);
+        const hasMatch = affectedPrefectures.some((pref) =>
+          targetPrefectures.includes(pref)
+        );
+        if (!hasMatch) {
+          continue;
+        }
+      }
+
+      // 通知チャンネルを取得
+      const channels = await prisma.notificationChannel.findMany({
+        where: {
+          workspaceRef: condition.workspaceRef,
+          purpose: "earthquake",
+          isActive: true,
+        },
+      });
+
+      if (channels.length === 0) {
+        console.warn(`⚠️  通知チャンネルが設定されていません: ${condition.workspace.name}`);
+        continue;
+      }
+
+      // 通知レコードを作成
+      for (const channel of channels) {
+        const existing = await prisma.earthquakeNotification.findFirst({
+          where: {
+            earthquakeRecordId: recordId,
+            workspaceId: condition.workspaceRef,
+            channelId: channel.channelId,
+          },
+        });
+
+        if (existing) {
+          continue; // 既に作成済み
+        }
+
+        await prisma.earthquakeNotification.create({
+          data: {
+            earthquakeRecordId: recordId,
+            workspaceId: condition.workspaceRef,
+            channelId: channel.channelId,
+            notificationStatus: "pending",
+          },
+        });
+
+        console.log(`✅ 通知レコード作成: ${condition.workspace.name} -> #${channel.channelName}`);
+      }
+    }
+  } catch (error: any) {
+    console.error("Error creating notification records:", error);
+  }
+}
+
+// 震度比較ヘルパー
+function matchesIntensity(maxIntensity: string, minIntensity: string): boolean {
+  const intensityMap: Record<string, number> = {
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5弱": 5,
+    "5強": 6,
+    "6弱": 7,
+    "6強": 8,
+    "7": 9,
+  };
+
+  const maxValue = intensityMap[maxIntensity] || 0;
+  const minValue = intensityMap[minIntensity] || 0;
+
+  return maxValue >= minValue;
+}
+
 // 地震イベントログに保存（重複チェック付き）
 async function saveEarthquakeEventLog(telegram: any) {
   const eventId = telegram.head?.eventId || telegram.id;
@@ -89,41 +263,82 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const DMDATA_API_KEY = await getDmdataApiKey();
+    if (!DMDATA_API_KEY) {
+      return NextResponse.json(
+        { success: false, error: "DMDATA_API_KEY not configured" },
+        { status: 500 }
+      );
+    }
 
     const telegrams = await fetchEarthquakesFromDMData();
 
-    let savedCount = 0;
+    let savedEventLogCount = 0;
+    let savedRecordCount = 0;
 
     for (const telegram of telegrams) {
-      const saved = await saveEarthquakeEventLog(telegram);
-      if (saved) {
-        savedCount++;
+      // 1. イベントログに保存（重複チェック）
+      const savedLog = await saveEarthquakeEventLog(telegram);
+      if (savedLog) {
+        savedEventLogCount++;
+      }
+
+      // 2. XMLデータを取得してパース
+      if (telegram.url && telegram.format === "xml") {
+        const telegramItem = await fetchAndParseXml(
+          telegram.url,
+          DMDATA_API_KEY,
+          telegram
+        );
+
+        if (telegramItem) {
+          // 3. 地震情報を抽出
+          const earthquakeInfo = extractEarthquakeInfo(telegramItem);
+
+          if (earthquakeInfo) {
+            // 4. earthquake_recordsに保存
+            const recordId = await saveEarthquakeRecord(earthquakeInfo);
+            if (recordId) {
+              savedRecordCount++;
+              console.log(`✅ Saved earthquake record: ${earthquakeInfo.eventId}`);
+
+              // 5. 通知条件チェックと通知レコード作成
+              await checkAndCreateNotifications(recordId, earthquakeInfo);
+            }
+          }
+        }
       }
     }
 
     // cron実行記録として、新規データがなくても必ず1件保存（ダミーレコード）
-    if (savedCount === 0 && telegrams.length > 0) {
+    if (savedEventLogCount === 0 && telegrams.length > 0) {
       try {
         await prisma.earthquakeEventLog.create({
           data: {
             eventId: `cron-heartbeat-${Date.now()}`,
             payloadHash: `heartbeat`,
             source: "cron",
-            payload: { type: "heartbeat", executedAt: new Date().toISOString(), fetchedCount: telegrams.length },
+            payload: {
+              type: "heartbeat",
+              executedAt: new Date().toISOString(),
+              fetchedCount: telegrams.length,
+            },
           },
         });
       } catch (error) {
+        // Ignore duplicate heartbeat
       }
     }
-
 
     return NextResponse.json({
       success: true,
       fetched: telegrams.length,
-      saved: savedCount,
-      message: `Fetched ${telegrams.length} telegrams, saved ${savedCount} new events`,
+      savedEventLogs: savedEventLogCount,
+      savedRecords: savedRecordCount,
+      message: `Fetched ${telegrams.length} telegrams, saved ${savedRecordCount} earthquake records`,
     });
   } catch (error: any) {
+    console.error("Error in fetch-earthquakes cron:", error);
     return NextResponse.json(
       {
         success: false,
