@@ -45,19 +45,37 @@ export async function GET(request: NextRequest) {
         authTag: workspace.botTokenTag,
       });
 
-      // Slack APIからチャンネル一覧取得
-      const slackResponse = await fetch("https://slack.com/api/conversations.list", {
-        headers: {
-          Authorization: `Bearer ${botToken}`,
-        },
-      });
+      // Slack APIから全チャンネルを取得（ページネーション対応）
+      const allChannels: any[] = [];
+      let cursor: string | undefined = undefined;
 
-      const slackData = await slackResponse.json();
+      do {
+        const url = new URL("https://slack.com/api/conversations.list");
+        url.searchParams.set("limit", "200"); // 1ページあたり最大200件
+        if (cursor) {
+          url.searchParams.set("cursor", cursor);
+        }
 
-      if (slackData.ok && slackData.channels) {
+        const slackResponse = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bearer ${botToken}`,
+          },
+        });
+
+        const slackData = await slackResponse.json();
+
+        if (slackData.ok && slackData.channels) {
+          allChannels.push(...slackData.channels);
+          cursor = slackData.response_metadata?.next_cursor;
+        } else {
+          break;
+        }
+      } while (cursor);
+
+      if (allChannels.length > 0) {
         // DBに保存（workspace.id = 内部UUIDを使用）
         await Promise.all(
-          slackData.channels.map((ch: any) =>
+          allChannels.map((ch: any) =>
             prisma.notificationChannel.upsert({
               where: {
                 workspaceRef_channelId_purpose: {
