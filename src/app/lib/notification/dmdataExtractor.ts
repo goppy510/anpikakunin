@@ -113,15 +113,21 @@ export function normalizeIntensity(intensity: string): string {
  */
 export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null {
   try {
+    // XMLパース時に大文字/小文字どちらも対応
+    const xmlReport = item.xmlReport as any;
+    const head = xmlReport?.Head || xmlReport?.head;
+    const control = xmlReport?.Control || xmlReport?.control;
+    const body = xmlReport?.Body || xmlReport?.body;
+
     const info: EarthquakeInfo = {
-      eventId: item.head?.eventID || item.xmlReport?.head?.eventID || item.id,
+      eventId: item.head?.eventID || head?.EventID || head?.eventID || item.id,
       type: item.head?.type || "",
-      infoType: item.xmlReport?.head?.infoType || "",
-      title: item.xmlReport?.head?.headline?.text || item.xmlReport?.control?.title || item.xmlReport?.head?.title || "",
-      occurrenceTime: item.xmlReport?.head?.targetDateTime || undefined,
-      occurredAt: item.xmlReport?.head?.targetDateTime || undefined,
-      arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
-      serialNo: parseInt(item.xmlReport?.head?.serial || "1", 10),
+      infoType: head?.InfoType || head?.infoType || "",
+      title: head?.Headline?.Text || head?.headline?.text || control?.Title || control?.title || head?.Title || head?.title || "",
+      occurrenceTime: head?.TargetDateTime || head?.targetDateTime || undefined,
+      occurredAt: head?.TargetDateTime || head?.targetDateTime || undefined,
+      arrivalTime: head?.ReportDateTime || head?.reportDateTime || undefined,
+      serialNo: parseInt(head?.Serial || head?.serial || "1", 10),
       receivedAt: item.receivedTime,
       rawData: item, // 元のTelegramItem全体を保存
     };
@@ -129,25 +135,31 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
     // VXSE51: 震度速報（震源情報なし）
     // VXSE53: 震源・震度に関する情報
 
-    const body = item.xmlReport?.body;
-
     if (!body) {
       return info;
     }
 
+    // 大文字/小文字両対応
+    const earthquake = body.Earthquake || body.earthquake;
+    const intensity = body.Intensity || body.intensity;
+
     // 震源情報（VXSE53のみ）
-    if (body.earthquake?.hypocenter) {
-      const hypocenter = body.earthquake.hypocenter;
+    const hypocenter = earthquake?.Hypocenter || earthquake?.hypocenter;
+    if (hypocenter) {
+      const area = hypocenter.Area || hypocenter.area;
+      info.epicenter = area?.Name || area?.name || undefined;
 
-      info.epicenter = hypocenter.name || undefined;
-
-      if (hypocenter.magnitude?.value) {
-        info.magnitude = parseFloat(hypocenter.magnitude.value);
+      const magnitude = earthquake?.Magnitude || earthquake?.magnitude;
+      if (magnitude?._) {
+        info.magnitude = parseFloat(magnitude._);
+      } else if (magnitude?.value) {
+        info.magnitude = parseFloat(magnitude.value);
       }
 
-      if (hypocenter.depth?.value) {
-        const depthValue = hypocenter.depth.value;
-        const condition = hypocenter.depth.condition;
+      const depth = hypocenter.Depth || hypocenter.depth;
+      if (depth?.value) {
+        const depthValue = depth.value;
+        const condition = depth.condition;
 
         if (condition === "ごく浅い") {
           info.depth = "ごく浅い";
@@ -159,18 +171,21 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
     }
 
     // 発生時刻
-    if (body.earthquake?.originTime) {
-      info.occurrenceTime = body.earthquake.originTime;
-      info.occurredAt = body.earthquake.originTime;
+    const originTime = earthquake?.OriginTime || earthquake?.originTime;
+    if (originTime) {
+      info.occurrenceTime = originTime;
+      info.occurredAt = originTime;
     }
 
     // 到達時刻（震度速報の場合）
-    if (body.earthquake?.arrivalTime) {
-      info.arrivalTime = body.earthquake.arrivalTime;
+    const arrivalTime = earthquake?.ArrivalTime || earthquake?.arrivalTime;
+    if (arrivalTime) {
+      info.arrivalTime = arrivalTime;
     }
 
     // 最大震度
-    const maxInt = body.intensity?.observation?.MaxInt || body.intensity?.observation?.maxInt || body.Intensity?.Observation?.MaxInt;
+    const observation = intensity?.Observation || intensity?.observation;
+    const maxInt = observation?.MaxInt || observation?.maxInt;
     if (maxInt) {
       info.maxIntensity = normalizeIntensity(maxInt);
     }
