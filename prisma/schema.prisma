@@ -372,6 +372,7 @@ model UserInvitation {
 model EarthquakeRecord {
   id              String                             @id @default(uuid())
   eventId         String                             @map("event_id")
+  serialNo        Int                                @default(1) @map("serial_no") // 電文番号
   infoType        String                             @map("info_type") // VXSE51 or VXSE53
   title           String
   epicenter       String?                            // 震源地
@@ -389,6 +390,7 @@ model EarthquakeRecord {
   notifications          EarthquakeNotification[]
 
   @@map("earthquake_records")
+  @@unique([eventId, serialNo])
   @@index([eventId])
   @@index([infoType])
   @@index([maxIntensity])
