@@ -84,6 +84,11 @@ export async function POST(request: NextRequest) {
         Arn: apiDestinationArn,
         RoleArn: process.env.EVENTBRIDGE_ROLE_ARN!,
         Input: JSON.stringify({ trainingId }),
+        HttpParameters: {
+          HeaderParameters: {
+            "Content-Type": "application/json",
+          },
+        },
         RetryPolicy: {
           MaximumRetryAttempts: 2,
           MaximumEventAge: 3600, // 1時間

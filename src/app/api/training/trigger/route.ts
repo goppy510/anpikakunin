@@ -40,6 +40,11 @@ export async function POST(request: NextRequest) {
     // 認証チェック
     if (!isAuthorizedFromEventBridge(request)) {
       console.error("❌ Unauthorized request to /api/training/trigger");
+      console.error("Auth header:", request.headers.get("authorization"));
+      console.error(
+        "Expected token:",
+        process.env.EVENTBRIDGE_SECRET_TOKEN ? "SET" : "NOT SET"
+      );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
