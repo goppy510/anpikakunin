@@ -6,13 +6,16 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# まずpackage.jsonとprismaスキーマをコピー
 COPY package.json yarn.lock ./
+COPY prisma ./prisma
+
+# 依存関係インストール（postinstallでprisma generateが実行される）
 RUN yarn install --frozen-lockfile
 
+# 残りのファイルをコピー
 COPY . .
-
-# Prismaクライアントを生成
-RUN npx prisma generate
 
 # バッチスクリプトをビルド
 RUN yarn build:batch
