@@ -20,6 +20,10 @@
     "build:batch": "tsc scripts/fetch-earthquakes-batch.ts --outDir dist --module commonjs --target ES2022 --esModuleInterop --resolveJsonModule --skipLibCheck",
     "batch": "yarn build:batch && node dist/scripts/fetch-earthquakes-batch.js"
   },
+  "engines": {
+    "node": ">=20.0.0 <23.0.0",
+    "yarn": ">=1.22.0"
+  },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },

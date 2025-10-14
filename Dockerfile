@@ -1,4 +1,4 @@
-FROM node:23-slim
+FROM node:22-slim
 
 # Prismaに必要なOpenSSLと依存関係をインストール
 RUN apt-get update -y && \
