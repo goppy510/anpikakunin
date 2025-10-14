@@ -313,14 +313,14 @@ export async function GET(request: NextRequest) {
     // cron実行記録として、新規データがなくても必ず1件保存（ダミーレコード）
     if (savedEventLogCount === 0 && telegrams.length > 0) {
       try {
-        // 1分以上前のheartbeatレコードを削除
-        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+        // 2分以上前のheartbeatレコードを削除（時刻の揺らぎを考慮）
+        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
         await prisma.earthquakeEventLog.deleteMany({
           where: {
             payloadHash: "heartbeat",
             source: "cron",
             fetchedAt: {
-              lt: oneMinuteAgo,
+              lt: twoMinutesAgo,
             },
           },
         });
