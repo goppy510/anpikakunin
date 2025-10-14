@@ -1,4 +1,4 @@
-FROM node:23-slim
+FROM node:22-slim
 
 # Prismaに必要なOpenSSLと依存関係をインストール
 RUN apt-get update -y && \
@@ -6,13 +6,16 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# まずpackage.jsonとprismaスキーマをコピー
 COPY package.json yarn.lock ./
+COPY prisma ./prisma
+
+# 依存関係インストール（postinstallでprisma generateが実行される）
 RUN yarn install --frozen-lockfile
 
+# 残りのファイルをコピー
 COPY . .
-
-# Prismaクライアントを生成
-RUN npx prisma generate
 
 # バッチスクリプトをビルド
 RUN yarn build:batch
@@ -23,7 +26,8 @@ ENV NEXT_PUBLIC_BASE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_GAS_INTERACTIONS_URL=https://script.google.com/macros/s/placeholder/exec
 ENV SLACK_SIGNING_SECRET=placeholder_secret
 ENV NODE_ENV=production
-RUN yarn build
+# Docker build時はマイグレーション不要（起動時に実行）
+RUN yarn build:docker
 
 EXPOSE 8080
 ENV PORT=8080

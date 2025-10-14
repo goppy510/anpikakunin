@@ -207,11 +207,13 @@ async function fetchEarthquakes(): Promise<EarthquakeInfo[]> {
     return earthquakes;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
+      console.error("[fetchEarthquakeData] Axios error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         message: error.message,
       });
     } else {
+      console.error("[fetchEarthquakeData] Unknown error:", error);
     }
     return [];
   }
@@ -497,6 +499,7 @@ async function createNotificationRecord(
     });
 
     if (channels.length === 0) {
+      console.warn(
         `  ⚠️  通知チャンネルが設定されていません: ${condition.workspace.name}`
       );
       return;
@@ -526,10 +529,12 @@ async function createNotificationRecord(
         },
       });
 
+      console.log(
         `  ✅ 通知レコード作成: ${condition.workspace.name} -> #${channel.channelName}`
       );
     }
   } catch (error: any) {
+    console.error("[createNotificationRecords] Error:", error);
   }
 }
 

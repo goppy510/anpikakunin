@@ -9,6 +9,9 @@ import {
   getPasswordStrengthLevel,
 } from "@/app/lib/validation/password";
 
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
 function AcceptInvitationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
