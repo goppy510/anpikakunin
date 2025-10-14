@@ -17,6 +17,7 @@ export interface EarthquakeInfo {
   serialNo: number; // 電文番号
   receivedAt: string; // 受信時刻
   prefectureObservations?: Record<string, any>; // 都道府県別観測情報
+  rawData: any; // 元のTelegramItem全体
 }
 
 /**
@@ -122,6 +123,7 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
       arrivalTime: item.xmlReport?.head?.reportDateTime || undefined,
       serialNo: parseInt(item.xmlReport?.head?.serial || "1", 10),
       receivedAt: item.receivedTime,
+      rawData: item, // 元のTelegramItem全体を保存
     };
 
     // VXSE51: 震度速報（震源情報なし）
