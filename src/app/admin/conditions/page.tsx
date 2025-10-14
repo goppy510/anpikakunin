@@ -45,6 +45,7 @@ export default function ConditionsPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [condition, setCondition] = useState<NotificationCondition | null>(null);
   const [loading, setLoading] = useState(true);
+  const [channelsLoading, setChannelsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [channelSearch, setChannelSearch] = useState("");
 
@@ -63,7 +64,6 @@ export default function ConditionsPage() {
   useEffect(() => {
     if (selectedWorkspace) {
       loadCondition();
-      loadChannels();
     }
   }, [selectedWorkspace]);
 
@@ -107,8 +107,12 @@ export default function ConditionsPage() {
   };
 
   const loadChannels = async () => {
+    if (channelsLoading || !selectedWorkspace) return;
+
     try {
-      const response = await fetch(`/api/slack/channels?workspaceId=${selectedWorkspace}`);
+      setChannelsLoading(true);
+      // 保存済みのnotification_channelsから取得（高速）
+      const response = await fetch(`/api/notification-channels?workspaceId=${selectedWorkspace}`);
       if (response.ok) {
         const data = await response.json();
         setChannels(data.channels || []);
@@ -125,6 +129,8 @@ export default function ConditionsPage() {
       }
     } catch (error) {
       toast.error("チャンネルの取得に失敗しました");
+    } finally {
+      setChannelsLoading(false);
     }
   };
 
@@ -289,6 +295,7 @@ export default function ConditionsPage() {
                   type="text"
                   value={channelSearch}
                   onChange={(e) => setChannelSearch(e.target.value)}
+                  onFocus={loadChannels}
                   placeholder="チャンネル名で検索..."
                   className="w-full bg-gray-700 p-2 rounded mb-2"
                 />
