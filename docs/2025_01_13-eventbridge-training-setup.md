@@ -97,6 +97,31 @@ EventBridge RuleがAPI Destinationを呼び出すためのIAMロールを作成�
    - `AmazonEventBridgeApiDestinationsServiceRolePolicy` を選択
 5. **Role name**: `EventBridgeRuleExecutionRole`
 6. **「Create role」** をクリック
+
+#### 3-2. InvokeApiDestination権限の追加（重要）
+
+作成したロールに `events:InvokeApiDestination` 権限を追加します。
+
+1. IAM Consoleで `EventBridgeRuleExecutionRole` を開く
+2. **「Add permissions」** → **「Create inline policy」**
+3. **JSON** タブを選択して以下を貼り付け:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": ["events:InvokeApiDestination"],
+         "Resource": "arn:aws:events:ap-northeast-1:*:api-destination/anpikakunin-training-trigger/*"
+       }
+     ]
+   }
+   ```
+4. **Policy name**: `InvokeApiDestinationPolicy`
+5. **「Create policy」** をクリック
+
+#### 3-3. ロールARNの設定
+
 7. 作成したロールのARNをコピー（例: `arn:aws:iam::123456789012:role/EventBridgeRuleExecutionRole`）
 8. `.env` ファイルまたはVercel環境変数に設定:
    ```bash
