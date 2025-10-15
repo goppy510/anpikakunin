@@ -120,6 +120,7 @@ API Destination を定期実行するには **EventBridge Rules** を使用し�
    - ドロップダウンから `anpikakunin-earthquake-fetch` を選択
    - **実行ロール**: `この特定のリソースについて新しいロールを作成` を選択
      - EventBridge が自動的に必要な権限を持つ IAM ロールを作成します
+     - **重要**: 作成後、ロールに `events:InvokeApiDestination` 権限を追加する必要があります（後述）
    - **「Next」** をクリック
 
 5. **Configure tags (optional)**:
@@ -129,6 +130,29 @@ API Destination を定期実行するには **EventBridge Rules** を使用し�
 6. **Review and create**:
    - 設定内容を確認
    - **「Create rule」** をクリック
+
+#### 3-3. 実行ロールに InvokeApiDestination 権限を追加（重要）
+
+EventBridge が自動作成したロールには `events:InvokeApiDestination` 権限が含まれていないため、手動で追加する必要があります。
+
+1. [IAM Console - Roles](https://console.aws.amazon.com/iam/home#/roles) にアクセス
+2. `Amazon_EventBridge_Invoke_Api_Destination_*` のような名前のロールを検索
+3. ロールを開いて **「Add permissions」** → **「Create inline policy」**
+4. **JSON** タブを選択して以下を貼り付け:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": ["events:InvokeApiDestination"],
+         "Resource": "arn:aws:events:ap-northeast-1:*:api-destination/anpikakunin-earthquake-fetch/*"
+       }
+     ]
+   }
+   ```
+5. **Policy name**: `InvokeApiDestinationPolicy`
+6. **「Create policy」** をクリック
 
 ---
 
