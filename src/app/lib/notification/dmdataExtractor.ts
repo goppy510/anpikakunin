@@ -168,7 +168,7 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
             info.depth = "ごく浅い";
           } else {
             // 全角数字を半角に変換
-            const halfWidth = depthStr.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+            const halfWidth = depthStr.replace(/[０-９]/g, (s: string) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
             const depthKm = halfWidth.replace(/[ｋｍkm]/g, '').trim();
             info.depth = `約${depthKm}km`;
           }
@@ -210,15 +210,29 @@ export function extractEarthquakeInfo(item: TelegramItem): EarthquakeInfo | null
       info.maxIntensity = normalizeIntensity(maxInt);
     }
 
-    // 都道府県別震度
-    const prefectures = body.intensity?.observation?.prefectures?.pref;
-    if (Array.isArray(prefectures)) {
-      info.prefectureObservations = prefectures
-        .filter((pref) => pref.name && pref.maxInt)
-        .map((pref) => ({
-          prefecture: pref.name,
-          maxIntensity: normalizeIntensity(pref.maxInt || ""),
-        }));
+    // 都道府県別震度（大文字/小文字両対応）
+    const prefRaw = observation?.Pref || observation?.pref || body.intensity?.observation?.prefectures?.pref;
+    const prefectures = Array.isArray(prefRaw) ? prefRaw : (prefRaw ? [prefRaw] : []);
+
+    if (prefectures.length > 0) {
+      const prefObservations: Record<string, any> = {};
+
+      for (const pref of prefectures) {
+        const prefCode = pref.Code || pref.code;
+        const prefName = pref.Name || pref.name;
+        const maxInt = pref.MaxInt || pref.maxInt;
+
+        if (prefCode && maxInt) {
+          prefObservations[prefCode] = {
+            name: prefName,
+            maxIntensity: normalizeIntensity(maxInt),
+          };
+        }
+      }
+
+      if (Object.keys(prefObservations).length > 0) {
+        info.prefectureObservations = prefObservations;
+      }
     }
 
     // VXSE51(震度速報)の場合、headlineから震度を抽出

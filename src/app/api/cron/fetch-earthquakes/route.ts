@@ -3,7 +3,6 @@ import { prisma } from "@/app/lib/db/prisma";
 import { getDmdataApiKey } from "@/app/lib/dmdata/credentials";
 import { env } from "@/app/lib/env";
 import { parseStringPromise } from "xml2js";
-import crypto from "crypto";
 import {
   extractEarthquakeInfo,
   type TelegramItem,
@@ -174,8 +173,11 @@ async function checkAndCreateNotifications(
       if (targetPrefectures.length > 0 && info.prefectureObservations) {
         const observations = info.prefectureObservations as any;
         const affectedPrefectures = Object.keys(observations);
+
+        // 都道府県コードは文字列（"04"）で格納されているので、targetPrefectures も文字列に変換して比較
+        const targetPrefecturesStr = targetPrefectures.map(p => String(p).padStart(2, '0'));
         const hasMatch = affectedPrefectures.some((pref) =>
-          targetPrefectures.includes(pref)
+          targetPrefecturesStr.includes(pref)
         );
         if (!hasMatch) {
           continue;
