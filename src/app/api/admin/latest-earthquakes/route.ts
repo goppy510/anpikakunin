@@ -11,6 +11,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "3");
 
     const earthquakes = await prisma.earthquakeRecord.findMany({
+      where: {
+        infoType: {
+          not: "不明",
+        },
+      },
       orderBy: {
         occurrenceTime: "desc",
       },
