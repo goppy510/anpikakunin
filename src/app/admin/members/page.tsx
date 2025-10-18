@@ -119,7 +119,7 @@ export default function MembersPage() {
 
   const copyInvitationUrl = (token: string) => {
     const baseUrl =
-      process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || "http://localhost:3000";
+      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8080";
     const invitationUrl = `${baseUrl}/accept-invitation?token=${token}`;
 
     if (navigator.clipboard) {
