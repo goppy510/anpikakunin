@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/lib/auth/middleware";
 import { prisma } from "@/app/lib/db/prisma";
 import { sendInvitationEmail } from "@/app/lib/email/service";
+import { UserRole } from "@prisma/client";
 import crypto from "crypto";
 
 /**
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       email: string;
+      role?: UserRole;
     };
 
     // バリデーション
@@ -114,7 +116,7 @@ export async function POST(request: NextRequest) {
         email: body.email,
         invitedBy: inviterId,
         token,
-        role: body.role || "EDITOR",
+        role: body.role || UserRole.EDITOR,
         expiresAt,
       },
       include: {
@@ -138,6 +140,9 @@ export async function POST(request: NextRequest) {
       // メール送信失敗してもエラーにしない（招待レコードは作成済み）
     }
 
+    // BASE_URLを取得（本番: https://anpikakunin.xyz、開発: http://localhost:8080）
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8080";
+
     return NextResponse.json(
       {
         id: invitation.id,
@@ -147,7 +152,7 @@ export async function POST(request: NextRequest) {
         inviterEmail: invitation.inviter.email,
         expiresAt: invitation.expiresAt.toISOString(),
         createdAt: invitation.createdAt.toISOString(),
-        invitationUrl: `${process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || "http://localhost:3000"}/accept-invitation?token=${invitation.token}`,
+        invitationUrl: `${baseUrl}/accept-invitation?token=${invitation.token}`,
       },
       { status: 201 }
     );
