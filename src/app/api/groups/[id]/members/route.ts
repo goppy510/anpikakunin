@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/app/lib/auth/middleware";
-import { addUserToGroup, removeUserFromGroup } from "@/app/lib/db/groups";
+import { addUserToGroup, removeUserFromGroup, getGroupById } from "@/app/lib/db/groups";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -11,7 +11,7 @@ type RouteContext = {
  * グループにユーザーを追加
  */
 export async function POST(request: NextRequest, context: RouteContext) {
-  const authCheck = await requirePermission(request, ["group:read"]);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id: groupId } = await context.params;
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
  * グループからユーザーを削除
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const authCheck = await requirePermission(request, ["group:read"]);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id: groupId } = await context.params;
@@ -72,6 +72,22 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         { error: "userIdは必須です" },
         { status: 400 }
+      );
+    }
+
+    // グループ情報を取得してシステムグループかチェック
+    const group = await getGroupById(groupId);
+    if (!group) {
+      return NextResponse.json(
+        { error: "グループが見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    if (group.isSystem) {
+      return NextResponse.json(
+        { error: "システムグループのメンバーは削除できません" },
+        { status: 403 }
       );
     }
 

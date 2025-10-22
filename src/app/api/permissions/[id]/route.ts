@@ -14,9 +14,10 @@ type RouteContext = {
 /**
  * GET /api/permissions/:id
  * 権限詳細取得
+ * グループ管理画面で使用するため、group:read権限でもアクセス可能
  */
 export async function GET(request: NextRequest, context: RouteContext) {
-  const authCheck = await requirePermission(request, ["system:admin"]);
+  const authCheck = await requirePermission(request, ["group:read", "group:write", "system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;

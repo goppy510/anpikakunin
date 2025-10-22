@@ -10,9 +10,10 @@ import {
 /**
  * GET /api/permissions
  * 権限一覧取得
+ * グループ管理画面で使用するため、group:read権限でもアクセス可能
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requirePermission(request, ["system:admin"]);
+  const authCheck = await requirePermission(request, ["group:read", "group:write", "system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
