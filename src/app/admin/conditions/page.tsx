@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 interface Workspace {
   id: string;
@@ -38,6 +39,7 @@ interface NotificationCondition {
 }
 
 export default function ConditionsPage() {
+  const { hasPermission } = usePermissions();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
   const [prefectures, setPrefectures] = useState<Prefecture[]>([]);
@@ -260,7 +262,8 @@ export default function ConditionsPage() {
           {!isEditing && condition && (
             <button
               onClick={() => setIsEditing(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+              disabled={!hasPermission("earthquake:condition:write")}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               編集
             </button>
@@ -383,7 +386,8 @@ export default function ConditionsPage() {
             <div className="flex gap-2">
               <button
                 onClick={handleSave}
-                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+                disabled={!hasPermission("earthquake:condition:write")}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 保存
               </button>
