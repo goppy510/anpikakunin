@@ -81,6 +81,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // グループ情報を取得してworkspaceRefを確認
+    const group = await prisma.group.findUnique({
+      where: { id: body.groupId },
+      select: { id: true, workspaceRef: true },
+    });
+
+    if (!group) {
+      return NextResponse.json(
+        { error: "指定されたグループが見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    if (!group.workspaceRef) {
+      return NextResponse.json(
+        { error: "システムグループへの招待はできません" },
+        { status: 400 }
+      );
+    }
+
     // 既存ユーザーチェック
     const existingUser = await prisma.user.findUnique({
       where: { email: body.email },
@@ -123,9 +143,10 @@ export async function POST(request: NextRequest) {
       data: {
         email: body.email,
         invitedBy: inviterId,
+        workspaceRef: group.workspaceRef, // ワークスペースIDを保存
+        groupId: body.groupId, // グループIDを保存
         token,
         role: body.role || UserRole.EDITOR,
-        groupId: body.groupId, // グループIDを保存
         expiresAt,
       },
       include: {

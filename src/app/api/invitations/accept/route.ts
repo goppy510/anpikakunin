@@ -86,6 +86,14 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // ワークスペースに自動所属
+      await tx.userWorkspace.create({
+        data: {
+          userId: newUser.id,
+          workspaceRef: invitation.workspaceRef,
+        },
+      });
+
       // 招待を受諾済みにマーク
       await tx.userInvitation.update({
         where: { id: invitation.id },
