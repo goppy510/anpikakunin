@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 
 /**
  * Slack Bot Tokenの接続テスト
  * auth.test APIを使用してワークスペース情報を取得
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["slack:workspace:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

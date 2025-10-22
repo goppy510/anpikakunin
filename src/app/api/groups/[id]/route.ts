@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import {
   getGroupById,
   updateGroup,
@@ -16,7 +16,7 @@ type RouteContext = {
  * グループ詳細取得
  */
 export async function GET(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["group:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * グループ更新（管理者以外のグループのみ）
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;
@@ -104,7 +104,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
  * グループ削除
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;

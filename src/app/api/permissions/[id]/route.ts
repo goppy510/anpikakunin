@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import {
   getPermissionById,
   updatePermission,
@@ -16,7 +16,7 @@ type RouteContext = {
  * 権限詳細取得
  */
 export async function GET(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * 権限更新
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;
@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
  * 権限削除
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id } = await context.params;

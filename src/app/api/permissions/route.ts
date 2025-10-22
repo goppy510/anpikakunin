@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import {
   listPermissions,
   listPermissionsByCategory,
@@ -12,7 +12,7 @@ import {
  * 権限一覧取得
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
  * 権限作成
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

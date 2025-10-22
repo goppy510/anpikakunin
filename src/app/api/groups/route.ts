@@ -7,7 +7,7 @@ import { listGroups, createGroup, GroupInput } from "@/app/lib/db/groups";
  * グループ一覧取得
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requirePermission(request, ["view_groups"]);
+  const authCheck = await requirePermission(request, ["group:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
  * グループ作成
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requirePermission(request, ["manage_groups"]);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

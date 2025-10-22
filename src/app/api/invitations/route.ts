@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import { prisma } from "@/app/lib/db/prisma";
 import { sendInvitationEmail } from "@/app/lib/email/service";
 import { UserRole } from "@prisma/client";
@@ -13,7 +13,7 @@ import crypto from "crypto";
  * 招待キャンセル（DELETEメソッド）
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["member:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
  * メンバー招待
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["member:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const inviterId = authCheck.user.id;
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
  * 招待キャンセル
  */
 export async function DELETE(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["member:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

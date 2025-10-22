@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import { logActivity, getRequestInfo } from "@/app/lib/activity/logger";
 
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["department:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
   const { user } = authCheck;
 
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["department:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import {
   attachPermissionToGroup,
   detachPermissionFromGroup,
@@ -18,7 +18,7 @@ const ADMIN_ONLY_CATEGORIES = ["dmdata", "slack", "cron"];
  * グループに権限をアタッチ（管理者のみ）
  */
 export async function POST(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id: groupId } = await context.params;
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
  * グループから権限をデタッチ（管理者のみ）
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["group:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { id: groupId } = await context.params;

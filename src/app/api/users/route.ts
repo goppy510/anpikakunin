@@ -7,7 +7,7 @@ import { prisma } from "@/app/lib/db/prisma";
  * ユーザー一覧取得
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requirePermission(request, ["view_users"]);
+  const authCheck = await requirePermission(request, ["user:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
