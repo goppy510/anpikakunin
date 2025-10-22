@@ -321,11 +321,11 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 保存済み地震情報（震度3以上、最新3件） */}
+      {/* 保存済み地震情報（最新3件） */}
       <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
           <i className="fa-solid fa-database"></i>
-          <span>保存済みの地震情報（震度3以上、最新3件）</span>
+          <span>保存済みの地震情報（最新3件）</span>
         </h2>
 
         {earthquakes.length === 0 ? (

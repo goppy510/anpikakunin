@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // パスワードハッシュ化
     const passwordHash = await bcrypt.hash(body.password, 10);
 
-    // トランザクションでユーザー作成 + 招待受諾
+    // トランザクションでユーザー作成 + 招待受諾 + グループ所属
     const user = await prisma.$transaction(async (tx) => {
       // ユーザー作成
       const newUser = await tx.user.create({
@@ -77,6 +77,37 @@ export async function POST(request: NextRequest) {
           isActive: true,
         },
       });
+
+      // グループに自動所属
+      await tx.userGroupMembership.create({
+        data: {
+          userId: newUser.id,
+          groupId: invitation.groupId,
+        },
+      });
+
+      // ワークスペースに自動所属
+      await tx.userWorkspace.create({
+        data: {
+          userId: newUser.id,
+          workspaceRef: invitation.workspaceRef,
+        },
+      });
+
+      // デフォルト権限を付与: slack:workspace:read
+      // 部署管理や通知条件設定にはワークスペース閲覧が必須なため
+      const workspaceReadPermission = await tx.permission.findFirst({
+        where: { name: "slack:workspace:read" },
+      });
+
+      if (workspaceReadPermission) {
+        await tx.userPermissionAttachment.create({
+          data: {
+            userId: newUser.id,
+            permissionId: workspaceReadPermission.id,
+          },
+        });
+      }
 
       // 招待を受諾済みにマーク
       await tx.userInvitation.update({

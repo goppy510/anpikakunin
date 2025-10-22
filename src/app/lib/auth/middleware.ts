@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUserBySession } from "./session";
+import { getUserPermissions } from "@/app/lib/db/permissions";
 import type { User, UserRole } from "@prisma/client";
 
 export type AuthUser = User;
@@ -106,4 +107,44 @@ export async function requireEditor(
   request: NextRequest
 ): Promise<{ user: AuthUser } | NextResponse> {
   return requireRole(request, ["EDITOR", "ADMIN"]);
+}
+
+/**
+ * 特定の権限（permission）が必要なAPIエンドポイント用ミドルウェア
+ * ADMINロールは全ての権限を持つものとして扱う
+ */
+export async function requirePermission(
+  request: NextRequest,
+  requiredPermissions: string[]
+): Promise<{ user: AuthUser } | NextResponse> {
+  const authResult = await requireAuth(request);
+
+  if (authResult instanceof NextResponse) {
+    return authResult; // 認証エラー
+  }
+
+  const { user } = authResult;
+
+  // ADMINロールは全ての権限を持つ
+  if (user.role === "ADMIN") {
+    return { user };
+  }
+
+  // ユーザーの権限を取得
+  const userPermissions = await getUserPermissions(user.id);
+  const permissionNames = userPermissions.map((p) => p.name);
+
+  // いずれかの権限を持っているかチェック
+  const hasPermission = requiredPermissions.some((perm) =>
+    permissionNames.includes(perm)
+  );
+
+  if (!hasPermission) {
+    return NextResponse.json(
+      { error: "この操作を実行する権限がありません" },
+      { status: 403 }
+    );
+  }
+
+  return { user };
 }

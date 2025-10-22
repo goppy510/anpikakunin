@@ -14,6 +14,7 @@ export type GroupSummary = {
   description: string | null;
   isActive: boolean;
   isSystem: boolean;
+  workspaceRef: string | null; // ワークスペース参照
   memberCount: number;
   permissionCount: number;
   createdAt: string;
@@ -58,6 +59,7 @@ export const listGroups = async (): Promise<GroupSummary[]> => {
     description: g.description,
     isActive: g.isActive,
     isSystem: g.isSystem,
+    workspaceRef: g.workspaceRef, // ワークスペース参照を追加
     memberCount: g._count.members,
     permissionCount: g._count.permissions,
     createdAt: g.createdAt.toISOString(),

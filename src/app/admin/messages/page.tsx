@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
+import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 type MessageTemplate = {
   id: string;
@@ -18,6 +19,7 @@ type Workspace = {
 };
 
 export default function MessagesPage() {
+  const { hasPermission } = usePermissions();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -205,7 +207,8 @@ export default function MessagesPage() {
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+                disabled={!hasPermission("message:write")}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 編集
               </button>
@@ -219,7 +222,8 @@ export default function MessagesPage() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+                  disabled={!hasPermission("message:write")}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   保存
                 </button>

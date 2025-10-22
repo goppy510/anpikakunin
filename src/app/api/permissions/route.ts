@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import {
   listPermissions,
   listPermissionsByCategory,
@@ -10,9 +10,10 @@ import {
 /**
  * GET /api/permissions
  * 権限一覧取得
+ * グループ管理画面で使用するため、group:read権限でもアクセス可能
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["group:read", "group:write", "system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
  * 権限作成
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["system:admin"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

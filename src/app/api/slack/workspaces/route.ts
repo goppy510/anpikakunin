@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import {
   listSlackWorkspaces,
   upsertSlackWorkspaceWithSettings,
@@ -13,7 +13,7 @@ type PostRequestBody = {
 };
 
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["slack:workspace:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const userId = authCheck.user.id;
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["slack:workspace:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const userId = authCheck.user.id;

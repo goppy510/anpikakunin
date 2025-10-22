@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import { prisma } from "@/app/lib/db/prisma";
 import { sendInvitationEmail } from "@/app/lib/email/service";
 import { UserRole } from "@prisma/client";
@@ -13,7 +13,7 @@ import crypto from "crypto";
  * 招待キャンセル（DELETEメソッド）
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["member:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
  * メンバー招待
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["member:invite"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const inviterId = authCheck.user.id;
@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       email: string;
       role?: UserRole;
+      workspaceRef: string; // ワークスペースIDは必須
+      groupId: string; // グループIDは必須
     };
 
     // バリデーション
@@ -70,6 +72,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "有効なメールアドレスを入力してください" },
         { status: 400 }
+      );
+    }
+
+    if (!body.workspaceRef) {
+      return NextResponse.json(
+        { error: "ワークスペースを選択してください" },
+        { status: 400 }
+      );
+    }
+
+    if (!body.groupId) {
+      return NextResponse.json(
+        { error: "グループを選択してください" },
+        { status: 400 }
+      );
+    }
+
+    // グループ情報を取得してisSystemを確認
+    const group = await prisma.group.findUnique({
+      where: { id: body.groupId },
+      select: { id: true, isSystem: true },
+    });
+
+    if (!group) {
+      return NextResponse.json(
+        { error: "指定されたグループが見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    // 権限チェック: システムグループへの招待はADMINのみ
+    if (group.isSystem && authCheck.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "管理者グループへの招待は管理者のみ実行できます" },
+        { status: 403 }
       );
     }
 
@@ -115,6 +152,8 @@ export async function POST(request: NextRequest) {
       data: {
         email: body.email,
         invitedBy: inviterId,
+        workspaceRef: body.workspaceRef, // UIから受け取ったワークスペースIDを保存
+        groupId: body.groupId, // グループIDを保存
         token,
         role: body.role || UserRole.EDITOR,
         expiresAt,
@@ -123,6 +162,12 @@ export async function POST(request: NextRequest) {
         inviter: {
           select: {
             email: true,
+          },
+        },
+        group: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -170,7 +215,7 @@ export async function POST(request: NextRequest) {
  * 招待キャンセル
  */
 export async function DELETE(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["member:invite"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
