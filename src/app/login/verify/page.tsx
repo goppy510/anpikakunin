@@ -61,11 +61,7 @@ function VerifyOtpContent() {
       }
 
       // ログイン成功、ダッシュボードへ
-      if (data.user.role === "ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/settings");
-      }
+      router.push("/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "認証に失敗しました");
     } finally {

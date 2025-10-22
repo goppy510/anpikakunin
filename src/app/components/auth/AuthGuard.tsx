@@ -37,7 +37,7 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
         // 権限チェック
         if (requiredRole === "ADMIN" && authenticatedUser.role !== "ADMIN") {
           alert("この画面にアクセスする権限がありません");
-          router.push("/settings"); // EDITORは設定画面へ
+          router.push("/admin"); // ダッシュボードへ
           return;
         }
 
