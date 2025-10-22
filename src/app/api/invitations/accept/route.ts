@@ -94,6 +94,21 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // デフォルト権限を付与: slack:workspace:read
+      // 部署管理や通知条件設定にはワークスペース閲覧が必須なため
+      const workspaceReadPermission = await tx.permission.findFirst({
+        where: { name: "slack:workspace:read" },
+      });
+
+      if (workspaceReadPermission) {
+        await tx.userPermissionAttachment.create({
+          data: {
+            userId: newUser.id,
+            permissionId: workspaceReadPermission.id,
+          },
+        });
+      }
+
       // 招待を受諾済みにマーク
       await tx.userInvitation.update({
         where: { id: invitation.id },
