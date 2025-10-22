@@ -219,7 +219,7 @@ export default function MembersPage() {
                   </button>
                   <button
                     onClick={() => handleCancelInvitation(inv.id, inv.email)}
-                    disabled={!hasPermission("member:delete")}
+                    disabled={!hasPermission("member:invite")}
                     className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     キャンセル

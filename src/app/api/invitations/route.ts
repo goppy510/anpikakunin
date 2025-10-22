@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
  * メンバー招待
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requirePermission(request, ["member:write"]);
+  const authCheck = await requirePermission(request, ["member:invite"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const inviterId = authCheck.user.id;
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
  * 招待キャンセル
  */
 export async function DELETE(request: NextRequest) {
-  const authCheck = await requirePermission(request, ["member:write"]);
+  const authCheck = await requirePermission(request, ["member:invite"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

@@ -512,7 +512,13 @@ async function main() {
     {
       name: "member:write",
       displayName: "メンバー編集",
-      description: "メンバーの招待・編集・削除",
+      description: "メンバーの編集・削除",
+      category: "member",
+    },
+    {
+      name: "member:invite",
+      displayName: "メンバー招待",
+      description: "新規メンバーの招待",
       category: "member",
     },
 
