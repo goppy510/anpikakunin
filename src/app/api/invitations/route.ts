@@ -81,16 +81,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // グループ情報を取得してworkspaceRefを確認
+    // グループ情報を取得してworkspaceRefとisSystemを確認
     const group = await prisma.group.findUnique({
       where: { id: body.groupId },
-      select: { id: true, workspaceRef: true },
+      select: { id: true, workspaceRef: true, isSystem: true },
     });
 
     if (!group) {
       return NextResponse.json(
         { error: "指定されたグループが見つかりません" },
         { status: 404 }
+      );
+    }
+
+    // 権限チェック: システムグループへの招待はADMINのみ
+    if (group.isSystem && authCheck.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "管理者グループへの招待は管理者のみ実行できます" },
+        { status: 403 }
       );
     }
 

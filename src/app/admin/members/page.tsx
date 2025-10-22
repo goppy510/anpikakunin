@@ -31,6 +31,7 @@ type Group = {
   name: string;
   description: string | null;
   isActive: boolean;
+  isSystem: boolean; // システムグループかどうか
 };
 
 export default function MembersPage() {
@@ -44,7 +45,7 @@ export default function MembersPage() {
   const [email, setEmail] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
 
-  const { hasPermission} = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
 
   useEffect(() => {
     fetchData();
@@ -284,12 +285,15 @@ export default function MembersPage() {
                   disabled={inviting}
                 >
                   <option value="">グループを選択してください</option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                      {group.description && ` - ${group.description}`}
-                    </option>
-                  ))}
+                  {groups
+                    .filter((group) => isAdmin || !group.isSystem) // EDITORはシステムグループを除外
+                    .map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                        {group.description && ` - ${group.description}`}
+                        {group.isSystem && " (管理者グループ)"}
+                      </option>
+                    ))}
                 </select>
               </div>
 
