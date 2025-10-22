@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 
 // GET: 通知条件一覧取得
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["earthquake:condition:read"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   const { searchParams } = new URL(request.url);
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
 // POST: 通知条件作成
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["earthquake:condition:write"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {

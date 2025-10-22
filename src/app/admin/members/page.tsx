@@ -26,16 +26,35 @@ type Invitation = {
   createdAt: string;
 };
 
+type Group = {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  isSystem: boolean; // システムグループかどうか
+  workspaceRef: string | null; // ワークスペース参照
+};
+
+type Workspace = {
+  id: string;
+  name: string;
+  workspaceId: string;
+};
+
 export default function MembersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviting, setInviting] = useState(false);
 
   const [email, setEmail] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
 
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
 
   useEffect(() => {
     fetchData();
@@ -44,9 +63,11 @@ export default function MembersPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [usersRes, invitationsRes] = await Promise.all([
+      const [usersRes, invitationsRes, groupsRes, workspacesRes] = await Promise.all([
         axios.get("/api/users"),
         axios.get("/api/invitations"),
+        axios.get("/api/groups"),
+        axios.get("/api/slack/workspaces"),
       ]);
 
       setUsers(usersRes.data.users || []);
@@ -55,6 +76,8 @@ export default function MembersPage() {
           (inv: Invitation) => !inv.acceptedAt
         )
       );
+      setGroups(groupsRes.data.groups || []);
+      setWorkspaces(workspacesRes.data.workspaces || []);
     } catch (error) {
       console.error("データ取得エラー:", error);
       toast.error("データの取得に失敗しました");
@@ -69,11 +92,23 @@ export default function MembersPage() {
       return;
     }
 
+    if (!selectedWorkspaceId) {
+      toast.error("ワークスペースを選択してください");
+      return;
+    }
+
+    if (!selectedGroupId) {
+      toast.error("グループを選択してください");
+      return;
+    }
+
     try {
       setInviting(true);
 
       const res = await axios.post("/api/invitations", {
         email,
+        workspaceRef: selectedWorkspaceId,
+        groupId: selectedGroupId,
       });
 
       toast.success("招待を送信しました");
@@ -87,6 +122,8 @@ export default function MembersPage() {
 
       setShowInviteModal(false);
       setEmail("");
+      setSelectedWorkspaceId("");
+      setSelectedGroupId("");
       fetchData();
     } catch (error: any) {
       // 409 (既に登録済み) や 400 (バリデーションエラー) は想定内なのでログ出力しない
@@ -182,7 +219,7 @@ export default function MembersPage() {
                   </button>
                   <button
                     onClick={() => handleCancelInvitation(inv.id, inv.email)}
-                    disabled={!hasPermission("member:delete")}
+                    disabled={!hasPermission("member:invite")}
                     className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     キャンセル
@@ -255,11 +292,67 @@ export default function MembersPage() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  ワークスペース <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedWorkspaceId}
+                  onChange={(e) => {
+                    setSelectedWorkspaceId(e.target.value);
+                    setSelectedGroupId(""); // ワークスペース変更時にグループ選択をリセット
+                  }}
+                  className="w-full bg-gray-700 p-2 rounded"
+                  disabled={inviting}
+                >
+                  <option value="">ワークスペースを選択してください</option>
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  所属グループ <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  className="w-full bg-gray-700 p-2 rounded"
+                  disabled={inviting || !selectedWorkspaceId}
+                >
+                  <option value="">グループを選択してください</option>
+                  {groups
+                    .filter((group) => {
+                      // システムグループ（workspaceRef=null or empty）は常に表示（ADMIN権限者のみ選択可能）
+                      if (group.isSystem && (!group.workspaceRef || group.workspaceRef === "")) {
+                        return isAdmin; // ADMINのみシステムグループを表示
+                      }
+                      // workspaceRefがない（null or empty）グループは全ワークスペースで表示
+                      if (!group.workspaceRef || group.workspaceRef === "") {
+                        return true;
+                      }
+                      // 選択されたワークスペースに属するグループのみ表示
+                      return group.workspaceRef === selectedWorkspaceId;
+                    })
+                    .map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                        {group.description && ` - ${group.description}`}
+                        {group.isSystem && " (管理者グループ)"}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
               <div className="bg-blue-900 bg-opacity-30 border border-blue-700 rounded-lg p-3">
                 <p className="text-sm text-gray-300">
-                  💡 招待されたメンバーは初期状態では権限を持ちません。
+                  💡 招待されたメンバーは選択したグループに自動的に所属します。
                   <br />
-                  グループに追加することで権限を付与できます。
+                  グループの権限に応じて機能にアクセスできます。
                 </p>
               </div>
             </div>
@@ -269,6 +362,8 @@ export default function MembersPage() {
                 onClick={() => {
                   setShowInviteModal(false);
                   setEmail("");
+                  setSelectedWorkspaceId("");
+                  setSelectedGroupId("");
                 }}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
                 disabled={inviting}
@@ -277,7 +372,7 @@ export default function MembersPage() {
               </button>
               <button
                 onClick={handleInvite}
-                disabled={inviting || !email}
+                disabled={inviting || !email || !selectedGroupId}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50"
               >
                 {inviting ? "招待中..." : "招待"}

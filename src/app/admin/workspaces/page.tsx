@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SCOPE_DESCRIPTIONS } from "@/app/lib/slack/requiredScopes";
+import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 interface Workspace {
   id: string;
@@ -33,6 +34,7 @@ interface PermissionInfo {
 }
 
 export default function WorkspacesPage() {
+  const { hasPermission } = usePermissions();
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +99,8 @@ export default function WorkspacesPage() {
         <h2 className="text-2xl font-bold">ワークスペース管理</h2>
         <button
           onClick={() => router.push("/admin/slack-setup")}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+          disabled={!hasPermission("slack:workspace:write")}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + 新規追加
         </button>
@@ -110,7 +113,8 @@ export default function WorkspacesPage() {
           </p>
           <button
             onClick={() => router.push("/admin/slack-setup")}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded"
+            disabled={!hasPermission("slack:workspace:write")}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
           >
             最初のワークスペースを追加
           </button>
@@ -157,11 +161,15 @@ export default function WorkspacesPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => router.push(`/admin/slack-setup?edit=${workspace.workspaceId}`)}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+                      disabled={!hasPermission("slack:workspace:write")}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       編集
                     </button>
-                    <button className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm">
+                    <button
+                      disabled={!hasPermission("slack:workspace:write")}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       削除
                     </button>
                   </div>

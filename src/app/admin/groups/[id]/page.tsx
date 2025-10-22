@@ -11,6 +11,7 @@ type GroupDetail = {
   name: string;
   description: string | null;
   isActive: boolean;
+  isSystem: boolean; // システムグループかどうか
   memberCount: number;
   permissionCount: number;
   createdAt: string;
@@ -336,8 +337,9 @@ export default function GroupDetailPage({
                 </div>
                 <button
                   onClick={() => handleRemoveMember(member.id, member.email)}
-                  disabled={!hasPermission("group:write")}
+                  disabled={!hasPermission("group:write") || group.isSystem}
                   className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={group.isSystem ? "システムグループのメンバーは削除できません" : ""}
                 >
                   削除
                 </button>
