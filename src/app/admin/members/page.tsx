@@ -327,9 +327,13 @@ export default function MembersPage() {
                   <option value="">グループを選択してください</option>
                   {groups
                     .filter((group) => {
-                      // システムグループ（workspaceRef=null）は常に表示（ADMIN権限者のみ選択可能）
-                      if (group.isSystem && group.workspaceRef === null) {
+                      // システムグループ（workspaceRef=null or empty）は常に表示（ADMIN権限者のみ選択可能）
+                      if (group.isSystem && (!group.workspaceRef || group.workspaceRef === "")) {
                         return isAdmin; // ADMINのみシステムグループを表示
+                      }
+                      // workspaceRefがない（null or empty）グループは全ワークスペースで表示
+                      if (!group.workspaceRef || group.workspaceRef === "") {
+                        return true;
                       }
                       // 選択されたワークスペースに属するグループのみ表示
                       return group.workspaceRef === selectedWorkspaceId;
