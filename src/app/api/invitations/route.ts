@@ -94,11 +94,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!group.workspaceRef) {
-      return NextResponse.json(
-        { error: "システムグループへの招待はできません" },
-        { status: 400 }
-      );
+    // workspaceRefの決定（システムグループの場合は最初のワークスペースを使用）
+    let workspaceRef = group.workspaceRef;
+    if (!workspaceRef) {
+      // システムグループの場合、最初のワークスペースを取得
+      const firstWorkspace = await prisma.slackWorkspace.findFirst({
+        select: { id: true },
+      });
+
+      if (!firstWorkspace) {
+        return NextResponse.json(
+          { error: "ワークスペースが見つかりません。先にワークスペースを作成してください。" },
+          { status: 400 }
+        );
+      }
+
+      workspaceRef = firstWorkspace.id;
     }
 
     // 既存ユーザーチェック
@@ -143,7 +154,7 @@ export async function POST(request: NextRequest) {
       data: {
         email: body.email,
         invitedBy: inviterId,
-        workspaceRef: group.workspaceRef, // ワークスペースIDを保存
+        workspaceRef, // ワークスペースIDを保存（システムグループの場合は最初のワークスペース）
         groupId: body.groupId, // グループIDを保存
         token,
         role: body.role || UserRole.EDITOR,
