@@ -502,6 +502,14 @@ async function main() {
       category: "message",
     },
 
+    // ユーザー管理
+    {
+      name: "user:read",
+      displayName: "ユーザー閲覧",
+      description: "ユーザー情報の閲覧",
+      category: "user",
+    },
+
     // メンバー管理
     {
       name: "member:read",
