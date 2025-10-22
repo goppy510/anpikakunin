@@ -32,17 +32,26 @@ type Group = {
   description: string | null;
   isActive: boolean;
   isSystem: boolean; // システムグループかどうか
+  workspaceRef: string | null; // ワークスペース参照
+};
+
+type Workspace = {
+  id: string;
+  name: string;
+  workspaceId: string;
 };
 
 export default function MembersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviting, setInviting] = useState(false);
 
   const [email, setEmail] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
 
   const { hasPermission, isAdmin } = usePermissions();
@@ -54,10 +63,11 @@ export default function MembersPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [usersRes, invitationsRes, groupsRes] = await Promise.all([
+      const [usersRes, invitationsRes, groupsRes, workspacesRes] = await Promise.all([
         axios.get("/api/users"),
         axios.get("/api/invitations"),
         axios.get("/api/groups"),
+        axios.get("/api/slack/workspaces"),
       ]);
 
       setUsers(usersRes.data.users || []);
@@ -67,6 +77,7 @@ export default function MembersPage() {
         )
       );
       setGroups(groupsRes.data.groups || []);
+      setWorkspaces(workspacesRes.data.workspaces || []);
     } catch (error) {
       console.error("データ取得エラー:", error);
       toast.error("データの取得に失敗しました");
@@ -81,6 +92,11 @@ export default function MembersPage() {
       return;
     }
 
+    if (!selectedWorkspaceId) {
+      toast.error("ワークスペースを選択してください");
+      return;
+    }
+
     if (!selectedGroupId) {
       toast.error("グループを選択してください");
       return;
@@ -91,6 +107,7 @@ export default function MembersPage() {
 
       const res = await axios.post("/api/invitations", {
         email,
+        workspaceRef: selectedWorkspaceId,
         groupId: selectedGroupId,
       });
 
@@ -105,6 +122,7 @@ export default function MembersPage() {
 
       setShowInviteModal(false);
       setEmail("");
+      setSelectedWorkspaceId("");
       setSelectedGroupId("");
       fetchData();
     } catch (error: any) {
@@ -276,17 +294,46 @@ export default function MembersPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">
+                  ワークスペース <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedWorkspaceId}
+                  onChange={(e) => {
+                    setSelectedWorkspaceId(e.target.value);
+                    setSelectedGroupId(""); // ワークスペース変更時にグループ選択をリセット
+                  }}
+                  className="w-full bg-gray-700 p-2 rounded"
+                  disabled={inviting}
+                >
+                  <option value="">ワークスペースを選択してください</option>
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
                   所属グループ <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={selectedGroupId}
                   onChange={(e) => setSelectedGroupId(e.target.value)}
                   className="w-full bg-gray-700 p-2 rounded"
-                  disabled={inviting}
+                  disabled={inviting || !selectedWorkspaceId}
                 >
                   <option value="">グループを選択してください</option>
                   {groups
-                    .filter((group) => isAdmin || !group.isSystem) // EDITORはシステムグループを除外
+                    .filter((group) => {
+                      // システムグループ（workspaceRef=null）は常に表示（ADMIN権限者のみ選択可能）
+                      if (group.isSystem && group.workspaceRef === null) {
+                        return isAdmin; // ADMINのみシステムグループを表示
+                      }
+                      // 選択されたワークスペースに属するグループのみ表示
+                      return group.workspaceRef === selectedWorkspaceId;
+                    })
                     .map((group) => (
                       <option key={group.id} value={group.id}>
                         {group.name}
@@ -311,6 +358,7 @@ export default function MembersPage() {
                 onClick={() => {
                   setShowInviteModal(false);
                   setEmail("");
+                  setSelectedWorkspaceId("");
                   setSelectedGroupId("");
                 }}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"

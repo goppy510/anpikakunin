@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       email: string;
       role?: UserRole;
+      workspaceRef: string; // ワークスペースIDは必須
       groupId: string; // グループIDは必須
     };
 
@@ -74,6 +75,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!body.workspaceRef) {
+      return NextResponse.json(
+        { error: "ワークスペースを選択してください" },
+        { status: 400 }
+      );
+    }
+
     if (!body.groupId) {
       return NextResponse.json(
         { error: "グループを選択してください" },
@@ -81,10 +89,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // グループ情報を取得してworkspaceRefとisSystemを確認
+    // グループ情報を取得してisSystemを確認
     const group = await prisma.group.findUnique({
       where: { id: body.groupId },
-      select: { id: true, workspaceRef: true, isSystem: true },
+      select: { id: true, isSystem: true },
     });
 
     if (!group) {
@@ -100,24 +108,6 @@ export async function POST(request: NextRequest) {
         { error: "管理者グループへの招待は管理者のみ実行できます" },
         { status: 403 }
       );
-    }
-
-    // workspaceRefの決定（システムグループの場合は最初のワークスペースを使用）
-    let workspaceRef = group.workspaceRef;
-    if (!workspaceRef) {
-      // システムグループの場合、最初のワークスペースを取得
-      const firstWorkspace = await prisma.slackWorkspace.findFirst({
-        select: { id: true },
-      });
-
-      if (!firstWorkspace) {
-        return NextResponse.json(
-          { error: "ワークスペースが見つかりません。先にワークスペースを作成してください。" },
-          { status: 400 }
-        );
-      }
-
-      workspaceRef = firstWorkspace.id;
     }
 
     // 既存ユーザーチェック
@@ -162,7 +152,7 @@ export async function POST(request: NextRequest) {
       data: {
         email: body.email,
         invitedBy: inviterId,
-        workspaceRef, // ワークスペースIDを保存（システムグループの場合は最初のワークスペース）
+        workspaceRef: body.workspaceRef, // UIから受け取ったワークスペースIDを保存
         groupId: body.groupId, // グループIDを保存
         token,
         role: body.role || UserRole.EDITOR,
