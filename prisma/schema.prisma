@@ -220,6 +220,7 @@ model Group {
   // リレーション
   members     UserGroupMembership[]
   permissions GroupPermissionAttachment[]
+  invitations UserInvitation[]
 
   @@map("groups")
   @@index([name])
@@ -357,15 +358,18 @@ model UserInvitation {
   invitedBy  String    @map("invited_by")
   token      String    @unique
   role       UserRole  @default(EDITOR)
+  groupId    String    @map("group_id") // 招待時に所属させるグループ（必須）
   expiresAt  DateTime  @map("expires_at") // 7日後
   acceptedAt DateTime? @map("accepted_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
   inviter    User      @relation("InviterRelation", fields: [invitedBy], references: [id])
+  group      Group     @relation(fields: [groupId], references: [id])
 
   @@map("user_invitations")
   @@index([email])
   @@index([token])
+  @@index([groupId])
 }
 
 // 地震情報記録（震度3以上）

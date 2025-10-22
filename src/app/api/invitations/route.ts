@@ -63,12 +63,20 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       email: string;
       role?: UserRole;
+      groupId: string; // グループIDは必須
     };
 
     // バリデーション
     if (!body.email || !body.email.includes("@")) {
       return NextResponse.json(
         { error: "有効なメールアドレスを入力してください" },
+        { status: 400 }
+      );
+    }
+
+    if (!body.groupId) {
+      return NextResponse.json(
+        { error: "グループを選択してください" },
         { status: 400 }
       );
     }
@@ -117,12 +125,19 @@ export async function POST(request: NextRequest) {
         invitedBy: inviterId,
         token,
         role: body.role || UserRole.EDITOR,
+        groupId: body.groupId, // グループIDを保存
         expiresAt,
       },
       include: {
         inviter: {
           select: {
             email: true,
+          },
+        },
+        group: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },

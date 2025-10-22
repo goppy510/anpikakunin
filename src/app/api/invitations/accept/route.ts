@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // パスワードハッシュ化
     const passwordHash = await bcrypt.hash(body.password, 10);
 
-    // トランザクションでユーザー作成 + 招待受諾
+    // トランザクションでユーザー作成 + 招待受諾 + グループ所属
     const user = await prisma.$transaction(async (tx) => {
       // ユーザー作成
       const newUser = await tx.user.create({
@@ -75,6 +75,14 @@ export async function POST(request: NextRequest) {
           role: invitation.role,
           emailVerified: true, // 招待経由なのでメール確認済み
           isActive: true,
+        },
+      });
+
+      // グループに自動所属
+      await tx.userGroupMembership.create({
+        data: {
+          userId: newUser.id,
+          groupId: invitation.groupId,
         },
       });
 
