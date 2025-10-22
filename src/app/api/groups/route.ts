@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/lib/auth/middleware";
+import { requirePermission } from "@/app/lib/auth/middleware";
 import { listGroups, createGroup, GroupInput } from "@/app/lib/db/groups";
 
 /**
@@ -7,7 +7,7 @@ import { listGroups, createGroup, GroupInput } from "@/app/lib/db/groups";
  * グループ一覧取得
  */
 export async function GET(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["view_groups"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
  * グループ作成
  */
 export async function POST(request: NextRequest) {
-  const authCheck = await requireAdmin(request);
+  const authCheck = await requirePermission(request, ["manage_groups"]);
   if (authCheck instanceof NextResponse) return authCheck;
 
   try {
