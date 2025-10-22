@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import { usePermissions } from "@/app/lib/hooks/usePermissions";
 
 interface Department {
   id: string;
@@ -24,6 +25,7 @@ interface Emoji {
 }
 
 export default function DepartmentsPage() {
+  const { hasPermission } = usePermissions();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -375,13 +377,15 @@ export default function DepartmentsPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => startEdit(dept)}
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                    disabled={!hasPermission("department:write")}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     編集
                   </button>
                   <button
                     onClick={() => handleDeleteDepartment(dept.id)}
-                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
+                    disabled={!hasPermission("department:write")}
+                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     削除
                   </button>
@@ -471,7 +475,7 @@ export default function DepartmentsPage() {
         )}
 
         {/* プラスボタンカード（フォーム非表示時のみ） */}
-        {!showAddForm && (
+        {!showAddForm && hasPermission("department:write") && (
           <button
             onClick={() => setShowAddForm(true)}
             className="bg-gray-800 rounded-lg p-6 border-2 border-dashed border-gray-600 hover:border-blue-500 transition-colors flex items-center justify-center h-full"
