@@ -75,13 +75,17 @@ function AcceptInvitationContent() {
     try {
       setAccepting(true);
 
-      await axios.post("/api/invitations/accept", {
+      const response = await axios.post("/api/invitations/accept", {
         token,
         password,
       });
 
+      const { userId } = response.data;
+
       toast.success("アカウントを作成しました");
-      router.push("/login");
+
+      // パスキー登録画面へ遷移
+      router.push(`/setup-passkey?userId=${userId}`);
     } catch (error: any) {
       // Silenced
       const errorMsg = error.response?.data?.error || "アカウント作成に失敗しました";
