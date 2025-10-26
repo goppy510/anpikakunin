@@ -150,7 +150,7 @@ export function SnoozeButton() {
   const isSnoozed = snoozeStatus?.snoozed;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       {workspaces.length > 1 && (
         <select
           value={selectedWorkspace}
@@ -165,27 +165,28 @@ export function SnoozeButton() {
         </select>
       )}
 
-      <button
-        onClick={handleToggleSnooze}
-        disabled={loading}
-        className={`px-4 py-2 rounded font-medium transition-colors ${
-          isSnoozed
-            ? "bg-yellow-600 hover:bg-yellow-700 text-white"
-            : "bg-red-600 hover:bg-red-700 text-white"
-        } disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
-        title={isSnoozed ? "通知を再開" : "通知を一時停止"}
-      >
-        <i className={`fa-solid ${isSnoozed ? "fa-bell" : "fa-bell-slash"}`}></i>
-        {loading ? (
-          "処理中..."
-        ) : isSnoozed ? (
-          <span>
-            スヌーズ中 {timeRemaining && `(${timeRemaining})`}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleToggleSnooze}
+          disabled={loading}
+          className={`px-3 py-2 rounded font-medium transition-all flex items-center gap-2 ${
+            isSnoozed
+              ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+              : "bg-red-600 hover:bg-red-700 text-white"
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+          title={isSnoozed ? `通知を再開 (残り${timeRemaining})` : "通知を一時停止"}
+        >
+          <i className={`fa-solid ${isSnoozed ? "fa-bell" : "fa-bell-slash"}`}></i>
+          <span className="text-sm">
+            {isSnoozed ? "通知停止中" : "通知停止"}
           </span>
-        ) : (
-          "通知スヌーズ"
+        </button>
+        {isSnoozed && timeRemaining && (
+          <span className="text-yellow-400 font-mono text-sm font-semibold">
+            {timeRemaining}
+          </span>
         )}
-      </button>
+      </div>
     </div>
   );
 }
