@@ -41,6 +41,8 @@ model SlackWorkspace {
   invitations        UserInvitation[] // ワークスペースに紐づく招待
   earthquakeNotifications EarthquakeNotification[]
   trainingNotifications TrainingNotification[]
+  notificationSnoozeConfig NotificationSnoozeConfig? // 通知スヌーズ設定
+  notificationSnooze NotificationSnooze? // 通知スヌーズ状態
 
   @@map("slack_workspaces")
   @@index([workspaceId], map: "idx_slack_workspaces_workspace_id")
@@ -669,5 +671,33 @@ model PasskeyResetToken {
   @@map("passkey_reset_tokens")
   @@index([token])
   @@index([userId])
+  @@index([expiresAt])
+}
+
+// 通知スヌーズ設定（時間単位で設定可能）
+model NotificationSnoozeConfig {
+  id                String         @id @default(uuid())
+  workspaceRef      String         @unique @map("workspace_ref")
+  workspace         SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  durationHours     Int            @default(24) @map("duration_hours") // スヌーズ時間（時間単位）
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  @@map("notification_snooze_configs")
+  @@index([workspaceRef])
+}
+
+// 通知スヌーズ状態
+model NotificationSnooze {
+  id           String         @id @default(uuid())
+  workspaceRef String         @unique @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  snoozedBy    String         @map("snoozed_by") // スヌーズを実行したユーザーID
+  snoozedAt    DateTime       @default(now()) @map("snoozed_at")
+  expiresAt    DateTime       @map("expires_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@map("notification_snoozes")
+  @@index([workspaceRef])
   @@index([expiresAt])
 }

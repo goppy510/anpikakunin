@@ -162,6 +162,25 @@ async function checkAndCreateNotifications(
     });
 
     for (const condition of conditions) {
+      // スヌーズ状態をチェック
+      const snooze = await prisma.notificationSnooze.findUnique({
+        where: { workspaceRef: condition.workspaceRef },
+      });
+
+      // スヌーズ中かつ有効期限内の場合はスキップ
+      if (snooze && snooze.expiresAt > new Date()) {
+        console.log(
+          `⏸️  通知スヌーズ中: ${condition.workspace.name} (期限: ${snooze.expiresAt.toLocaleString('ja-JP')})`
+        );
+        continue;
+      }
+
+      // 期限切れスヌーズは削除
+      if (snooze && snooze.expiresAt <= new Date()) {
+        await prisma.notificationSnooze.delete({
+          where: { id: snooze.id },
+        });
+      }
       // 震度チェック
       const minIntensity = condition.minIntensity || "1";
       if (

@@ -586,6 +586,20 @@ async function main() {
       category: "training",
     },
 
+    // 通知スヌーズ
+    {
+      name: "notification:snooze",
+      displayName: "通知スヌーズ",
+      description: "通知の一時停止（スヌーズ）を実行",
+      category: "notification",
+    },
+    {
+      name: "notification:snooze:config",
+      displayName: "スヌーズ設定編集",
+      description: "スヌーズ時間の設定変更",
+      category: "notification",
+    },
+
     // システム管理
     {
       name: "system:admin",
