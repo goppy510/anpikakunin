@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
-import { getAuthenticatedUser } from "@/app/lib/auth/session";
+import { requireAuth } from "@/app/lib/auth/middleware";
 import { getUserPermissions } from "@/app/lib/db/permissions";
 
 async function hasPermission(userId: string, permissionName: string): Promise<boolean> {
@@ -14,10 +14,11 @@ async function hasPermission(userId: string, permissionName: string): Promise<bo
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authCheck = await requireAuth(request);
+    if (authCheck instanceof NextResponse) {
+      return authCheck;
     }
+    const { user } = authCheck;
 
     // notification:snooze:config 権限チェック
     const canConfigSnooze = await hasPermission(
@@ -56,10 +57,11 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authCheck = await requireAuth(request);
+    if (authCheck instanceof NextResponse) {
+      return authCheck;
     }
+    const { user } = authCheck;
 
     // notification:snooze:config 権限チェック
     const canConfigSnooze = await hasPermission(
