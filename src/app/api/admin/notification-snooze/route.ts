@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/db/prisma";
 import { getAuthenticatedUser } from "@/app/lib/auth/session";
-import { hasPermission } from "@/app/lib/auth/authorization";
+import { getUserPermissions } from "@/app/lib/db/permissions";
+
+async function hasPermission(userId: string, permissionName: string): Promise<boolean> {
+  const permissions = await getUserPermissions(userId);
+  return permissions.some(p => p.name === permissionName);
+}
 
 /**
  * スヌーズ状態取得
