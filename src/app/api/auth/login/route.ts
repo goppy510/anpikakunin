@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/db/prisma";
 import { verifyPassword } from "@/app/lib/auth/password";
 import { createOtpCode } from "@/app/lib/auth/otp";
 import { sendOtpEmail } from "@/app/lib/email/service";
+import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +54,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // OTPコード生成
+    // 2FAが無効の場合は直接ログイン
+    if (!user.twoFactorEnabled) {
+      // セッション作成
+      const sessionToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7日間有効
+
+      await prisma.session.create({
+        data: {
+          userId: user.id,
+          token: sessionToken,
+          expiresAt,
+        },
+      });
+
+      const response = NextResponse.json({
+        message: "ログインしました",
+        userId: user.id,
+        email: user.email,
+        requires2FA: false,
+      });
+
+      response.cookies.set("session_token", sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        expires: expiresAt,
+      });
+
+      return response;
+    }
+
+    // 2FAが有効の場合はOTPコード生成
     const otpCode = await createOtpCode(user.id);
 
     // OTPメール送信
@@ -66,6 +99,7 @@ export async function POST(request: NextRequest) {
       message: "認証コードを送信しました",
       userId: user.id,
       email: user.email,
+      requires2FA: true,
     });
   } catch (error) {
     console.error("Login error:", error);

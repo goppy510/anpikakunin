@@ -11,6 +11,7 @@ import {
   validatePasswordStrength,
   getPasswordStrengthLevel,
 } from "@/app/lib/validation/password";
+import { SnoozeButton } from "../components/admin/SnoozeButton";
 
 type SidebarItem = {
   href: string;
@@ -235,6 +236,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 "管理画面"}
             </h1>
             <div className="flex items-center gap-4">
+              <SnoozeButton />
               <span className="text-sm text-gray-400">
                 {new Date().toLocaleDateString("ja-JP", {
                   year: "numeric",
