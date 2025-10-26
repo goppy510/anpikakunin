@@ -41,6 +41,8 @@ model SlackWorkspace {
   invitations        UserInvitation[] // ワークスペースに紐づく招待
   earthquakeNotifications EarthquakeNotification[]
   trainingNotifications TrainingNotification[]
+  notificationSnoozeConfig NotificationSnoozeConfig? // 通知スヌーズ設定
+  notificationSnooze NotificationSnooze? // 通知スヌーズ状態
 
   @@map("slack_workspaces")
   @@index([workspaceId], map: "idx_slack_workspaces_workspace_id")
@@ -199,6 +201,7 @@ model User {
   // リレーション
   sessions      Session[]
   otpCodes      OtpCode[]
+  passkeys      Passkey[] // パスキー認証
   invitationsSent UserInvitation[] @relation("InviterRelation")
   workspaces    UserWorkspace[]
   groupMemberships UserGroupMembership[]
@@ -615,4 +618,86 @@ model AwsCredential {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("aws_credentials")
+}
+
+// パスキー（WebAuthn認証）
+model Passkey {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // WebAuthn Credential情報
+  credentialId Bytes     @unique @map("credential_id") // Base64デコード済みのCredential ID
+  publicKey    Bytes     @map("public_key")            // COSE形式の公開鍵
+  counter      BigInt    @default(0)                   // 署名カウンター（リプレイ攻撃防止）
+
+  // デバイス情報
+  deviceName   String?   @map("device_name")           // ユーザー指定のデバイス名（例: "MacBook Pro"）
+  transports   String[]  @default([])                  // ["usb", "nfc", "ble", "internal"]
+
+  // タイムスタンプ
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+
+  @@map("passkeys")
+  @@index([userId])
+}
+
+// WebAuthnチャレンジ（登録・認証時の使い捨てトークン）
+model WebAuthnChallenge {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")           // 登録時はnull、認証時は設定
+  challenge  String   @unique                   // ランダム生成されたチャレンジ文字列
+  type       String                             // "registration" | "authentication"
+  expiresAt  DateTime @map("expires_at")        // 有効期限（通常60秒）
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("webauthn_challenges")
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([challenge])
+}
+
+// パスキー再登録トークン
+model PasskeyResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")         // 24時間有効
+  createdAt DateTime @default(now()) @map("created_at")
+  used      Boolean  @default(false)
+  usedAt    DateTime? @map("used_at")
+
+  @@map("passkey_reset_tokens")
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// 通知スヌーズ設定（時間単位で設定可能）
+model NotificationSnoozeConfig {
+  id                String         @id @default(uuid())
+  workspaceRef      String         @unique @map("workspace_ref")
+  workspace         SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  durationHours     Int            @default(24) @map("duration_hours") // スヌーズ時間（時間単位）
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  @@map("notification_snooze_configs")
+  @@index([workspaceRef])
+}
+
+// 通知スヌーズ状態
+model NotificationSnooze {
+  id           String         @id @default(uuid())
+  workspaceRef String         @unique @map("workspace_ref")
+  workspace    SlackWorkspace @relation(fields: [workspaceRef], references: [id], onDelete: Cascade)
+  snoozedBy    String         @map("snoozed_by") // スヌーズを実行したユーザーID
+  snoozedAt    DateTime       @default(now()) @map("snoozed_at")
+  expiresAt    DateTime       @map("expires_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@map("notification_snoozes")
+  @@index([workspaceRef])
+  @@index([expiresAt])
 }

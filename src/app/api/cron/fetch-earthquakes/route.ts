@@ -8,6 +8,9 @@ import {
   type TelegramItem,
   type EarthquakeInfo,
 } from "@/app/lib/notification/dmdataExtractor";
+import { decrypt } from "@/app/lib/security/encryption";
+import { buildEarthquakeNotificationMessage } from "@/app/lib/slack/messageBuilder";
+import axios from "axios";
 
 // 認証ヘルパー関数
 function isAuthorized(request: NextRequest): boolean {
@@ -159,6 +162,25 @@ async function checkAndCreateNotifications(
     });
 
     for (const condition of conditions) {
+      // スヌーズ状態をチェック
+      const snooze = await prisma.notificationSnooze.findUnique({
+        where: { workspaceRef: condition.workspaceRef },
+      });
+
+      // スヌーズ中かつ有効期限内の場合はスキップ
+      if (snooze && snooze.expiresAt > new Date()) {
+        console.log(
+          `⏸️  通知スヌーズ中: ${condition.workspace.name} (期限: ${snooze.expiresAt.toLocaleString('ja-JP')})`
+        );
+        continue;
+      }
+
+      // 期限切れスヌーズは削除
+      if (snooze && snooze.expiresAt <= new Date()) {
+        await prisma.notificationSnooze.delete({
+          where: { id: snooze.id },
+        });
+      }
       // 震度チェック
       const minIntensity = condition.minIntensity || "1";
       if (
@@ -200,7 +222,7 @@ async function checkAndCreateNotifications(
         continue;
       }
 
-      // 通知レコードを作成
+      // 通知レコードを作成してSlackに送信
       for (const channel of channels) {
         const existing = await prisma.earthquakeNotification.findFirst({
           where: {
@@ -214,7 +236,7 @@ async function checkAndCreateNotifications(
           continue; // 既に作成済み
         }
 
-        await prisma.earthquakeNotification.create({
+        const notification = await prisma.earthquakeNotification.create({
           data: {
             earthquakeRecordId: recordId,
             workspaceId: condition.workspaceRef,
@@ -222,10 +244,120 @@ async function checkAndCreateNotifications(
             notificationStatus: "pending",
           },
         });
+
+        // Slackに送信
+        try {
+          await sendEarthquakeNotification(notification.id, info, condition.workspace);
+        } catch (error) {
+          console.error(`Failed to send notification ${notification.id}:`, error);
+        }
       }
     }
   } catch (error: any) {
     console.error("Error creating notification records:", error);
+  }
+}
+
+// Slack通知送信
+async function sendEarthquakeNotification(
+  notificationId: string,
+  info: EarthquakeInfo,
+  workspace: any
+): Promise<void> {
+  try {
+    // 通知レコードを取得
+    const notification = await prisma.earthquakeNotification.findUnique({
+      where: { id: notificationId },
+    });
+
+    if (!notification) {
+      throw new Error("Notification not found");
+    }
+
+    // 部署情報を取得
+    const departments = await prisma.department.findMany({
+      where: { workspaceRef: workspace.id, isActive: true },
+      orderBy: { displayOrder: "asc" },
+    });
+
+    // メッセージテンプレートを取得
+    const template = await prisma.messageTemplate.findFirst({
+      where: {
+        workspaceRef: workspace.id,
+        type: "PRODUCTION",
+        isActive: true,
+      },
+    });
+
+    if (!template) {
+      throw new Error("Message template not found");
+    }
+
+    // Bot Tokenを復号化
+    const botToken = decrypt({
+      ciphertext: workspace.botTokenCiphertext,
+      iv: workspace.botTokenIv,
+      authTag: workspace.botTokenTag,
+    });
+
+    // メッセージを作成
+    const message = buildEarthquakeNotificationMessage(
+      info,
+      departments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        slackEmoji: d.slackEmoji,
+        buttonColor: d.buttonColor,
+      })),
+      {
+        title: template.title,
+        body: template.body,
+      }
+    );
+
+    // Slackに送信
+    const slackResponse = await axios.post(
+      "https://slack.com/api/chat.postMessage",
+      {
+        channel: notification.channelId,
+        ...message,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${botToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!slackResponse.data.ok) {
+      throw new Error(slackResponse.data.error || "Slack送信に失敗しました");
+    }
+
+    // 通知ステータスを更新
+    await prisma.earthquakeNotification.update({
+      where: { id: notificationId },
+      data: {
+        notificationStatus: "sent",
+        messageTs: slackResponse.data.ts,
+        notifiedAt: new Date(),
+      },
+    });
+
+    console.log(`✅ 地震通知を送信しました: ${notificationId}`);
+  } catch (error: any) {
+    console.error(`❌ 地震通知送信エラー: ${notificationId}`, error);
+
+    // エラーステータスを更新
+    await prisma.earthquakeNotification.update({
+      where: { id: notificationId },
+      data: {
+        notificationStatus: "failed",
+        errorMessage: error.message || "送信に失敗しました",
+      },
+    });
+
+    throw error;
   }
 }
 
