@@ -169,14 +169,17 @@ export function SnoozeButton() {
         <button
           onClick={handleToggleSnooze}
           disabled={loading}
-          className={`p-2 rounded-full font-medium transition-all ${
+          className={`px-3 py-2 rounded font-medium transition-all flex items-center gap-2 ${
             isSnoozed
               ? "bg-yellow-600 hover:bg-yellow-700 text-white"
               : "bg-red-600 hover:bg-red-700 text-white"
           } disabled:opacity-50 disabled:cursor-not-allowed`}
           title={isSnoozed ? `通知を再開 (残り${timeRemaining})` : "通知を一時停止"}
         >
-          <i className={`fa-solid ${isSnoozed ? "fa-bell" : "fa-bell-slash"} text-lg`}></i>
+          <i className={`fa-solid ${isSnoozed ? "fa-bell" : "fa-bell-slash"}`}></i>
+          <span className="text-sm">
+            {isSnoozed ? "通知停止中" : "通知停止"}
+          </span>
         </button>
         {isSnoozed && timeRemaining && (
           <span className="text-yellow-400 font-mono text-sm font-semibold">
