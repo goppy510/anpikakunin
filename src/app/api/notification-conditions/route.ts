@@ -56,22 +56,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    const condition = await prisma.earthquakeNotificationCondition.upsert({
-      where: { workspaceRef: workspace.id },
-      create: {
-        workspaceRef: workspace.id,
-        minIntensity,
-        targetPrefectures: targetPrefectures || [],
-        channelId,
-      },
-      update: {
-        minIntensity,
-        targetPrefectures: targetPrefectures || [],
-        channelId,
-      },
+    // トランザクションで通知条件とチャンネルを同時に保存
+    const result = await prisma.$transaction(async (tx) => {
+      // 通知条件を保存
+      const condition = await tx.earthquakeNotificationCondition.upsert({
+        where: { workspaceRef: workspace.id },
+        create: {
+          workspaceRef: workspace.id,
+          minIntensity,
+          targetPrefectures: targetPrefectures || [],
+          channelId,
+        },
+        update: {
+          minIntensity,
+          targetPrefectures: targetPrefectures || [],
+          channelId,
+        },
+      });
+
+      // notification_channels テーブルにも earthquake 用チャンネルを登録
+      await tx.notificationChannel.upsert({
+        where: {
+          workspaceRef_channelId_purpose: {
+            workspaceRef: workspace.id,
+            channelId,
+            purpose: "earthquake",
+          },
+        },
+        create: {
+          workspaceRef: workspace.id,
+          channelId,
+          channelName: "earthquake-notifications",
+          purpose: "earthquake",
+          isActive: true,
+        },
+        update: {
+          channelName: "earthquake-notifications",
+          isActive: true,
+        },
+      });
+
+      return condition;
     });
 
-    return NextResponse.json(condition);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to create notification condition:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
